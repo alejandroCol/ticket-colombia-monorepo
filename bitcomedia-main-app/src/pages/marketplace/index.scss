@@ -1,0 +1,184 @@
+@import '../../main.scss';
+
+.marketplace-screen {
+  min-height: 100vh;
+  background: $color-primary;
+  display: flex;
+  flex-direction: column;
+}
+
+// —— Hero compacto: prioridad a los eventos ——
+.marketplace-hero {
+  padding: 0.75rem 1rem 0.5rem;
+  margin-top: 50px;
+  flex-shrink: 0;
+
+  @include respond-sm {
+    padding: 0.85rem 1.5rem 0.6rem;
+    margin-top: 60px;
+  }
+
+  &__title {
+    font-family: 'Outfit', $font-family-primary;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: $color-text-primary;
+    margin: 0;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+
+  &__tagline {
+    font-size: 0.875rem;
+    color: $color-text-secondary;
+    margin: 0.2em 0 0;
+    font-weight: $font-weight-medium;
+  }
+}
+
+// —— Contenido y filtros ——
+.marketplace-content {
+  flex: 1;
+  padding: 0 1rem 1rem;
+
+  @include respond-sm {
+    padding: 0 1.5rem 1.5rem;
+  }
+}
+
+.marketplace-filters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  padding: 0 0.25rem;
+}
+
+.marketplace-events {
+  position: relative;
+}
+
+.marketplace-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 160px;
+  width: 100%;
+}
+
+.event-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+
+  @include respond-sm {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.75rem;
+  }
+
+  @include respond-lg {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 2rem;
+  }
+
+  &__item {
+    width: 100%;
+  }
+}
+
+.marketplace-loading-more {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  padding: 1rem 0;
+}
+
+// —— Estado vacío ——
+.marketplace-empty {
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+
+  &__icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+    opacity: 0.8;
+  }
+
+  p {
+    margin: 0;
+    color: $color-text-secondary;
+    font-size: 1rem;
+  }
+
+  &__hint {
+    margin-top: 0.5rem !important;
+    font-size: 0.9rem !important;
+    opacity: 0.85;
+  }
+}
+
+// —— Footer mínimo ——
+.marketplace-footer {
+  display: flex;
+  justify-content: center;
+  padding: 0.75rem 1rem;
+
+  @media (max-width: $breakpoint-md) {
+    padding-bottom: calc(60px + 0.75rem);
+  }
+
+  &__copy {
+    font-size: 0.8125rem;
+    color: $color-text-secondary;
+    opacity: 0.8;
+  }
+}
+
+// —— Botón flotante WhatsApp (abajo derecha) ——
+.marketplace-whatsapp-fab {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.25rem;
+  z-index: 500;
+
+  @media (max-width: $breakpoint-md) {
+    bottom: calc(60px + 1.25rem); // Encima del bottom nav
+    right: 1.25rem;
+  }
+}
+
+.marketplace-whatsapp-fab .marketplace-whatsapp-fab__btn,
+.marketplace-whatsapp-fab__btn {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  min-width: 56px;
+  min-height: 56px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #25D366 !important;
+  color: white !important;
+  text-decoration: none !important;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(37, 211, 102, 0.45);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    background: #20bd5a !important;
+    color: white !important;
+    transform: scale(1.05);
+    box-shadow: 0 6px 18px rgba(37, 211, 102, 0.5);
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+}
+
+.bottom-nav-spacer {
+  height: 80px;
+}

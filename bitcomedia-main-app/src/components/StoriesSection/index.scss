@@ -1,0 +1,182 @@
+@import '../../main.scss';
+@import '../common-styles.scss';
+
+.stories-section {
+  width: 100%;
+  margin-bottom: 1.5rem;
+  
+  // Header
+  &__header {
+    margin-bottom: 1rem;
+  }
+  
+  &__title {
+    font-size: 1.1rem;
+    font-weight: var(--component-font-weight, #{$font-weight-semi-bold});
+    color: var(--component-text-primary, #{$color-text-primary});
+    margin: 0;
+    padding: 0 1rem;
+    
+    @media (min-width: $breakpoint-sm) {
+      font-size: 1.2rem;
+      padding: 0 1.5rem;
+    }
+    
+    @media (min-width: $breakpoint-md) {
+      padding: 0 2rem;
+    }
+  }
+  
+  // Main container
+  &__container {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  
+  // Scroll container
+  &__scroll-container {
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: visible; // Allow overflow for hover effects
+    scroll-behavior: smooth;
+    
+    // Hide scrollbar
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+    
+    &::-webkit-scrollbar {
+      display: none; /* Chrome, Safari, Opera */
+    }
+  }
+  
+  // Stories grid
+  &__stories {
+    display: flex;
+    gap: 1rem;
+    padding: 0.5rem 1rem; // Added vertical padding for hover effect
+    min-width: min-content;
+    
+    @media (min-width: $breakpoint-sm) {
+      gap: 1.25rem;
+      padding: 0.75rem 1.5rem;
+    }
+    
+    @media (min-width: $breakpoint-md) {
+      gap: 1.5rem;
+      padding: 1rem 2rem;
+    }
+  }
+  
+  // Scroll buttons
+  &__scroll-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 10;
+    
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    
+    background-color: var(--component-primary-color, #{$color-primary});
+    color: var(--component-text-primary, #{$color-text-primary});
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    
+    transition: all 0.2s ease;
+    
+    &:hover {
+      background-color: var(--component-surface-color, #{$color-surface});
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      transform: translateY(-50%) scale(1.1);
+    }
+    
+    &:active {
+      transform: translateY(-50%) scale(0.95);
+    }
+    
+    // Hide on mobile by default
+    display: none;
+    
+    @media (min-width: $breakpoint-md) {
+      display: flex;
+    }
+    
+    &--left {
+      left: 0.5rem;
+    }
+    
+    &--right {
+      right: 0.5rem;
+    }
+    
+    svg {
+      width: 16px;
+      height: 16px;
+    }
+  }
+}
+
+// Theme specific styles
+.stories-section.teatro911-theme {
+  .stories-section__title {
+    color: var(--component-text-primary, #{$teatro911-color-text-primary});
+  }
+  
+  .stories-section__scroll-btn {
+    background-color: var(--component-primary-color, #{$teatro911-color-primary});
+    color: var(--component-text-secondary, #{$teatro911-color-text-secondary});
+    border: 1px solid var(--component-accent-color, #{$teatro911-color-accent});
+    
+    &:hover {
+      background-color: var(--component-surface-color, #{$teatro911-color-surface});
+      color: var(--component-text-primary, #{$teatro911-color-text-primary});
+      border-color: var(--component-text-primary, #{$teatro911-color-text-primary});
+      box-shadow: 0 4px 12px rgba(217, 21, 58, 0.3);
+    }
+  }
+}
+
+.stories-section.default-theme {
+  .stories-section__title {
+    color: var(--component-text-primary, #{$color-text-primary});
+  }
+  
+  .stories-section__scroll-btn {
+    background-color: var(--component-primary-color, #{$color-primary});
+    color: var(--component-text-primary, #{$color-text-primary});
+    
+    &:hover {
+      background-color: var(--component-surface-color, #{$color-surface});
+    }
+  }
+}
+
+// Responsive adjustments
+@media (max-width: ($breakpoint-sm - 1px)) {
+  .stories-section {
+    &__stories {
+      gap: 0.75rem;
+      padding: 0 0.75rem;
+    }
+    
+    &__title {
+      font-size: 1rem;
+      padding: 0 0.75rem;
+    }
+  }
+}
+
+// Touch scrolling improvements for mobile
+@media (hover: none) {
+  .stories-section__scroll-container {
+    /* Enable momentum scrolling on iOS */
+    -webkit-overflow-scrolling: touch;
+  }
+}

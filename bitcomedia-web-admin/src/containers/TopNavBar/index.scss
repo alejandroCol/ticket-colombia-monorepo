@@ -1,0 +1,460 @@
+@import '../../main.scss';
+
+.top-nav-bar {
+  width: 100%;
+  background-color: $color-primary;
+  border-bottom: 1px solid rgba($color-text-secondary, 0.2);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+  padding: 0.5rem 1rem;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  
+  // Always display for all screen sizes
+  display: block;
+  
+  // Mobile layout - centered logo only
+  .nav-container-mobile {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 50px;
+    
+    @media (min-width: $breakpoint-md) {
+      display: none; // Hide on medium and large screens
+    }
+    
+    .logo-container-mobile {
+      cursor: pointer;
+      
+      .logo {
+        height: 35px;
+        width: auto;
+      }
+    }
+  }
+  
+  // Tablet and Desktop layout
+  .nav-container {
+    display: none; // Hide by default (on mobile)
+    align-items: center;
+    justify-content: space-between;
+    max-width: 1400px;
+    margin: 0 auto;
+    height: 60px;
+    
+    @media (min-width: $breakpoint-md) {
+      display: flex; // Show on medium and large screens
+    }
+    
+    &.nav-container-logo-only {
+      justify-content: center;
+    }
+  }
+  
+  .logo-container {
+    cursor: pointer;
+    padding: 0.5rem;
+    
+    .logo {
+      height: 40px;
+      width: auto;
+    }
+  }
+  
+  // Navigation links for large screens
+  .nav-links-desktop {
+    display: none;
+    margin-left: auto; // This will push the nav links to the right when auth buttons are not present
+    
+    @media (min-width: $breakpoint-lg) {
+      display: flex;
+      gap: 2rem;
+      margin-right: 2rem; // Add space between nav links and auth buttons
+    }
+    
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      color: $color-text-secondary;
+      padding: 0.5rem;
+      transition: color 0.2s ease;
+      
+      &.active {
+        color: $color-text-primary;
+      }
+      
+      &:hover:not(.active) {
+        color: $color-text-primary;
+        
+        .icon-inactive {
+          filter: brightness(0) saturate(100%) invert(100%) sepia(0%) saturate(0%) hue-rotate(324deg) brightness(102%) contrast(101%);
+        }
+      }
+      
+      .icon {
+        height: 20px;
+        width: 20px;
+        transition: filter 0.2s ease;
+        
+        &.icon-active {
+          filter: brightness(0) saturate(100%) invert(100%) sepia(0%) saturate(0%) hue-rotate(324deg) brightness(102%) contrast(101%);
+        }
+        
+        &.icon-inactive {
+          filter: brightness(0) saturate(100%) invert(81%) sepia(11%) saturate(895%) hue-rotate(340deg) brightness(93%) contrast(90%);
+        }
+      }
+      
+      span {
+        font-weight: $font-weight-medium;
+        font-size: 0.9rem;
+      }
+    }
+  }
+  
+  // Auth buttons for large screens
+  .auth-buttons-desktop {
+    display: none;
+    
+    @media (min-width: $breakpoint-lg) {
+      display: flex;
+      gap: 1rem;
+    }
+    
+    .login-button, .logout-button, .signup-button {
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-weight: $font-weight-medium;
+      cursor: pointer;
+      font-family: $font-family-primary;
+      font-size: 0.9rem;
+      transition: all 0.2s ease;
+    }
+    
+    .login-button {
+      background-color: transparent;
+      border: 1px solid $color-text-secondary;
+      color: $color-text-secondary;
+      
+      &:hover {
+        border-color: $color-text-primary;
+        color: $color-text-primary;
+      }
+    }
+    
+    .signup-button {
+      background-color: $color-accent;
+      color: white;
+      border: none;
+      
+      &:hover {
+        background-color: darken($color-accent, 10%);
+      }
+    }
+    
+    .logout-button {
+      background-color: transparent;
+      border: 1px solid rgba(255, 59, 48, 0.7);
+      color: rgba(255, 59, 48, 0.9);
+      
+      &:hover {
+        background-color: rgba(255, 59, 48, 0.1);
+      }
+    }
+  }
+  
+  // Hamburger menu for medium screens
+  .hamburger-menu {
+    display: none;
+    
+    @media (min-width: $breakpoint-md) and (max-width: ($breakpoint-lg - 1px)) {
+      display: block;
+      cursor: pointer;
+      padding: 0.5rem;
+    }
+    
+    .hamburger-icon {
+      width: 24px;
+      height: 18px;
+      position: relative;
+      
+      span {
+        display: block;
+        position: absolute;
+        height: 2px;
+        width: 100%;
+        background-color: $color-text-secondary;
+        border-radius: 2px;
+        transition: transform 0.25s ease-in-out, opacity 0.25s ease-in-out;
+        
+        &:nth-child(1) {
+          top: 0;
+        }
+        
+        &:nth-child(2) {
+          top: 8px;
+        }
+        
+        &:nth-child(3) {
+          top: 16px;
+        }
+      }
+      
+      &.open {
+        span {
+          background-color: $color-text-primary;
+          
+          &:nth-child(1) {
+            transform: rotate(45deg);
+            top: 8px;
+          }
+          
+          &:nth-child(2) {
+            opacity: 0;
+          }
+          
+          &:nth-child(3) {
+            transform: rotate(-45deg);
+            top: 8px;
+          }
+        }
+      }
+    }
+  }
+  
+  // Mobile menu overlay
+  .mobile-menu {
+    position: fixed;
+    top: 60px;
+    left: 0;
+    width: 100%;
+    height: 0;
+    background-color: $color-primary;
+    overflow: hidden;
+    transition: height 0.3s ease;
+    z-index: 900;
+    
+    &.open {
+      height: calc(100vh - 60px);
+      overflow-y: auto;
+    }
+    
+    .mobile-menu-items {
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      
+      .mobile-nav-link {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.75rem;
+        cursor: pointer;
+        color: $color-text-secondary;
+        transition: all 0.2s ease;
+        border-radius: 8px;
+        
+        &.active {
+          color: $color-text-primary;
+          background-color: rgba($color-surface, 0.3);
+        }
+        
+        &:hover:not(.active) {
+          color: $color-text-primary;
+          background-color: rgba($color-surface, 0.2);
+          
+          .icon-inactive {
+            filter: brightness(0) saturate(100%) invert(100%) sepia(0%) saturate(0%) hue-rotate(324deg) brightness(102%) contrast(101%);
+          }
+        }
+        
+        .icon {
+          height: 24px;
+          width: 24px;
+          transition: filter 0.2s ease;
+          
+          &.icon-active {
+            filter: brightness(0) saturate(100%) invert(100%) sepia(0%) saturate(0%) hue-rotate(324deg) brightness(102%) contrast(101%);
+          }
+          
+          &.icon-inactive {
+            filter: brightness(0) saturate(100%) invert(81%) sepia(11%) saturate(895%) hue-rotate(340deg) brightness(93%) contrast(90%);
+          }
+        }
+        
+        span {
+          font-weight: $font-weight-medium;
+          font-size: 1rem;
+        }
+      }
+      
+      .mobile-menu-auth {
+        margin-top: 1rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid rgba($color-text-secondary, 0.2);
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        
+        .mobile-login-button, .mobile-logout-button, .mobile-signup-button {
+          padding: 0.75rem;
+          border-radius: 8px;
+          font-weight: $font-weight-medium;
+          cursor: pointer;
+          font-family: $font-family-primary;
+          font-size: 1rem;
+          text-align: center;
+          transition: all 0.2s ease;
+        }
+        
+        .mobile-login-button {
+          background-color: transparent;
+          border: 1px solid $color-text-secondary;
+          color: $color-text-secondary;
+          
+          &:hover {
+            border-color: $color-text-primary;
+            color: $color-text-primary;
+          }
+        }
+        
+        .mobile-signup-button {
+          background-color: $color-accent;
+          color: white;
+          border: none;
+          
+          &:hover {
+            background-color: darken($color-accent, 10%);
+          }
+        }
+        
+        .mobile-logout-button {
+          background-color: transparent;
+          border: 1px solid rgba(255, 59, 48, 0.7);
+          color: rgba(255, 59, 48, 0.9);
+          
+          &:hover {
+            background-color: rgba(255, 59, 48, 0.1);
+          }
+        }
+      }
+    }
+  }
+}
+
+// Add padding to body to accommodate the fixed top navbar
+body {
+  // Add padding for all screen sizes since TopNavBar is always present
+  padding-top: 50px; // Height of mobile nav bar
+  
+  @media (min-width: $breakpoint-md) {
+    padding-top: 60px; // Height of desktop nav bar
+  }
+}
+
+// Apply padding to the page containers
+.marketplace-screen,
+.profile-screen,
+.tickets-screen {
+  @media (min-width: $breakpoint-md) {
+    padding-top: 1rem;
+  }
+}
+
+// Admin navbar specific styles
+.top-nav-bar.admin-nav {
+  // Hide the default mobile container when in admin mode
+  .nav-container-mobile {
+    display: none;
+  }
+  
+  // Hide the default desktop container when in admin mode
+  .nav-container {
+    display: none;
+  }
+  
+  .nav-container-admin {
+    display: none; // Hide by default (on mobile)
+    align-items: center;
+    justify-content: space-between;
+    max-width: 1400px;
+    margin: 0 auto;
+    height: 60px;
+    padding: 0 1rem;
+    
+    @media (min-width: $breakpoint-md) {
+      display: flex; // Show on medium and large screens
+    }
+    
+    .logo-container {
+      flex-shrink: 0;
+    }
+    
+    .admin-nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-left: auto;
+    }
+
+    .admin-nav-link {
+      background: none;
+      border: none;
+      color: $color-text-secondary;
+      font-family: $font-family-primary;
+      font-size: 0.9rem;
+      font-weight: $font-weight-medium;
+      cursor: pointer;
+      padding: 0.5rem;
+      transition: color 0.2s ease;
+
+      &:hover {
+        color: $color-text-primary;
+      }
+    }
+  }
+  
+  .admin-mobile {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 50px;
+    padding: 0 1rem;
+    
+    @media (min-width: $breakpoint-md) {
+      display: none;
+    }
+    
+    .logo-container-mobile {
+      flex-shrink: 0;
+    }
+    
+    .admin-nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-left: auto;
+    }
+
+    .admin-nav-link {
+      background: none;
+      border: none;
+      color: $color-text-secondary;
+      font-family: $font-family-primary;
+      font-size: 0.85rem;
+      font-weight: $font-weight-medium;
+      cursor: pointer;
+      padding: 0.4rem;
+      transition: color 0.2s ease;
+
+      &:hover {
+        color: $color-text-primary;
+      }
+    }
+  }
+}

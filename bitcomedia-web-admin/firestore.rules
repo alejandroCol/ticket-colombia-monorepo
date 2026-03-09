@@ -1,0 +1,67 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Events collection - publicly readable, authenticated users can write
+    match /events/{eventId} {
+      allow read: if true; // Allow anyone to read event data
+      allow create, update, delete: if request.auth != null; // Only authenticated users can write
+    }
+    
+    // Recurring events collection - publicly readable, authenticated users can write
+    match /recurring_events/{eventId} {
+      allow read: if true; // Allow anyone to read recurring event data
+      allow create, update, delete: if request.auth != null; // Only authenticated users can write
+    }
+    
+    // Users collection - only authenticated users can read/write
+    match /users/{userId} {
+      // Users can only read/write their own data
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Admin users can access all user data
+      allow read, write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
+    }
+    
+    // Configurations collection - publicly readable, only admins can write
+    match /configurations/{configId} {
+      allow read: if true; // Allow anyone to read configuration data (landing, app)
+      allow create, update: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
+      allow delete: if false;
+    }
+    
+    // Tickets collection - users can read their own tickets, admins can read/update all
+    match /tickets/{ticketId} {
+      // Users can read their own tickets, admins can read any ticket
+      allow read: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN'
+      );
+      
+      // Only admin users can update ticket status (for validation)
+      allow update: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
+      
+      // No one can create or delete tickets through Firestore directly
+      allow create, delete: if false;
+    }
+    
+    // Venues collection - only admin users can read/write
+    match /venues/{venueId} {
+      // Only authenticated admin users can read venues
+      allow read: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
+      
+      // Only authenticated admin users can create, update, delete venues
+      allow create, update, delete: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
+    }
+    
+    // Default deny all other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+} 

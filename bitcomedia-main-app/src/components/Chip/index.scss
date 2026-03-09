@@ -1,0 +1,207 @@
+@import '../../main.scss';
+@import '../common-styles.scss';
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--component-padding, 0.5rem 1rem);
+  border-radius: var(--component-border-radius, 100px);
+  font-size: var(--component-font-size, 0.875rem);
+  font-weight: var(--component-font-weight, #{$font-weight-medium});
+  font-family: var(--component-font-family, #{$font-family-primary});
+  transition: var(--component-transition, all 0.2s ease);
+  margin: var(--component-margin, 0.25rem);
+  user-select: none;
+  color: var(--component-text-secondary, #{$color-text-secondary});
+  border: 1px solid transparent;
+  
+  // Tamaños
+  &.chip-small {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+  }
+  
+  &.chip-medium {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+  }
+  
+  &.chip-large {
+    padding: 0.625rem 1.25rem;
+    font-size: 1rem;
+  }
+  
+  // Colores
+  &.chip-default {
+    background-color: $color-surface;
+    
+    &.active, &.clickable:hover {
+      background-color: lighten($color-surface, 10%);
+      color: $color-text-primary;
+    }
+  }
+  
+  &.chip-primary {
+    background-color: rgba($color-surface, 0.8);
+    
+    &.active, &.clickable:hover {
+      background-color: $color-surface;
+      color: $color-text-primary;
+    }
+  }
+  
+  &.chip-accent {
+    background-color: rgba($color-accent, 0.1);
+    
+    &.active, &.clickable:hover {
+      background-color: $color-accent;
+      color: white;
+    }
+  }
+  
+  &.chip-success {
+    background-color: rgba(52, 199, 89, 0.1);
+    
+    &.active, &.clickable:hover {
+      background-color: #34c759;
+      color: white;
+    }
+  }
+  
+  &.chip-warning {
+    background-color: rgba(255, 204, 0, 0.1);
+    
+    &.active, &.clickable:hover {
+      background-color: #ffcc00;
+      color: $color-primary;
+    }
+  }
+  
+  &.chip-error {
+    background-color: rgba(255, 59, 48, 0.1);
+    
+    &.active, &.clickable:hover {
+      background-color: #ff3b30;
+      color: white;
+    }
+  }
+  
+  // Estado clickable
+  &.clickable {
+    cursor: pointer;
+    
+    &:hover {
+      transform: var(--component-button-hover-transform, translateY(-2px));
+      box-shadow: var(--component-box-shadow, 0 2px 8px rgba(0, 0, 0, 0.15));
+    }
+    
+    &:active {
+      transform: var(--component-button-active-transform, translateY(0));
+    }
+  }
+  
+  // Estado disabled
+  &.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    
+    &:hover {
+      transform: none;
+      box-shadow: none;
+    }
+  }
+  
+  // Icono
+  .chip-icon {
+    margin-right: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .chip-label {
+    line-height: var(--component-line-height, 1.2);
+  }
+}
+
+// Teatro911 theme specific styles
+.chip.teatro911-theme {
+  border-radius: var(--component-border-radius, 100px); // Mantener redondeado como default
+  font-weight: var(--component-font-weight, #{$teatro911-font-weight-medium}); // Más sutil
+  color: $teatro911-color-text-primary;
+  
+  // Solo aplicar efectos especiales cuando se solicite explícitamente
+  &.with-text-shadow {
+    text-shadow: var(--component-text-shadow);
+  }
+  
+  &.with-grunge-border {
+    border-width: var(--component-border-width, 2px);
+    border-style: solid;
+    border-color: var(--component-border-color);
+  }
+  
+  &.clickable:hover {
+    transform: var(--component-button-hover-transform, translateY(-2px)); // Menos dramático
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+  
+  &.clickable:active {
+    transform: var(--component-button-active-transform, translateY(0));
+  }
+  
+  // Teatro911 color overrides
+  &.chip-default {
+    background-color: $teatro911-color-surface;
+    
+    &.active, &.clickable:hover {
+      background-color: lighten($teatro911-color-surface, 10%);
+      color: $teatro911-color-text-primary;
+    }
+  }
+  
+  &.chip-primary {
+    background-color: rgba($teatro911-color-surface, 0.8);
+    
+    &.active, &.clickable:hover {
+      background-color: $teatro911-color-surface;
+      color: $teatro911-color-text-primary;
+    }
+  }
+  
+  &.chip-accent {
+    background-color: rgba($teatro911-color-accent, 0.1);
+    
+    &.active, &.clickable:hover {
+      background-color: $teatro911-color-accent;
+      color: $teatro911-color-primary;
+    }
+  }
+  
+  &.chip-success {
+    background-color: rgba($teatro911-color-text-secondary, 0.1); // Verde lima
+    
+    &.active, &.clickable:hover {
+      background-color: $teatro911-color-text-secondary; // Verde lima
+      color: $teatro911-color-primary;
+    }
+  }
+  
+  &.chip-warning {
+    background-color: rgba($teatro911-color-text-secondary, 0.1); // Verde lima
+    
+    &.active, &.clickable:hover {
+      background-color: $teatro911-color-text-secondary; // Verde lima
+      color: $teatro911-color-primary;
+    }
+  }
+  
+  &.chip-error {
+    background-color: rgba($teatro911-color-text-primary, 0.1);
+    
+    &.active, &.clickable:hover {
+      background-color: $teatro911-color-text-primary;
+      color: $teatro911-color-primary;
+    }
+  }
+}

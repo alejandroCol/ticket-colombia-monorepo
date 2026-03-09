@@ -1,0 +1,165 @@
+@import '../../main.scss';
+@import '../common-styles.scss';
+
+.loader-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: var(--component-padding, 1rem);
+
+  &.fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba($color-primary, 0.7);
+    z-index: 1000;
+  }
+}
+
+.spinner {
+  position: relative;
+  border-radius: 50%;
+
+  &.spinner-small {
+    width: 20px;
+    height: 20px;
+  }
+
+  &.spinner-medium {
+    width: 40px;
+    height: 40px;
+  }
+
+  &.spinner-large {
+    width: 60px;
+    height: 60px;
+  }
+
+  &.spinner-primary {
+    border: 2px solid rgba($color-primary, 0.2);
+    
+    .spinner-inner {
+      border-color: var(--component-primary-color, #{$color-primary}) transparent transparent transparent;
+    }
+  }
+
+  &.spinner-secondary {
+    border: 2px solid rgba($color-text-secondary, 0.2);
+    
+    .spinner-inner {
+      border-color: var(--component-text-secondary, #{$color-text-secondary}) transparent transparent transparent;
+    }
+  }
+
+  &.spinner-accent {
+    border: 2px solid rgba($color-accent, 0.2);
+    
+    .spinner-inner {
+      border-color: var(--component-accent-color, #{$color-accent}) transparent transparent transparent;
+    }
+  }
+}
+
+.spinner-inner {
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  animation: spin 1s linear infinite;
+}
+
+// Teatro911 theme specific styles
+.spinner.teatro911-spinner {
+  &.spinner-accent {
+    border: 2px solid rgba($teatro911-color-accent, 0.2); // Más sutil
+    
+    .spinner-inner {
+      border-color: $teatro911-color-accent transparent transparent transparent; // Simplificado
+      border-width: 2px;
+    }
+  }
+  
+  // Solo aplicar animaciones especiales cuando se solicite explícitamente
+  &.theatrical-animation {
+    .spinner-inner {
+      animation: teatro911-spin 0.8s ease-in-out infinite;
+    }
+  }
+}
+
+.loader-container.teatro911-theme {
+  &.with-grunge-effect {
+    .grunge-particles {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      
+      span {
+        position: absolute;
+        width: 4px;
+        height: 4px;
+        background-color: var(--component-accent-color, #{$teatro911-color-accent});
+        border-radius: 50%;
+        animation: grunge-float 2s ease-in-out infinite;
+        
+        &:nth-child(1) {
+          top: -30px;
+          left: -20px;
+          animation-delay: 0s;
+        }
+        
+        &:nth-child(2) {
+          top: -15px;
+          right: -25px;
+          animation-delay: 0.7s;
+          background-color: $teatro911-color-text-secondary; // Verde lima
+        }
+        
+        &:nth-child(3) {
+          bottom: -20px;
+          left: -15px;
+          animation-delay: 1.3s;
+          background-color: $teatro911-color-text-primary; // Blanco
+        }
+      }
+    }
+  }
+  
+  &.fullscreen {
+    background-color: rgba($teatro911-color-primary, 0.9);
+  }
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes teatro911-spin {
+  0% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(90deg) scale(1.1); }
+  50% { transform: rotate(180deg) scale(1); }
+  75% { transform: rotate(270deg) scale(0.9); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+@keyframes grunge-float {
+  0%, 100% { 
+    transform: translateY(0px) scale(1);
+    opacity: 0.7;
+  }
+  50% { 
+    transform: translateY(-10px) scale(1.2);
+    opacity: 1;
+  }
+}

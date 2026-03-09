@@ -1,0 +1,21 @@
+{
+  "name": "ticket-colombia-functions",
+  "version": "1.0.0",
+  "description": "Firebase Functions para Ticket Colombia",
+  "main": "functions/src/index.js",
+  "scripts": {
+    "init-db": "node init-firestore.js",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "18"
+  },
+  "dependencies": {
+    "@google-cloud/storage": "^7.16.0",
+    "firebase-admin": "^12.7.0"
+  }
+}

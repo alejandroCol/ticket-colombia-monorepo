@@ -1,0 +1,146 @@
+// Common component styles with CSS custom properties for theming
+@import '../main.scss';
+@import '../pages/Teatro911/index.scss';
+
+// Default theme variables (uses main.scss variables)
+.default-theme {
+  // Colors
+  --component-primary-color: #{$color-primary};
+  --component-secondary-color: #{$color-surface};
+  --component-accent-color: #{$color-accent};
+  --component-text-primary: #{$color-text-primary};
+  --component-text-secondary: #{$color-text-secondary};
+  --component-surface-color: #{$color-surface};
+  --component-border-color: #{rgba($color-text-secondary, 0.3)};
+  --component-error-color: #FF4444;
+  --component-success-color: #4CAF50;
+  --component-warning-color: #FF9800;
+  
+  // Typography
+  --component-font-family: #{$font-family-primary};
+  --component-font-size: 1rem;
+  --component-font-weight: #{$font-weight-regular};
+  --component-line-height: 1.5;
+  
+  // Spacing
+  --component-padding: 0.75rem 1rem;
+  --component-margin: 0.5rem;
+  --component-border-radius: 8px;
+  
+  // Effects
+  --component-box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --component-transition: all 0.2s ease;
+  
+  // Button specific
+  --component-button-hover-transform: translateY(-2px);
+  --component-button-active-transform: translateY(0);
+}
+
+// Teatro911 theme variables (exactamente los mismos 5 colores que main.scss)
+.teatro911-theme {
+  // Colors (matching main.scss structure exactly)
+  --component-primary-color: #{$teatro911-color-primary};         // #15110f - Marrón oscuro
+  --component-text-primary: #{$teatro911-color-text-primary};     // #FFFFFF - Blanco puro
+  --component-text-secondary: #{$teatro911-color-text-secondary}; // #9ababe - Azul grisáceo
+  --component-surface-color: #{$teatro911-color-surface};         // #1a2025 - Gris azulado oscuro
+  --component-accent-color: #{$teatro911-color-accent};           // #d9153a - Rojo intenso
+  
+  // Derived colors using the 5 base colors
+  --component-border-color: #{$teatro911-color-accent};           // Usar accent para borders
+  --component-error-color: #{$teatro911-color-accent};            // Usar accent para errors
+  --component-success-color: #{$teatro911-color-text-secondary};  // Usar text-secondary para success
+  --component-warning-color: #{$teatro911-color-text-secondary};  // Usar text-secondary para warnings
+  
+  // Typography
+  --component-font-family: #{$teatro911-font-family-primary};
+  --component-font-family-display: #{$teatro911-font-family-display};
+  --component-font-size: 1rem;
+  --component-font-weight: #{$teatro911-font-weight-medium}; // Más sutil
+  --component-line-height: 1.5; // Más legible
+  
+  // Spacing
+  --component-padding: 0.75rem 1rem; // Como default
+  --component-margin: 0.5rem;
+  --component-border-radius: 8px; // Más redondeado como default
+  
+  // Effects - más sutiles
+  --component-box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  --component-transition: all 0.2s ease;
+  
+  // Button specific - menos dramático
+  --component-button-hover-transform: translateY(-2px);
+  --component-button-active-transform: translateY(0);
+  
+  // Teatro911 specific effects (usando solo los 5 colores base)
+  --component-text-shadow: 2px 2px 0px #{$teatro911-color-text-secondary}, 4px 4px 0px #{$teatro911-color-accent}; // Verde lima + Cyan
+  --component-border-width: 2px;
+  --component-letter-spacing: 0.5px;
+}
+
+// Base component styles that work with both themes
+.themeable-component {
+  font-family: var(--component-font-family);
+  font-size: var(--component-font-size);
+  font-weight: var(--component-font-weight);
+  line-height: var(--component-line-height);
+  transition: var(--component-transition);
+  
+  // Teatro911 specific enhancements (solo cuando se soliciten explícitamente)
+  &.teatro911-theme {
+    &.with-text-shadow {
+      text-shadow: var(--component-text-shadow);
+    }
+    
+    &.with-grunge-border {
+      border-width: var(--component-border-width);
+      border-style: solid;
+    }
+    
+    &.with-uppercase {
+      text-transform: uppercase;
+      letter-spacing: var(--component-letter-spacing, 0.5px);
+    }
+  }
+}
+
+// Utility classes for quick theme application
+.theme-colors {
+  background-color: var(--component-surface-color);
+  color: var(--component-text-primary);
+  border-color: var(--component-border-color);
+}
+
+.theme-accent {
+  background-color: var(--component-accent-color);
+  color: var(--component-primary-color);
+}
+
+.theme-text {
+  color: var(--component-text-primary);
+}
+
+.theme-text-secondary {
+  color: var(--component-text-secondary);
+}
+
+// Animation keyframes for enhanced effects
+@keyframes teatro911-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+@keyframes teatro911-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  75% { transform: translateX(2px); }
+}
+
+.teatro911-theme {
+  &.animated-pulse {
+    animation: teatro911-pulse 2s ease-in-out infinite;
+  }
+  
+  &.animated-shake {
+    animation: teatro911-shake 0.5s ease-in-out;
+  }
+}

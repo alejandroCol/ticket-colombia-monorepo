@@ -1,0 +1,58 @@
+@import '../../main.scss';
+
+.config-screen {
+  min-height: 100vh;
+  background-color: $color-primary;
+}
+
+.config-content {
+  padding: 1.5rem;
+  padding-top: 2rem;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.config-card {
+  background-color: $color-surface;
+  border-radius: 16px;
+  padding: 1.5rem 2rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+
+  h1 {
+    margin: 0 0 0.5rem;
+    font-size: 1.5rem;
+    color: $color-text-primary;
+  }
+}
+
+.config-description {
+  color: $color-text-secondary;
+  font-size: 0.9rem;
+  margin: 0 0 1.5rem;
+  line-height: 1.4;
+}
+
+.config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.config-error {
+  color: #c62828;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.config-success {
+  color: #2e7d32;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.config-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}

@@ -1,0 +1,149 @@
+@import '../../main.scss';
+@import '../../pages/Teatro911/index.scss';
+@import '../../components/common-styles.scss';
+
+.bottom-nav-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 60px;
+  background-color: var(--component-primary-color, #{$color-primary});
+  border-top: 1px solid var(--component-border-color, #{rgba($color-text-secondary, 0.2)});
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  z-index: 100;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  
+  // Hide on larger screens
+  display: none;
+  
+  @media (max-width: $breakpoint-md) {
+    display: flex;
+  }
+  
+  .nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    height: 100%;
+    color: var(--component-text-secondary, #{$color-text-secondary});
+    transition: color 0.2s ease;
+    cursor: pointer;
+    
+    &.active {
+      color: var(--component-text-primary, #{$color-text-primary});
+    }
+    
+    &:hover:not(.active) {
+      color: var(--component-text-primary, #{$color-text-primary});
+      
+      .icon-inactive {
+        filter: brightness(0) saturate(100%) invert(100%) sepia(0%) saturate(0%) hue-rotate(324deg) brightness(102%) contrast(101%);
+      }
+    }
+    
+    .nav-icon {
+      margin-bottom: 4px;
+      height: 24px;
+      width: 24px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      
+      .icon {
+        height: 22px;
+        width: 22px;
+        transition: filter 0.2s ease;
+        
+        // Active style - white color (color-text-primary)
+        &.icon-active {
+          filter: brightness(0) saturate(100%) invert(100%) sepia(0%) saturate(0%) hue-rotate(324deg) brightness(102%) contrast(101%);
+        }
+        
+        // Inactive style - brownish color (color-text-secondary, #CCA88F)
+        &.icon-inactive {
+          filter: brightness(0) saturate(100%) invert(81%) sepia(11%) saturate(895%) hue-rotate(340deg) brightness(93%) contrast(90%);
+        }
+      }
+    }
+    
+    .nav-label {
+      font-size: 0.75rem;
+      font-weight: $font-weight-medium;
+      margin-top: 4px;
+    }
+  }
+}
+
+// Apply styling to the body when bottom nav is present
+body.has-bottom-nav {
+  @media (max-width: $breakpoint-md) {
+    padding-bottom: 90px !important; // Increased to 90px for extra safety
+  }
+}
+
+// Add padding to specific page containers
+.marketplace-screen,
+.profile-screen,
+.tickets-screen {
+  // Adjust top padding for mobile screens to account for the TopNavBar
+  @media (max-width: $breakpoint-md) {
+    padding-top: 50px;
+    padding-bottom: 80px;
+  }
+}
+
+// Teatro911 theme specific styles - Higher specificity to override default styles
+.bottom-nav-bar.teatro911-theme {
+  background-color: var(--component-primary-color, #{$teatro911-color-primary}) !important;
+  border-top: 1px solid var(--component-border-color, #{$teatro911-color-accent}) !important;
+  
+  .nav-item {
+    color: var(--component-text-secondary, #{$teatro911-color-text-secondary}) !important;
+    
+    &.active {
+      color: var(--component-text-primary, #{$teatro911-color-text-primary}) !important;
+      
+      .nav-icon .icon {
+        // Force active icon color for teatro911 theme
+        filter: brightness(0) saturate(100%) invert(100%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(100%) contrast(100%) !important;
+      }
+    }
+    
+    &:hover:not(.active) {
+      color: var(--component-text-primary, #{$teatro911-color-text-primary}) !important;
+      
+      .nav-icon .icon {
+        // Filter for white color on hover for teatro911 theme
+        filter: brightness(0) saturate(100%) invert(100%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(100%) contrast(100%) !important;
+      }
+    }
+    
+    // Base icon styles for teatro911 theme
+    .nav-icon .icon {
+      &.icon-active {
+        // Filter for white color (#FFFFFF) for teatro911 theme
+        filter: brightness(0) saturate(100%) invert(100%) sepia(0%) saturate(0%) hue-rotate(0deg) brightness(100%) contrast(100%) !important;
+      }
+      
+      &.icon-inactive {
+        // Filter for teatro911 text-secondary color (#9ababe)
+        filter: brightness(0) saturate(100%) invert(74%) sepia(18%) saturate(432%) hue-rotate(142deg) brightness(96%) contrast(89%) !important;
+      }
+    }
+  }
+}
+
+// Create a spacer that can be added to the end of scrollable content
+.bottom-nav-spacer {
+  height: 90px;
+  width: 100%;
+  
+  @media (min-width: $breakpoint-md) {
+    display: none;
+  }
+}

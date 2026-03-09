@@ -1,0 +1,98 @@
+@import '../../main.scss';
+
+.accountless-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  min-height: 50vh;
+  padding: 2rem;
+  margin-top: 2rem;
+  background-color: transparent;
+}
+
+.accountless-container {
+  max-width: 500px;
+  width: 100%;
+  background-color: $color-surface;
+  border-radius: 16px;
+  padding: 3rem 2rem;
+  text-align: center;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  
+  h2 {
+    color: $color-text-primary;
+    font-size: 1.75rem;
+    margin-bottom: 1rem;
+    font-weight: $font-weight-bold;
+  }
+  
+  .accountless-message {
+    color: $color-text-secondary;
+    font-size: 1rem;
+    margin-bottom: 2rem;
+    line-height: 1.5;
+  }
+}
+
+.accountless-icon {
+  margin-bottom: 2rem;
+  
+  .lock-icon {
+    display: inline-block;
+    width: 80px;
+    height: 80px;
+    background-color: rgba($color-accent, 0.1);
+    border-radius: 50%;
+    position: relative;
+    
+    &:before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 40px;
+      height: 40px;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23F57826'%3E%3Cpath d='M12 17a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm6-9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2h1V6a5 5 0 0 1 10 0v2h1zm-6-5a3 3 0 0 0-3 3v2h6V6a3 3 0 0 0-3-3z'%3E%3C/path%3E%3C/svg%3E") no-repeat center center;
+      background-size: contain;
+    }
+  }
+}
+
+.accountless-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 2rem;
+  
+  @include respond-sm {
+    flex-direction: row;
+    justify-content: center;
+  }
+  
+  .login-action, .signup-action {
+    min-width: 150px;
+  }
+  
+  // Override button styles to match original design if needed
+  .login-action {
+    &.primary-button {
+      // The PrimaryButton already has the correct styling
+    }
+  }
+  
+  .signup-action {
+    &.secondary-button {
+      // Ensure the SecondaryButton matches the original design
+      border: 1px solid $color-text-secondary;
+      color: $color-text-secondary;
+      
+      &:hover {
+        color: $color-text-primary;
+        border-color: $color-text-primary;
+        transform: translateY(-2px);
+      }
+    }
+  }
+}

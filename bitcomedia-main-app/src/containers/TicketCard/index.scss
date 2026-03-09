@@ -1,0 +1,251 @@
+@import '../../main.scss';
+@import '../../pages/Teatro911/index.scss';
+@import '../../components/common-styles.scss';
+
+.ticket-card {
+  background: var(--component-surface-color, #{$color-surface});
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  border: 2px solid transparent;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  }
+
+  // Status-based styling
+  &.status-paid {
+    border-color: #22c55e;
+    background: linear-gradient(135deg, $color-surface 0%, rgba(34, 197, 94, 0.1) 100%);
+  }
+
+  &.status-reserved {
+    border-color: #f59e0b;
+    background: linear-gradient(135deg, $color-surface 0%, rgba(245, 158, 11, 0.1) 100%);
+  }
+
+  &.status-cancelled {
+    border-color: #ef4444;
+    background: linear-gradient(135deg, $color-surface 0%, rgba(239, 68, 68, 0.1) 100%);
+    opacity: 0.8;
+  }
+
+  &.status-used {
+    border-color: #6b7280;
+    background: linear-gradient(135deg, $color-surface 0%, rgba(107, 114, 128, 0.1) 100%);
+    opacity: 0.9;
+  }
+
+  &.status-redeemed {
+    border-color: #8b5cf6;
+    background: linear-gradient(135deg, $color-surface 0%, rgba(139, 92, 246, 0.1) 100%);
+    opacity: 0.95;
+  }
+
+  .ticket-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+
+    .status-badges {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      
+      @include respond-sm {
+        flex-direction: row;
+        align-items: center;
+      }
+    }
+
+    .ticket-status, .payment-status {
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: $font-weight-medium;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .ticket-status {
+      &.status-paid {
+        background: #22c55e;
+        color: white;
+      }
+      &.status-reserved {
+        background: #f59e0b;
+        color: white;
+      }
+      &.status-cancelled {
+        background: #ef4444;
+        color: white;
+      }
+      &.status-used {
+        background: #6b7280;
+        color: white;
+      }
+      &.status-redeemed {
+        background: #8b5cf6;
+        color: white;
+      }
+    }
+
+    .payment-status {
+      &.payment-approved {
+        background: rgba(34, 197, 94, 0.2);
+        color: #22c55e;
+        border: 1px solid #22c55e;
+      }
+      &.payment-pending {
+        background: rgba(245, 158, 11, 0.2);
+        color: #f59e0b;
+        border: 1px solid #f59e0b;
+      }
+      &.payment-rejected {
+        background: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+        border: 1px solid #ef4444;
+      }
+    }
+
+    .ticket-amount {
+      font-size: 1.25rem;
+      font-weight: $font-weight-bold;
+      color: var(--component-accent-color, #{$color-accent});
+      text-align: right;
+      
+      @include respond-sm {
+        font-size: 1.5rem;
+      }
+    }
+  }
+
+  .ticket-body {
+    margin-bottom: 1.5rem;
+
+    .event-name {
+      color: var(--component-text-primary, #{$color-text-primary});
+      font-size: 1.125rem;
+      font-weight: $font-weight-semi-bold;
+      margin: 0 0 1rem 0;
+      line-height: 1.4;
+      
+      @include respond-sm {
+        font-size: 1.25rem;
+      }
+    }
+
+    .ticket-details {
+      display: grid;
+      gap: 0.5rem;
+      
+      @include respond-sm {
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+      }
+
+      .detail-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid rgba(204, 168, 143, 0.2);
+
+        .detail-label {
+          color: var(--component-text-secondary, #{$color-text-secondary});
+          font-size: 0.875rem;
+          font-weight: $font-weight-medium;
+        }
+
+        .detail-value {
+          color: var(--component-text-primary, #{$color-text-primary});
+          font-size: 0.875rem;
+          font-weight: $font-weight-regular;
+          text-align: right;
+          max-width: 60%;
+          word-break: break-word;
+        }
+      }
+    }
+  }
+
+  .ticket-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+
+    .preference-id {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      
+      @include respond-sm {
+        flex-direction: row;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .code-label {
+        color: var(--component-text-secondary, #{$color-text-secondary});
+        font-size: 0.75rem;
+        font-weight: $font-weight-medium;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .code-value {
+        color: var(--component-text-primary, #{$color-text-primary});
+        font-size: 0.875rem;
+        font-weight: $font-weight-medium;
+        font-family: 'Courier New', monospace;
+        background: var(--component-accent-bg, #{rgba($color-text-secondary, 0.1)});
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+      }
+    }
+
+    .show-qr-btn {
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: $font-weight-medium;
+      border: none;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+
+      &.primary {
+        background: var(--component-accent-color, #{$color-accent});
+        color: white;
+
+        &:hover {
+          background: var(--component-accent-color, #{darken($color-accent, 10%)});
+          transform: translateY(-1px);
+        }
+
+        &:active {
+          transform: translateY(0);
+        }
+      }
+
+      &.disabled {
+        background: rgba(107, 114, 128, 0.3);
+        color: rgba(255, 255, 255, 0.5);
+        cursor: not-allowed;
+      }
+    }
+  }
+
+  // Mobile responsiveness
+  @include respond-sm {
+    padding: 2rem;
+  }
+} 

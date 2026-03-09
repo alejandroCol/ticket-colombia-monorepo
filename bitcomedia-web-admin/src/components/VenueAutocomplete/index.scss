@@ -1,0 +1,234 @@
+// Import design system variables
+@import '../../main.scss';
+
+$placeholder-color: #9A8574; // Same as CustomInput
+
+.venue-autocomplete-container {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1rem;
+  width: 100%;
+  position: relative;
+  
+  &.has-error {
+    .venue-autocomplete-input {
+      border-color: red;
+    }
+  }
+  
+  &.disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+  
+  &.focused {
+    .venue-autocomplete-input {
+      border-color: $color-accent;
+      box-shadow: 0 0 0 2px rgba($color-accent, 0.2);
+    }
+  }
+}
+
+.venue-autocomplete-label {
+  color: $color-text-primary;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  font-weight: $font-weight-medium;
+  
+  .required-mark {
+    color: $color-accent;
+    margin-left: 4px;
+  }
+}
+
+.venue-autocomplete-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.venue-autocomplete-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background-color: $color-surface;
+  color: $color-text-primary;
+  border: 1px solid rgba($color-text-secondary, 0.3);
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  font-family: $font-family-primary;
+  
+  &:hover:not(:disabled) {
+    border-color: rgba($color-text-secondary, 0.5);
+  }
+  
+  &:focus {
+    outline: none;
+    border-color: $color-accent;
+  }
+  
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+    background-color: rgba($color-surface, 0.8);
+  }
+  
+  &::placeholder {
+    color: $placeholder-color;
+    opacity: 1;
+  }
+}
+
+.venue-autocomplete-loading {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba($color-text-secondary, 0.3);
+    border-top: 2px solid $color-accent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.venue-autocomplete-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: $color-surface;
+  border: 1px solid rgba($color-text-secondary, 0.3);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 4px 6px rgba($color-primary, 0.3);
+  z-index: 1000;
+  max-height: 200px;
+  overflow-y: auto;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: rgba($color-text-secondary, 0.2);
+    border-radius: 3px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: $color-text-secondary;
+    border-radius: 3px;
+
+    &:hover {
+      background: darken($color-text-secondary, 10%);
+    }
+  }
+}
+
+.venue-autocomplete-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.venue-autocomplete-item {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  border-bottom: 1px solid rgba($color-text-secondary, 0.2);
+  transition: background-color 0.2s ease;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover,
+  &.highlighted {
+    background-color: rgba($color-text-secondary, 0.1);
+  }
+
+  .venue-name {
+    font-weight: $font-weight-medium;
+    color: $color-text-primary;
+    margin-bottom: 4px;
+    font-size: 0.9rem;
+    font-family: $font-family-primary;
+  }
+
+  .venue-details {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.8rem;
+    color: $color-text-secondary;
+    font-family: $font-family-primary;
+
+    .venue-city {
+      font-weight: $font-weight-medium;
+    }
+
+    .venue-address {
+      font-style: italic;
+      font-weight: $font-weight-light;
+    }
+  }
+}
+
+.venue-autocomplete-no-results {
+  padding: 1rem;
+  text-align: center;
+  color: $color-text-secondary;
+  font-size: 0.9rem;
+  font-style: italic;
+  font-family: $font-family-primary;
+  font-weight: $font-weight-light;
+}
+
+.venue-autocomplete-error {
+  color: red;
+  font-size: 0.8rem;
+  margin-top: 0.3rem;
+  margin-bottom: 0;
+}
+
+// Responsive design using design system breakpoints
+@include respond-md {
+  .venue-autocomplete-dropdown {
+    max-height: 250px;
+  }
+}
+
+// Mobile optimizations
+@media (max-width: $breakpoint-md) {
+  .venue-autocomplete-dropdown {
+    max-height: 150px;
+  }
+
+  .venue-autocomplete-item {
+    padding: 0.6rem 0.8rem;
+
+    .venue-name {
+      font-size: 0.85rem;
+    }
+
+    .venue-details {
+      font-size: 0.75rem;
+    }
+  }
+
+  .venue-autocomplete-input {
+    padding: 0.6rem 0.8rem;
+    font-size: 0.9rem;
+  }
+
+  .venue-autocomplete-label {
+    font-size: 0.85rem;
+  }
+}

@@ -1,0 +1,152 @@
+// Color variables - Dark Blue Theme (Ticket Colombia)
+$color-primary: #0d1b2a;        // Dark blue background
+$color-secondary: #1b263b;      // Medium dark blue surface
+$color-accent: #00d4ff;         // Cyan/electric blue accent
+$color-text-primary: #e0e1dd;   // Light gray text (almost white)
+$color-text-secondary: #778da9; // Blue-gray text
+$color-surface: #1b263b;        // Dark blue surface
+
+// Font variables
+$font-family-primary: 'Be Vietnam Pro', sans-serif;
+$font-family-display: 'Outfit', $font-family-primary;
+$font-weight-thin: 100;
+$font-weight-extra-light: 200;
+$font-weight-light: 300;
+$font-weight-regular: 400;
+$font-weight-medium: 500;
+$font-weight-semi-bold: 600;
+$font-weight-bold: 700;
+$font-weight-extra-bold: 800;
+$font-weight-black: 900;
+
+// Responsive breakpoints (mobile-first)
+$breakpoint-sm: 576px;   // Small devices (phones)
+$breakpoint-md: 768px;   // Medium devices (tablets)
+$breakpoint-lg: 992px;   // Large devices (desktops)
+$breakpoint-xl: 1200px;  // Extra large devices (large desktops)
+$breakpoint-xxl: 1400px; // XXL devices
+
+// Responsive mixins (mobile-first)
+@mixin respond-sm {
+  @media (min-width: $breakpoint-sm) {
+    @content;
+  }
+}
+
+@mixin respond-md {
+  @media (min-width: $breakpoint-md) {
+    @content;
+  }
+}
+
+@mixin respond-lg {
+  @media (min-width: $breakpoint-lg) {
+    @content;
+  }
+}
+
+@mixin respond-xl {
+  @media (min-width: $breakpoint-xl) {
+    @content;
+  }
+}
+
+@mixin respond-xxl {
+  @media (min-width: $breakpoint-xxl) {
+    @content;
+  }
+}
+
+// Make variables available for importing in other SCSS files
+:root {
+  // Colors
+  --color-primary: #{$color-primary};
+  --color-secondary: #{$color-secondary};
+  --color-accent: #{$color-accent};
+  --color-text-primary: #{$color-text-primary};
+  --color-text-secondary: #{$color-text-secondary};
+  --color-surface: #{$color-surface};
+  
+  // Fonts
+  --font-family-primary: #{$font-family-primary};
+  --font-family-display: #{$font-family-display};
+  --font-weight-thin: #{$font-weight-thin};
+  --font-weight-extra-light: #{$font-weight-extra-light};
+  --font-weight-light: #{$font-weight-light};
+  --font-weight-regular: #{$font-weight-regular};
+  --font-weight-medium: #{$font-weight-medium};
+  --font-weight-semi-bold: #{$font-weight-semi-bold};
+  --font-weight-bold: #{$font-weight-bold};
+  --font-weight-extra-bold: #{$font-weight-extra-bold};
+  --font-weight-black: #{$font-weight-black};
+  
+  // Responsive breakpoints
+  --breakpoint-sm: #{$breakpoint-sm};
+  --breakpoint-md: #{$breakpoint-md};
+  --breakpoint-lg: #{$breakpoint-lg};
+  --breakpoint-xl: #{$breakpoint-xl};
+  --breakpoint-xxl: #{$breakpoint-xxl};
+}
+
+// Base mobile-first styles
+html {
+  box-sizing: border-box;
+  font-size: 16px; // Base font size for mobile
+  
+  @include respond-md {
+    font-size: 17px; // Slightly larger for tablets
+  }
+  
+  @include respond-lg {
+    font-size: 18px; // Larger for desktops
+  }
+}
+
+*, *:before, *:after {
+  box-sizing: inherit;
+}
+
+// Apply font to body
+body {
+  background-color: $color-primary;
+  font-family: $font-family-primary;
+  margin: 0;
+  padding: 0;
+  line-height: 1.5;
+  overflow-x: hidden; // Prevent horizontal scrolling on mobile
+}
+
+// Responsive images by default
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+// Container class for consistent padding/margins
+.container {
+  width: 100%;
+  padding-right: 1rem;
+  padding-left: 1rem;
+  margin-right: auto;
+  margin-left: auto;
+  
+  @include respond-sm {
+    max-width: 540px;
+  }
+  
+  @include respond-md {
+    max-width: 720px;
+  }
+  
+  @include respond-lg {
+    max-width: 960px;
+  }
+  
+  @include respond-xl {
+    max-width: 1140px;
+  }
+  
+  @include respond-xxl {
+    max-width: 1320px;
+  }
+}

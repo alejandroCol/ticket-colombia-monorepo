@@ -1,0 +1,350 @@
+// Teatro911 Design System - Based on hero-banner.png
+// Color variables inspired by the "STANDUP EN EL 911" graffiti design
+@import '../../main.scss';
+
+// Color variables - Teatro911 theme (exactamente 5 colores como main.scss)
+$teatro911-color-primary: #15110f;
+$teatro911-color-text-primary: #FFFFFF;   // Blanco puro
+$teatro911-color-text-secondary: #9ababe; // Azul grisáceo
+$teatro911-color-surface: #1a2025;        // Gris azulado oscuro
+$teatro911-color-accent: #d9153a;         // Rojo intenso
+
+// Font variables (keeping consistent with main system)
+$teatro911-font-family-primary: 'Be Vietnam Pro', sans-serif;
+$teatro911-font-family-display: 'Impact', 'Arial Black', sans-serif; // Bold display font for standup style
+$teatro911-font-weight-thin: 100;
+$teatro911-font-weight-extra-light: 200;
+$teatro911-font-weight-light: 300;
+$teatro911-font-weight-regular: 400;
+$teatro911-font-weight-medium: 500;
+$teatro911-font-weight-semi-bold: 600;
+$teatro911-font-weight-bold: 700;
+$teatro911-font-weight-extra-bold: 800;
+$teatro911-font-weight-black: 900;
+
+// Responsive breakpoints (mobile-first)
+$teatro911-breakpoint-sm: 576px;   // Small devices (phones)
+$teatro911-breakpoint-md: 768px;   // Medium devices (tablets)
+$teatro911-breakpoint-lg: 992px;   // Large devices (desktops)
+$teatro911-breakpoint-xl: 1200px;  // Extra large devices (large desktops)
+$teatro911-breakpoint-xxl: 1400px; // XXL devices
+
+// Responsive mixins (mobile-first)
+@mixin teatro911-respond-sm {
+  @media (min-width: $teatro911-breakpoint-sm) {
+    @content;
+  }
+}
+
+@mixin teatro911-respond-md {
+  @media (min-width: $teatro911-breakpoint-md) {
+    @content;
+  }
+}
+
+@mixin teatro911-respond-lg {
+  @media (min-width: $teatro911-breakpoint-lg) {
+    @content;
+  }
+}
+
+@mixin teatro911-respond-xl {
+  @media (min-width: $teatro911-breakpoint-xl) {
+    @content;
+  }
+}
+
+@mixin teatro911-respond-xxl {
+  @media (min-width: $teatro911-breakpoint-xxl) {
+    @content;
+  }
+}
+
+// Teatro911 specific design tokens
+:root {
+  // Primary colors
+  --teatro911-color-primary: #{$teatro911-color-primary};
+  --teatro911-color-text-primary: #{$teatro911-color-text-primary};
+  --teatro911-color-text-secondary: #{$teatro911-color-text-secondary};
+  --teatro911-color-surface: #{$teatro911-color-surface};
+  --teatro911-color-accent: #{$teatro911-color-accent};
+  
+  // No extended palette - using only the 5 base colors
+  
+  // Fonts
+  --teatro911-font-family-primary: #{$teatro911-font-family-primary};
+  --teatro911-font-family-display: #{$teatro911-font-family-display};
+  --teatro911-font-weight-thin: #{$teatro911-font-weight-thin};
+  --teatro911-font-weight-extra-light: #{$teatro911-font-weight-extra-light};
+  --teatro911-font-weight-light: #{$teatro911-font-weight-light};
+  --teatro911-font-weight-regular: #{$teatro911-font-weight-regular};
+  --teatro911-font-weight-medium: #{$teatro911-font-weight-medium};
+  --teatro911-font-weight-semi-bold: #{$teatro911-font-weight-semi-bold};
+  --teatro911-font-weight-bold: #{$teatro911-font-weight-bold};
+  --teatro911-font-weight-extra-bold: #{$teatro911-font-weight-extra-bold};
+  --teatro911-font-weight-black: #{$teatro911-font-weight-black};
+  
+  // Responsive breakpoints
+  --teatro911-breakpoint-sm: #{$teatro911-breakpoint-sm};
+  --teatro911-breakpoint-md: #{$teatro911-breakpoint-md};
+  --teatro911-breakpoint-lg: #{$teatro911-breakpoint-lg};
+  --teatro911-breakpoint-xl: #{$teatro911-breakpoint-xl};
+  --teatro911-breakpoint-xxl: #{$teatro911-breakpoint-xxl};
+}
+
+// Teatro911 specific styling
+.teatro911 {
+  background-color: $teatro911-color-primary;
+  font-family: $teatro911-font-family-primary;
+  color: $teatro911-color-text-primary;
+  
+  // Grunge text effect mixin
+  &__title {
+    font-family: $teatro911-font-family-display;
+    font-weight: $teatro911-font-weight-black;
+    color: $teatro911-color-text-primary;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    text-shadow: 
+      2px 2px 0px $teatro911-color-text-secondary,
+      4px 4px 0px $teatro911-color-accent;
+  }
+  
+  &__subtitle {
+    color: $teatro911-color-text-secondary;
+    font-weight: $teatro911-font-weight-bold;
+  }
+  
+  &__surface {
+    background-color: $teatro911-color-surface;
+    border: 2px solid $teatro911-color-accent;
+  }
+  
+  &__accent {
+    color: $teatro911-color-accent;
+  }
+  
+  &__warning {
+    color: $teatro911-color-text-secondary; // Verde lima para warnings
+  }
+}
+
+// Teatro911 Screen Layout (based on Marketplace structure)
+.teatro911-screen {
+  min-height: 100vh;
+  background: $teatro911-color-primary;
+  display: flex;
+  flex-direction: column;
+}
+
+// Hero Banner Section - Image Only
+.teatro911-hero-banner {
+  width: 100%;
+  margin-top: 60px; // Space for top navigation bar
+  overflow: hidden;
+  
+  @include respond-sm {
+    margin-top: 70px; // Slightly more space on larger screens
+  }
+
+  .teatro911-hero-image {
+    width: 100%;
+    height: auto;
+    min-height: 250px;
+    max-height: 400px;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+    
+    @include respond-sm {
+      min-height: 300px;
+      max-height: 500px;
+    }
+    
+    @include respond-md {
+      min-height: 350px;
+      max-height: 600px;
+    }
+    
+    @include respond-lg {
+      min-height: 400px;
+      max-height: 700px;
+    }
+  }
+}
+
+// Header Content Section (moved below hero banner)
+.teatro911-header {
+  padding: 2rem 1rem 1rem 1rem;
+  background: $teatro911-color-primary;
+  border-bottom: 1px solid rgba($teatro911-color-text-secondary, 0.2);
+  
+  @include respond-sm {
+    padding: 2.5rem 2rem 1.5rem 2rem;
+  }
+
+  .teatro911-header-content {
+    display: flex;
+    flex-direction: column;
+    text-align: center;
+    gap: 1.5rem;
+    
+    @include respond-sm {
+      flex-direction: row;
+      align-items: center;
+      text-align: left;
+      gap: 2rem;
+    }
+  }
+
+  .teatro911-logo-container {
+    flex-shrink: 0;
+    
+    .teatro911-logo {
+      height: 80px;
+      width: auto;
+      object-fit: contain;
+      
+      @include respond-sm {
+        height: 100px;
+      }
+      
+      @include respond-lg {
+        height: 120px;
+      }
+    }
+  }
+
+  .teatro911-text-content {
+    flex: 1;
+    text-align: center;
+    
+    @include respond-sm {
+      text-align: left;
+    }
+  }
+
+  .teatro911-hero-subtitle {
+    font-size: 1rem;
+    color: $teatro911-color-text-secondary;
+    text-align: inherit;
+    margin: 0 0 1rem 0;
+    font-weight: $teatro911-font-weight-medium;
+    line-height: 1.5;
+    
+    @include respond-sm {
+      font-size: 1.125rem;
+    }
+  }
+
+  .teatro911-whatsapp-contact {
+    font-size: 0.9rem;
+    color: $teatro911-color-text-secondary;
+    text-align: inherit;
+    margin: 0;
+    font-weight: $teatro911-font-weight-regular;
+    line-height: 1.4;
+    opacity: 0.8;
+    
+    @include respond-sm {
+      font-size: 1rem;
+    }
+  }
+}
+
+.teatro911-content {
+  flex: 1;
+  padding: 1rem;
+  
+  @include respond-sm {
+    padding: 1.5rem 2rem;
+  }
+
+  .bottom-nav-spacer {
+    height: 80px;
+  }
+}
+
+.teatro911-section {
+  margin-bottom: 3rem;
+  
+  h2 {
+    font-size: 1.5rem;
+    font-weight: $teatro911-font-weight-bold;
+    margin-bottom: 1.5rem;
+    color: $teatro911-color-text-secondary;
+  }
+}
+
+.event-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+  
+  @include respond-sm {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  @include respond-lg {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+}
+
+
+
+.teatro911-footer {
+  padding: 1rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: $teatro911-color-text-secondary;
+  
+  @media (max-width: $breakpoint-md) {
+    padding-bottom: calc(60px + 1rem); // Bottom navbar height + padding
+  }
+}
+
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem 0;
+  width: 100%;
+}
+
+.loading-more {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 1rem 0;
+}
+
+// Container class for Teatro911 pages
+.teatro911-container {
+  width: 100%;
+  padding-right: 1rem;
+  padding-left: 1rem;
+  margin-right: auto;
+  margin-left: auto;
+  background-color: $teatro911-color-primary;
+  
+  @include teatro911-respond-sm {
+    max-width: 540px;
+  }
+  
+  @include teatro911-respond-md {
+    max-width: 720px;
+  }
+  
+  @include teatro911-respond-lg {
+    max-width: 960px;
+  }
+  
+  @include teatro911-respond-xl {
+    max-width: 1140px;
+  }
+  
+  @include teatro911-respond-xxl {
+    max-width: 1320px;
+  }
+}

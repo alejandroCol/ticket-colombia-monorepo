@@ -1,0 +1,82 @@
+@import '../../main.scss';
+
+.loader-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 1rem;
+
+  &.fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba($color-primary, 0.7);
+    z-index: 1000;
+  }
+}
+
+.spinner {
+  position: relative;
+  border-radius: 50%;
+
+  &.spinner-small {
+    width: 20px;
+    height: 20px;
+  }
+
+  &.spinner-medium {
+    width: 40px;
+    height: 40px;
+  }
+
+  &.spinner-large {
+    width: 60px;
+    height: 60px;
+  }
+
+  &.spinner-primary {
+    border: 2px solid rgba($color-primary, 0.2);
+    
+    .spinner-inner {
+      border-color: $color-primary transparent transparent transparent;
+    }
+  }
+
+  &.spinner-secondary {
+    border: 2px solid rgba($color-text-secondary, 0.2);
+    
+    .spinner-inner {
+      border-color: $color-text-secondary transparent transparent transparent;
+    }
+  }
+
+  &.spinner-accent {
+    border: 2px solid rgba($color-accent, 0.2);
+    
+    .spinner-inner {
+      border-color: $color-accent transparent transparent transparent;
+    }
+  }
+}
+
+.spinner-inner {
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}

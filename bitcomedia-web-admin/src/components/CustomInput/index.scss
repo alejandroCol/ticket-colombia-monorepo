@@ -1,0 +1,99 @@
+@import '../../main.scss';
+
+$placeholder-color: #9A8574; // A lighter color that contrasts well with the background
+
+.custom-input-container {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1rem;
+  width: 100%;
+  
+  &.has-error {
+    .custom-input {
+      border-color: red;
+    }
+  }
+  
+  &.disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+  
+  &.focused {
+    .custom-input {
+      border-color: $color-accent;
+      box-shadow: 0 0 0 2px rgba($color-accent, 0.2);
+    }
+  }
+}
+
+.custom-input-label {
+  color: $color-text-primary;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  font-weight: $font-weight-medium;
+  
+  .required-mark {
+    color: $color-accent;
+    margin-left: 4px;
+  }
+}
+
+.custom-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.custom-input-icon {
+  position: absolute;
+  left: 12px;
+  color: $color-text-secondary;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.custom-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background-color: $color-surface;
+  color: $color-text-primary;
+  border: 1px solid rgba($color-text-secondary, 0.3);
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  font-family: $font-family-primary;
+  
+  &:hover:not(:disabled) {
+    border-color: rgba($color-text-secondary, 0.5);
+  }
+  
+  &:focus {
+    outline: none;
+    border-color: $color-accent;
+  }
+  
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+    background-color: rgba($color-surface, 0.8);
+  }
+  
+  &::placeholder {
+    color: $placeholder-color;
+    opacity: 1;
+  }
+  
+  // When there's an icon, add padding to the left
+  .custom-input-icon + & {
+    padding-left: 2.5rem;
+  }
+}
+
+.custom-input-error {
+  color: red;
+  font-size: 0.8rem;
+  margin-top: 0.3rem;
+  margin-bottom: 0;
+}

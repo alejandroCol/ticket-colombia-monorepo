@@ -1,0 +1,202 @@
+@import '../../main.scss';
+
+.qr-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.qr-modal {
+  background: $color-surface;
+  border-radius: 16px;
+  max-width: 400px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(204, 168, 143, 0.2);
+
+  .qr-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    border-bottom: 1px solid rgba(204, 168, 143, 0.2);
+
+    h2 {
+      color: $color-text-primary;
+      font-size: 1.25rem;
+      font-weight: $font-weight-semi-bold;
+      margin: 0;
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      color: $color-text-secondary;
+      font-size: 2rem;
+      cursor: pointer;
+      padding: 0;
+      width: 2rem;
+      height: 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      transition: all 0.3s ease;
+
+      &:hover {
+        background: rgba(204, 168, 143, 0.1);
+        color: $color-text-primary;
+      }
+    }
+  }
+
+  .qr-modal-content {
+    padding: 1.5rem;
+
+    .event-info {
+      text-align: center;
+      margin-bottom: 2rem;
+
+      h3 {
+        color: $color-text-primary;
+        font-size: 1.125rem;
+        font-weight: $font-weight-semi-bold;
+        margin: 0 0 1rem 0;
+        line-height: 1.4;
+      }
+
+      p {
+        color: $color-text-secondary;
+        font-size: 0.875rem;
+        margin: 0.25rem 0;
+      }
+    }
+
+    .qr-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.5rem;
+
+      .qr-code {
+        background: white;
+        padding: 1rem;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+
+        img {
+          display: block;
+          width: 200px;
+          height: 200px;
+        }
+
+        .qr-fallback {
+          width: 200px;
+          height: 200px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 1rem;
+          color: $color-primary;
+
+          p {
+            margin: 0;
+            font-weight: $font-weight-medium;
+          }
+
+          a {
+            color: $color-accent;
+            text-decoration: none;
+            font-weight: $font-weight-medium;
+            padding: 0.5rem 1rem;
+            border: 1px solid $color-accent;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+
+            &:hover {
+              background: $color-accent;
+              color: white;
+            }
+          }
+        }
+      }
+
+      .qr-actions {
+        text-align: center;
+
+        .download-btn {
+          background: $color-accent;
+          color: white;
+          border: none;
+          padding: 0.75rem 2rem;
+          border-radius: 8px;
+          font-size: 0.875rem;
+          font-weight: $font-weight-medium;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          margin-bottom: 1rem;
+
+          &:hover {
+            background: darken($color-accent, 10%);
+            transform: translateY(-1px);
+          }
+
+          &:active {
+            transform: translateY(0);
+          }
+        }
+
+        .qr-instructions {
+          color: $color-text-secondary;
+          font-size: 0.75rem;
+          margin: 0;
+          line-height: 1.4;
+          max-width: 250px;
+          margin: 0 auto;
+        }
+      }
+    }
+
+    .no-qr {
+      text-align: center;
+      padding: 2rem 1rem;
+
+      p {
+        color: $color-text-secondary;
+        margin: 0.5rem 0;
+        
+        &:first-child {
+          color: $color-text-primary;
+          font-weight: $font-weight-medium;
+          font-size: 1rem;
+        }
+      }
+    }
+  }
+
+  // Mobile responsiveness
+  @include respond-sm {
+    max-width: 450px;
+    
+    .qr-modal-header {
+      padding: 2rem;
+    }
+    
+    .qr-modal-content {
+      padding: 2rem;
+    }
+  }
+} 

@@ -1,0 +1,134 @@
+@import '../../main.scss';
+@import '../common-styles.scss';
+
+$placeholder-color: #9A8574; // A lighter color that contrasts well with the background
+
+.custom-textarea-container {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: var(--component-margin, 1rem);
+  width: 100%;
+  
+  &.has-error {
+    .custom-textarea {
+      border-color: var(--component-error-color, red);
+    }
+  }
+  
+  &.disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+  
+  &.focused {
+    .custom-textarea {
+      border-color: var(--component-accent-color, #{$color-accent});
+      box-shadow: 0 0 0 2px rgba($color-accent, 0.2);
+    }
+  }
+}
+
+.custom-textarea-label {
+  color: var(--component-text-primary, #{$color-text-primary});
+  font-size: var(--component-font-size, 0.9rem);
+  margin-bottom: 0.5rem;
+  font-weight: var(--component-font-weight, #{$font-weight-medium});
+  font-family: var(--component-font-family, #{$font-family-primary});
+  
+  .required-mark {
+    color: var(--component-accent-color, #{$color-accent});
+    margin-left: 4px;
+  }
+}
+
+.custom-textarea-wrapper {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+}
+
+.custom-textarea {
+  width: 100%;
+  padding: var(--component-padding, 0.75rem 1rem);
+  background-color: var(--component-surface-color, #{$color-surface});
+  color: var(--component-text-primary, #{$color-text-primary});
+  border: 1px solid var(--component-border-color, rgba($color-text-secondary, 0.3));
+  border-radius: var(--component-border-radius, 8px);
+  font-size: var(--component-font-size, 1rem);
+  transition: var(--component-transition, all 0.2s ease);
+  font-family: var(--component-font-family, #{$font-family-primary});
+  resize: vertical;
+  min-height: 100px;
+  
+  &:hover:not(:disabled) {
+    border-color: var(--component-border-color, rgba($color-text-secondary, 0.5));
+    filter: brightness(1.1);
+  }
+  
+  &:focus {
+    outline: none;
+    border-color: var(--component-accent-color, #{$color-accent});
+  }
+  
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+    background-color: rgba($color-surface, 0.8);
+  }
+  
+  &::placeholder {
+    color: $placeholder-color;
+    opacity: 1;
+  }
+}
+
+.custom-textarea-error {
+  color: var(--component-error-color, red);
+  font-size: 0.8rem;
+  margin-top: 0.3rem;
+  margin-bottom: 0;
+  font-family: var(--component-font-family, #{$font-family-primary});
+}
+
+// Teatro911 theme specific styles
+.custom-textarea-container.teatro911-theme {
+  .custom-textarea-label {
+    font-weight: var(--component-font-weight, #{$teatro911-font-weight-medium}); // Más sutil
+    color: $teatro911-color-text-primary;
+  }
+  
+  .custom-textarea {
+    background-color: $teatro911-color-surface;
+    color: $teatro911-color-text-primary;
+    border-color: $teatro911-color-text-secondary;
+    border-radius: var(--component-border-radius, 8px); // Mantener redondeado como default
+    
+    &:hover:not(:disabled) {
+      border-color: $teatro911-color-accent;
+    }
+    
+    &:focus {
+      border-color: $teatro911-color-accent;
+    }
+    
+    &::placeholder {
+      color: rgba($teatro911-color-text-secondary, 0.7);
+    }
+  }
+  
+  // Solo aplicar efectos especiales cuando se solicite explícitamente
+  &.with-grunge-border {
+    .custom-textarea {
+      border-width: var(--component-border-width, 2px);
+      border-style: solid;
+    }
+  }
+  
+  &.focused .custom-textarea {
+    box-shadow: 0 0 0 2px rgba($teatro911-color-accent, 0.2);
+  }
+  
+  .custom-textarea-error {
+    color: $teatro911-color-text-primary; // No rojo, usar color del tema
+  }
+} 

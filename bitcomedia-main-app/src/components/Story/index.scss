@@ -1,0 +1,210 @@
+@import '../../main.scss';
+@import '../common-styles.scss';
+
+.story {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  transition: transform 0.2s ease, z-index 0.2s ease;
+  
+  &:hover {
+    transform: scale(1.05);
+    z-index: 20; // Elevate above other stories
+  }
+  
+  &:active {
+    transform: scale(0.95);
+    z-index: 20;
+  }
+  
+  // Ring container
+  &__ring {
+    position: relative;
+    border-radius: 50%;
+    padding: 2px;
+    background: linear-gradient(45deg, 
+      var(--component-accent-color, #{$color-accent}), 
+      var(--component-text-primary, #{$color-text-primary}), 
+      var(--component-accent-color, #{$color-accent})
+    );
+    transition: all 0.3s ease;
+    
+    &:hover {
+      background: linear-gradient(45deg, 
+        var(--component-accent-color, #{$color-accent}), 
+        var(--component-text-primary, #{$color-text-primary}), 
+        var(--component-accent-color, #{$color-accent}), 
+        var(--component-text-primary, #{$color-text-primary})
+      );
+      box-shadow: 0 0 20px rgba(var(--component-accent-color, #{$color-accent}), 0.4);
+    }
+  }
+  
+  // Image container
+  &__image-container {
+    border-radius: 50%;
+    overflow: hidden;
+    background-color: var(--component-surface-color, #{$color-surface});
+    border: 2px solid var(--component-primary-color, #{$color-primary});
+  }
+  
+  // Story image
+  &__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  
+  // Story title
+  &__title {
+    font-size: 0.75rem;
+    font-weight: var(--component-font-weight, #{$font-weight-medium});
+    color: var(--component-text-primary, #{$color-text-primary});
+    text-align: center;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.2;
+  }
+  
+  // Size variants
+  &--small {
+    .story__ring {
+      width: 50px;
+      height: 50px;
+    }
+    
+    .story__image-container {
+      width: 46px;
+      height: 46px;
+    }
+    
+    .story__title {
+      font-size: 0.65rem;
+      max-width: 60px;
+    }
+  }
+  
+  &--medium {
+    .story__ring {
+      width: 70px;
+      height: 70px;
+    }
+    
+    .story__image-container {
+      width: 66px;
+      height: 66px;
+    }
+    
+    .story__title {
+      font-size: 0.75rem;
+      max-width: 80px;
+    }
+  }
+  
+  &--large {
+    .story__ring {
+      width: 90px;
+      height: 90px;
+    }
+    
+    .story__image-container {
+      width: 86px;
+      height: 86px;
+    }
+    
+    .story__title {
+      font-size: 0.85rem;
+      max-width: 100px;
+    }
+  }
+  
+  // Highlighted variant (more prominent gradient)
+  &--highlighted {
+    .story__ring {
+      background: linear-gradient(45deg, 
+        #ff6b6b, #ffd93d, #6bcf7f, #4d9de0, #e15759, #ff6b6b
+      );
+      padding: 3px;
+      
+      &:hover {
+        background: linear-gradient(45deg, 
+          #ff6b6b, #ffd93d, #6bcf7f, #4d9de0, #e15759, #ff6b6b, #ffd93d
+        );
+        box-shadow: 0 0 25px rgba(255, 107, 107, 0.6);
+      }
+    }
+  }
+  
+  // Animated variant
+  &--animated {
+    .story__ring {
+      animation: storyPulse 2s ease-in-out infinite;
+    }
+  }
+}
+
+// Animation for highlighted stories
+@keyframes storyPulse {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(var(--component-accent-color, #{$color-accent}), 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(var(--component-accent-color, #{$color-accent}), 0.6);
+  }
+}
+
+// Teatro911 theme specific styles
+.story.teatro911-theme {
+  .story__title {
+    color: var(--component-text-primary, #{$teatro911-color-text-primary});
+  }
+  
+  .story__ring {
+    background: linear-gradient(45deg, 
+      var(--component-accent-color, #{$teatro911-color-accent}), 
+      var(--component-text-secondary, #{$teatro911-color-text-secondary}), 
+      var(--component-accent-color, #{$teatro911-color-accent})
+    );
+    
+    &:hover {
+      box-shadow: 0 0 20px rgba(217, 21, 58, 0.5); // Teatro911 accent color with opacity
+    }
+  }
+  
+  .story__image-container {
+    border-color: var(--component-primary-color, #{$teatro911-color-primary});
+    background-color: var(--component-surface-color, #{$teatro911-color-surface});
+  }
+  
+  &.story--highlighted .story__ring {
+    background: linear-gradient(45deg, 
+      #{$teatro911-color-accent}, 
+      #{$teatro911-color-text-secondary}, 
+      #{$teatro911-color-accent}, 
+      #{$teatro911-color-text-primary}
+    );
+    
+    &:hover {
+      box-shadow: 0 0 25px rgba(217, 21, 58, 0.7);
+    }
+  }
+}
+
+// Default theme specific styles
+.story.default-theme {
+  .story__title {
+    color: var(--component-text-primary, #{$color-text-primary});
+  }
+  
+  .story__image-container {
+    border-color: var(--component-primary-color, #{$color-primary});
+    background-color: var(--component-surface-color, #{$color-surface});
+  }
+}

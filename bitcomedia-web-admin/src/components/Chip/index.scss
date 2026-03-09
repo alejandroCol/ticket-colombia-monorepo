@@ -1,0 +1,122 @@
+@import '../../main.scss';
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  border-radius: 100px;
+  font-size: 0.875rem;
+  font-weight: $font-weight-medium;
+  transition: all 0.2s ease;
+  margin: 0.25rem;
+  user-select: none;
+  color: $color-text-secondary;
+  
+  // Tamaños
+  &.chip-small {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+  }
+  
+  &.chip-medium {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+  }
+  
+  &.chip-large {
+    padding: 0.625rem 1.25rem;
+    font-size: 1rem;
+  }
+  
+  // Colores
+  &.chip-default {
+    background-color: $color-surface;
+    
+    &.active, &.clickable:hover {
+      background-color: lighten($color-surface, 10%);
+      color: $color-text-primary;
+    }
+  }
+  
+  &.chip-primary {
+    background-color: rgba($color-surface, 0.8);
+    
+    &.active, &.clickable:hover {
+      background-color: $color-surface;
+      color: $color-text-primary;
+    }
+  }
+  
+  &.chip-accent {
+    background-color: rgba($color-accent, 0.1);
+    
+    &.active, &.clickable:hover {
+      background-color: $color-accent;
+      color: white;
+    }
+  }
+  
+  &.chip-success {
+    background-color: rgba(52, 199, 89, 0.1);
+    
+    &.active, &.clickable:hover {
+      background-color: #34c759;
+      color: white;
+    }
+  }
+  
+  &.chip-warning {
+    background-color: rgba(255, 204, 0, 0.1);
+    
+    &.active, &.clickable:hover {
+      background-color: #ffcc00;
+      color: $color-primary;
+    }
+  }
+  
+  &.chip-error {
+    background-color: rgba(255, 59, 48, 0.1);
+    
+    &.active, &.clickable:hover {
+      background-color: #ff3b30;
+      color: white;
+    }
+  }
+  
+  // Estado clickable
+  &.clickable {
+    cursor: pointer;
+    
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+    
+    &:active {
+      transform: translateY(0);
+    }
+  }
+  
+  // Estado disabled
+  &.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    
+    &:hover {
+      transform: none;
+      box-shadow: none;
+    }
+  }
+  
+  // Icono
+  .chip-icon {
+    margin-right: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .chip-label {
+    line-height: 1.2;
+  }
+}

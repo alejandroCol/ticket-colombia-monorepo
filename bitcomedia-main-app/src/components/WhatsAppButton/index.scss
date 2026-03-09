@@ -1,0 +1,82 @@
+@import '../../main.scss';
+@import '../../pages/Teatro911/index.scss';
+@import '../common-styles.scss';
+
+.whatsapp-button {
+  color: var(--component-accent-color, #{$color-accent});
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: $font-family-primary;
+  font-size: inherit;
+  font-weight: $font-weight-semi-bold;
+  text-decoration: underline;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline;
+  outline: none;
+
+  &:hover {
+    color: var(--component-accent-color, #{lighten($color-accent, 10%)});
+    text-decoration: none;
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+
+  &:focus {
+    outline: 2px solid var(--component-accent-bg, #{rgba($color-accent, 0.3)});
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  // Variant for button-style appearance (WhatsApp themed)
+  &.button-style {
+    background-color: #25D366; // WhatsApp green (stays consistent)
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: $font-weight-medium;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    box-shadow: 0 2px 8px rgba(37, 211, 102, 0.3);
+
+    &:hover {
+      background-color: #128C7E;
+      color: white;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(37, 211, 102, 0.4);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+  }
+
+  // Variant for primary button style
+  &.primary-style {
+    background: linear-gradient(135deg, var(--component-accent-color, #{$color-accent}) 0%, var(--component-accent-color, #{lighten($color-accent, 10%)}) 100%);
+    color: var(--component-text-primary, #{$color-text-primary});
+    padding: 1rem 2rem;
+    border-radius: 12px;
+    text-decoration: none;
+    font-weight: $font-weight-semi-bold;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    box-shadow: 0 4px 16px var(--component-accent-bg, #{rgba($color-accent, 0.3)});
+
+    &:hover {
+      color: var(--component-text-primary, #{$color-text-primary});
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px var(--component-accent-bg, #{rgba($color-accent, 0.4)});
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+  }
+} 
