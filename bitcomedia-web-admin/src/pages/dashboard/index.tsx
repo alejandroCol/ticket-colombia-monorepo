@@ -7,7 +7,6 @@ import SecondaryButton from '@components/SecondaryButton';
 import EventCard from '@containers/EventCard';
 import TopNavBar from '@TopNavBar';
 import CreateTicketModal, { type TicketFormData } from '@components/CreateTicketModal';
-import ViewTicketsModal from '@components/ViewTicketsModal';
 import { logoutUser, db, functions } from '@services';
 import './index.scss';
 
@@ -54,8 +53,6 @@ const DashboardScreen: React.FC = () => {
   const [isRecurringCollapsed, setIsRecurringCollapsed] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<EventData | null>(null);
-  const [isViewTicketsModalOpen, setIsViewTicketsModalOpen] = useState(false);
-  const [viewTicketsEvent, setViewTicketsEvent] = useState<{ id: string; name: string } | null>(null);
   const navigate = useNavigate();
   
   // Fetch recurring events from Firestore
@@ -245,14 +242,8 @@ const DashboardScreen: React.FC = () => {
     setSelectedEvent(null);
   };
 
-  const handleViewTickets = (eventId: string, eventName: string) => {
-    setViewTicketsEvent({ id: eventId, name: eventName });
-    setIsViewTicketsModalOpen(true);
-  };
-
-  const handleViewTicketsModalClose = () => {
-    setIsViewTicketsModalOpen(false);
-    setViewTicketsEvent(null);
+  const handleViewTickets = (eventId: string) => {
+    navigate(`/events/${eventId}/tickets`);
   };
 
   const handleModalSubmit = async (ticketData: TicketFormData) => {
@@ -334,7 +325,7 @@ const DashboardScreen: React.FC = () => {
                     event={event}
                     onReserve={handleReserveEvent}
                     onCreateTicket={handleCreateTicket}
-                    onViewTickets={handleViewTickets}
+                    onViewTickets={(eventId) => handleViewTickets(eventId)}
                     onViewStats={handleViewStats}
                   />
                 ))}
@@ -373,7 +364,7 @@ const DashboardScreen: React.FC = () => {
                   event={event}
                   onReserve={handleReserveEvent}
                   onCreateTicket={handleCreateTicket}
-                  onViewTickets={handleViewTickets}
+                  onViewTickets={(eventId) => handleViewTickets(eventId)}
                   onViewStats={handleViewStats}
                 />
               ))}
@@ -408,15 +399,6 @@ const DashboardScreen: React.FC = () => {
         />
       )}
 
-      {/* View Tickets Modal */}
-      {viewTicketsEvent && (
-        <ViewTicketsModal
-          isOpen={isViewTicketsModalOpen}
-          onClose={handleViewTicketsModalClose}
-          eventId={viewTicketsEvent.id}
-          eventName={viewTicketsEvent.name}
-        />
-      )}
     </div>
   );
 };

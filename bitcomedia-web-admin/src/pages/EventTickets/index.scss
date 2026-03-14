@@ -1,0 +1,384 @@
+@import '../../main.scss';
+
+.event-tickets-screen {
+  min-height: 100vh;
+  background: linear-gradient(180deg, $color-primary 0%, darken($color-primary, 3%) 100%);
+}
+
+.event-tickets-content {
+  padding: 1.5rem;
+  padding-top: 80px;
+  padding-bottom: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.event-tickets-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba($color-accent, 0.2);
+
+  .header-title {
+    flex: 1;
+    min-width: 200px;
+
+    h1 {
+      margin: 0 0 0.25rem 0;
+      font-size: 1.5rem;
+      color: $color-text-primary;
+    }
+
+    p {
+      margin: 0;
+      font-size: 0.95rem;
+      color: $color-accent;
+      font-weight: 500;
+    }
+  }
+}
+
+.event-tickets-loading {
+  display: flex;
+  justify-content: center;
+  padding: 4rem;
+}
+
+.event-tickets-error {
+  background: rgba(255, 59, 48, 0.15);
+  border-left: 4px solid #ff3b30;
+  color: #ff6b6b;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.event-tickets-empty {
+  text-align: center;
+  padding: 3rem;
+  color: $color-text-secondary;
+  background: rgba($color-surface, 0.5);
+  border-radius: 12px;
+  border: 1px dashed rgba($color-text-secondary, 0.3);
+
+  p {
+    margin: 0;
+    font-size: 1.1rem;
+  }
+}
+
+.event-tickets-toolbar {
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.summary-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+
+  .summary-card {
+    display: flex;
+    flex-direction: column;
+    padding: 0.6rem 1rem;
+    background: rgba($color-surface, 0.8);
+    border-radius: 8px;
+    border-left: 4px solid $color-accent;
+
+    .label {
+      font-size: 0.75rem;
+      color: $color-text-secondary;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: $color-accent;
+    }
+
+    &.vendidos .value { color: #34c759; }
+    &.vendidos { border-left-color: #34c759; }
+    &.cortesias .value { color: #ff9500; }
+    &.cortesias { border-left-color: #ff9500; }
+  }
+}
+
+.filters-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+
+  .search-input {
+    flex: 1;
+    min-width: 200px;
+    padding: 0.6rem 1rem;
+    background: rgba($color-surface, 0.8);
+    border: 1px solid rgba($color-text-secondary, 0.25);
+    border-radius: 8px;
+    color: $color-text-primary;
+    font-size: 0.95rem;
+
+    &::placeholder {
+      color: rgba($color-text-secondary, 0.7);
+    }
+
+    &:focus {
+      outline: none;
+      border-color: $color-accent;
+    }
+  }
+
+  .filter-select {
+    padding: 0.6rem 1rem;
+    background: rgba($color-surface, 0.8);
+    border: 1px solid rgba($color-text-secondary, 0.25);
+    border-radius: 8px;
+    color: $color-text-primary;
+    font-size: 0.9rem;
+    min-width: 140px;
+    cursor: pointer;
+
+    &:focus {
+      outline: none;
+      border-color: $color-accent;
+    }
+  }
+}
+
+// Contenedor de tabla: scroll horizontal y vertical visibles
+.event-tickets-table-container {
+  overflow: auto;
+  overflow-x: scroll;
+  overflow-y: auto;
+  max-height: calc(100vh - 380px);
+  min-height: 300px;
+  border: 1px solid rgba($color-text-secondary, 0.2);
+  border-radius: 12px;
+  background: rgba($color-surface, 0.6);
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.2);
+
+  // Scrollbars siempre visibles y estilizados
+  scrollbar-width: thin;
+  scrollbar-color: rgba($color-accent, 0.5) rgba($color-text-secondary, 0.1);
+
+  &::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: rgba($color-text-secondary, 0.08);
+    border-radius: 6px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba($color-accent, 0.4);
+    border-radius: 6px;
+
+    &:hover {
+      background: rgba($color-accent, 0.6);
+    }
+  }
+
+  &::-webkit-scrollbar-corner {
+    background: rgba($color-text-secondary, 0.1);
+    border-radius: 0 0 12px 0;
+  }
+}
+
+.event-tickets-table {
+  width: 100%;
+  min-width: 1100px;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+
+  thead {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+
+    th {
+      padding: 0.85rem 1rem;
+      text-align: left;
+      font-weight: $font-weight-semi-bold;
+      color: $color-text-primary;
+      border-bottom: 2px solid rgba($color-accent, 0.4);
+      white-space: nowrap;
+      background: $color-secondary;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+  }
+
+  tbody {
+    tr {
+      border-bottom: 1px solid rgba($color-text-secondary, 0.12);
+      transition: background 0.15s;
+
+      &:hover {
+        background: rgba($color-primary, 0.4);
+      }
+
+      &.editing {
+        background: rgba($color-accent, 0.08);
+      }
+
+      td {
+        padding: 0.75rem 1rem;
+        color: $color-text-primary;
+        vertical-align: middle;
+      }
+    }
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+
+    &.ok {
+      background: rgba(52, 199, 89, 0.2);
+      color: #34c759;
+    }
+
+    &.pending {
+      background: rgba($color-text-secondary, 0.2);
+      color: $color-text-secondary;
+    }
+
+    &.cortesia {
+      background: rgba(255, 149, 0, 0.2);
+      color: #ff9500;
+    }
+  }
+
+  .btn-icon {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.35rem 0.5rem;
+    border-radius: 6px;
+    font-size: 1rem;
+    margin-right: 0.25rem;
+    transition: all 0.2s;
+
+    &.edit:hover {
+      background: rgba($color-accent, 0.25);
+    }
+
+    &.disable:hover {
+      background: rgba(255, 149, 0, 0.25);
+    }
+
+    &.enable:hover {
+      background: rgba(52, 199, 89, 0.25);
+    }
+  }
+
+  .status-badge {
+    padding: 0.25rem 0.65rem;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+
+    &.status-approved {
+      background: rgba(52, 199, 89, 0.2);
+      color: #34c759;
+    }
+
+    &.status-pending {
+      background: rgba(255, 204, 0, 0.2);
+      color: #ffcc00;
+    }
+
+    &.status-rejected {
+      background: rgba(255, 59, 48, 0.2);
+      color: #ff6b6b;
+    }
+
+    &.status-unknown {
+      background: rgba($color-text-secondary, 0.2);
+      color: $color-text-secondary;
+    }
+  }
+
+  .payment-badge {
+    padding: 0.25rem 0.65rem;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+
+    &.payment-manual {
+      background: rgba($color-accent, 0.2);
+      color: $color-accent;
+    }
+
+    &.payment-mercadopago {
+      background: rgba(0, 158, 227, 0.2);
+      color: #009ee3;
+    }
+
+    &.payment-other {
+      background: rgba($color-text-secondary, 0.2);
+      color: $color-text-secondary;
+    }
+  }
+
+  .edit-form {
+    padding: 1rem;
+    background: rgba($color-surface, 0.9);
+    border-radius: 8px;
+    margin: 0.5rem;
+
+    h4 {
+      margin: 0 0 1rem 0;
+      font-size: 1rem;
+      color: $color-text-primary;
+    }
+
+    .form-row {
+      margin-bottom: 0.75rem;
+
+      label {
+        display: block;
+        margin-bottom: 0.35rem;
+        font-size: 0.85rem;
+        color: $color-text-secondary;
+      }
+
+      input {
+        width: 100%;
+        max-width: 300px;
+        padding: 0.6rem;
+        background: rgba($color-primary, 0.6);
+        border: 1px solid rgba($color-text-secondary, 0.3);
+        border-radius: 6px;
+        color: $color-text-primary;
+        font-size: 0.95rem;
+
+        &:focus {
+          outline: none;
+          border-color: $color-accent;
+        }
+      }
+    }
+
+    .edit-actions {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+  }
+}
