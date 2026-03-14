@@ -63,7 +63,8 @@ export interface Ticket {
   preferenceId: string;
   qrCode: string;
   quantity: number;
-  ticketStatus: 'reserved' | 'paid' | 'cancelled' | 'used' | 'redeemed';
+  ticketStatus: 'reserved' | 'paid' | 'cancelled' | 'used' | 'redeemed' | 'disabled';
+  transferredTo?: string;
   updatedAt: Timestamp;
   userId: string;
 } 

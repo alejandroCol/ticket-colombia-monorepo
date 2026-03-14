@@ -1,4 +1,10 @@
-import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs, addDoc, query, where } from 'firebase/firestore';
+
+export interface BannerItem {
+  id?: string;
+  url: string;
+  order?: number;
+}
 import type { UserData, Event, Venue } from './types';
 import { app } from './firebase';
 
@@ -136,6 +142,118 @@ export const updateContactConfig = async (data: { whatsappPhone: string }): Prom
     throw new Error('El número de WhatsApp no puede estar vacío.');
   }
   await setDoc(configDocRef, { whatsappPhone: phone }, { merge: true });
+};
+
+// Get home banners
+export const getHomeBanners = async (): Promise<BannerItem[]> => {
+  try {
+    const configDocRef = doc(db, 'configurations', 'home_banners');
+    const configDoc = await getDoc(configDocRef);
+    if (configDoc.exists()) {
+      const data = configDoc.data();
+      const banners = data?.banners || [];
+      return banners
+        .filter((b: { url?: string }) => b?.url)
+        .sort((a: { order?: number }, b: { order?: number }) => (a.order ?? 0) - (b.order ?? 0));
+    }
+    return [];
+  } catch (error) {
+    console.error('Error fetching banners:', error);
+    return [];
+  }
+};
+
+// Save home banners
+export const saveHomeBanners = async (banners: BannerItem[]): Promise<void> => {
+  const configDocRef = doc(db, 'configurations', 'home_banners');
+  await setDoc(configDocRef, { banners }, { merge: true });
+};
+
+// Expense interface
+export interface Expense {
+  id: string;
+  description: string;
+  amount: number;
+  date: string; // YYYY-MM-DD
+  category?: string;
+  eventId?: string; // Opcional: egreso asociado a un evento
+  createdAt?: unknown;
+}
+
+// Get all expenses (exclude soft-deleted)
+export const getExpenses = async (): Promise<Expense[]> => {
+  try {
+    const expensesRef = collection(db, 'expenses');
+    const querySnapshot = await getDocs(expensesRef);
+    return querySnapshot.docs
+      .filter((docSnap) => !docSnap.data().deleted)
+      .map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      })) as Expense[];
+  } catch (error) {
+    console.error('Error fetching expenses:', error);
+    return [];
+  }
+};
+
+// Add expense (eventId opcional para egresos por evento)
+export const addExpense = async (expense: Omit<Expense, 'id'> & { eventId?: string }): Promise<string> => {
+  const expensesRef = collection(db, 'expenses');
+  const docRef = await addDoc(expensesRef, {
+    ...expense,
+    createdAt: new Date()
+  });
+  return docRef.id;
+};
+
+// Get expenses by event ID
+export const getExpensesByEventId = async (eventId: string): Promise<Expense[]> => {
+  try {
+    const expensesRef = collection(db, 'expenses');
+    const q = query(expensesRef, where('eventId', '==', eventId));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs
+      .filter((docSnap) => !docSnap.data().deleted)
+      .map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      })) as Expense[];
+  } catch (error) {
+    console.error('Error fetching expenses by event:', error);
+    return [];
+  }
+};
+
+// Delete expense (soft delete)
+export const deleteExpense = async (expenseId: string): Promise<void> => {
+  const expenseRef = doc(db, 'expenses', expenseId);
+  await updateDoc(expenseRef, { deleted: true, deletedAt: new Date() });
+};
+
+// Get total revenue from tickets
+export const getTotalRevenue = async (): Promise<number> => {
+  try {
+    const ticketsRef = collection(db, 'tickets');
+    const snapshot = await getDocs(ticketsRef);
+    let total = 0;
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      const status = data.ticketStatus || data.status;
+      if (
+        (status === 'paid' || status === 'used' || status === 'redeemed' || status === 'approved') &&
+        status !== 'cancelled' &&
+        status !== 'disabled' &&
+        !data.transferredTo
+      ) {
+        total += data.amount || data.purchaseAmount || 0;
+      }
+    });
+    return total;
+  } catch (error) {
+    console.error('Error fetching revenue:', error);
+    return 0;
+  }
 };
 
 // Get all venues from Firestore

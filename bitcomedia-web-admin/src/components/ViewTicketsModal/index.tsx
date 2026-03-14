@@ -5,6 +5,7 @@ import Loader from '@components/Loader';
 import PrimaryButton from '@components/PrimaryButton';
 import SecondaryButton from '@components/SecondaryButton';
 import CustomInput from '@components/CustomInput';
+import BulkUploadCortesiasModal from '@components/BulkUploadCortesiasModal';
 import './index.scss';
 
 interface ViewTicketsModalProps {
@@ -30,6 +31,8 @@ interface Ticket {
   validatedAt?: Timestamp | null;
   validatedBy?: string | null;
   createdByAdmin?: string;
+  isGeneralCourtesy?: boolean;
+  giftedBy?: string | null;
 }
 
 const ViewTicketsModal: React.FC<ViewTicketsModalProps> = ({
@@ -43,36 +46,68 @@ const ViewTicketsModal: React.FC<ViewTicketsModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterLocalidad, setFilterLocalidad] = useState<string>('');
+  const [filterValidado, setFilterValidado] = useState<string>('all');
+  const [filterCortesias, setFilterCortesias] = useState<string>('all');
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
   const [editFormData, setEditFormData] = useState({
     buyerName: '',
     buyerEmail: '',
     buyerPhone: ''
   });
+  const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
 
   useEffect(() => {
     if (isOpen && eventId) {
       loadTickets();
       setSearchTerm('');
+      setFilterLocalidad('');
+      setFilterValidado('all');
+      setFilterCortesias('all');
     }
   }, [isOpen, eventId]);
 
-  // Filtrar tickets por búsqueda (cédula, nombre, email)
+  // Obtener localidades únicas de los tickets
+  const localidades = React.useMemo(() => {
+    const set = new Set<string>();
+    tickets.forEach(t => set.add(t.sectionName || 'General'));
+    return Array.from(set).sort();
+  }, [tickets]);
+
+  // Filtrar tickets por búsqueda y filtros
   useEffect(() => {
-    if (!searchTerm.trim()) {
-      setFilteredTickets(tickets);
-      return;
+    let filtered = tickets;
+
+    // Búsqueda por cédula, nombre, email
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase().trim();
+      filtered = filtered.filter(ticket => {
+        const idNumber = ticket.buyerIdNumber?.toLowerCase() || '';
+        const name = ticket.buyerName?.toLowerCase() || '';
+        const email = ticket.buyerEmail?.toLowerCase() || '';
+        return idNumber.includes(term) || name.includes(term) || email.includes(term);
+      });
     }
 
-    const term = searchTerm.toLowerCase().trim();
-    const filtered = tickets.filter(ticket => {
-      const idNumber = ticket.buyerIdNumber?.toLowerCase() || '';
-      const name = ticket.buyerName?.toLowerCase() || '';
-      const email = ticket.buyerEmail?.toLowerCase() || '';
-      return idNumber.includes(term) || name.includes(term) || email.includes(term);
-    });
+    // Filtro por localidad
+    if (filterLocalidad) {
+      filtered = filtered.filter(t => (t.sectionName || 'General') === filterLocalidad);
+    }
+
+    // Filtro por validado
+    if (filterValidado === 'validated') {
+      filtered = filtered.filter(t => t.validatedAt);
+    } else if (filterValidado === 'pending') {
+      filtered = filtered.filter(t => !t.validatedAt);
+    }
+
+    // Filtro solo cortesías
+    if (filterCortesias === 'only') {
+      filtered = filtered.filter(t => (t.price || 0) === 0);
+    }
+
     setFilteredTickets(filtered);
-  }, [searchTerm, tickets]);
+  }, [searchTerm, filterLocalidad, filterValidado, filterCortesias, tickets]);
 
   const loadTickets = async () => {
     setLoading(true);
@@ -234,8 +269,24 @@ const ViewTicketsModal: React.FC<ViewTicketsModalProps> = ({
             <h2>🎫 Boletos del Evento</h2>
             <p className="event-name">{eventName}</p>
           </div>
-          <button className="close-button" onClick={onClose}>✕</button>
+          <div className="modal-header-actions">
+            <SecondaryButton
+              size="small"
+              onClick={() => setIsBulkUploadOpen(true)}
+            >
+              📤 Cargar cortesías Excel
+            </SecondaryButton>
+            <button className="close-button" onClick={onClose}>✕</button>
+          </div>
         </div>
+
+        <BulkUploadCortesiasModal
+          isOpen={isBulkUploadOpen}
+          onClose={() => setIsBulkUploadOpen(false)}
+          onSuccess={loadTickets}
+          eventId={eventId}
+          eventName={eventName}
+        />
 
         <div className="modal-body">
           {error && (
@@ -252,41 +303,100 @@ const ViewTicketsModal: React.FC<ViewTicketsModalProps> = ({
 
           {tickets.length > 0 && (
             <>
-              <div className="tickets-summary">
-                <div className="summary-item">
-                  <span className="summary-label">Total de Boletos:</span>
-                  <span className="summary-value">{tickets.length}</span>
+              {/* Toolbar: resumen + búsqueda + filtros - siempre visible */}
+              <div className="tickets-toolbar">
+                {(() => {
+                  const isActive = (t: Ticket) =>
+                    t.ticketStatus !== 'cancelled' && t.ticketStatus !== 'disabled';
+                  const activeTickets = tickets.filter(isActive);
+                  const cortesias = activeTickets.filter(t => (t.price || 0) === 0);
+                  const vendidos = activeTickets.filter(t => (t.price || 0) > 0);
+                  const validados = tickets.filter(t => t.validatedAt).length;
+
+                  return (
+                    <>
+                      <div className="tickets-toolbar-row">
+                        <div className="tickets-summary">
+                          <div className="summary-item summary-total">
+                            <span className="summary-label">Total</span>
+                            <span className="summary-value">{activeTickets.length}</span>
+                          </div>
+                          <div className="summary-item summary-vendidos">
+                            <span className="summary-label">Vendidos</span>
+                            <span className="summary-value">{vendidos.length}</span>
+                          </div>
+                          <div className="summary-item summary-cortesias">
+                            <span className="summary-label">Cortesías</span>
+                            <span className="summary-value">{cortesias.length}</span>
+                          </div>
+                          <div className="summary-item">
+                            <span className="summary-label">Validados</span>
+                            <span className="summary-value">{validados}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="tickets-toolbar-row tickets-filters-row">
+                        <div className="tickets-filters">
+                  <CustomInput
+                    label=""
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Buscar cédula, nombre, email..."
+                  />
+                  <div className="filter-group">
+                    <label>Localidad</label>
+                    <select
+                      value={filterLocalidad}
+                      onChange={(e) => setFilterLocalidad(e.target.value)}
+                      className="filter-select"
+                    >
+                      <option value="">Todas</option>
+                      {localidades.map(loc => (
+                        <option key={loc} value={loc}>{loc}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="filter-group">
+                    <label>Validado</label>
+                    <select
+                      value={filterValidado}
+                      onChange={(e) => setFilterValidado(e.target.value)}
+                      className="filter-select"
+                    >
+                      <option value="all">Todos</option>
+                      <option value="validated">✓ Validados</option>
+                      <option value="pending">Pendientes</option>
+                    </select>
+                  </div>
+                  <div className="filter-group">
+                    <label>Tipo</label>
+                    <select
+                      value={filterCortesias}
+                      onChange={(e) => setFilterCortesias(e.target.value)}
+                      className="filter-select"
+                    >
+                      <option value="all">Todos</option>
+                      <option value="only">Solo cortesías</option>
+                    </select>
+                  </div>
                 </div>
-                <div className="summary-item">
-                  <span className="summary-label">Aprobados:</span>
-                  <span className="summary-value">{tickets.filter(t => t.status === 'approved').length}</span>
-                </div>
-                <div className="summary-item">
-                  <span className="summary-label">Validados:</span>
-                  <span className="summary-value">{tickets.filter(t => t.validatedAt).length}</span>
-                </div>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
 
-              <div className="search-section">
-                <CustomInput
-                  label="Buscar por cédula, nombre o email"
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Ej: 1234567890 o Juan Pérez"
-                />
-              </div>
-            </>
-          )}
+              {!loading && filteredTickets.length === 0 && (
+                <div className="empty-state">
+                  <p>🔍 No hay boletos con los filtros aplicados</p>
+                </div>
+              )}
 
-          {!loading && filteredTickets.length === 0 && tickets.length > 0 && (
-            <div className="empty-state">
-              <p>🔍 No se encontraron boletos con ese criterio de búsqueda</p>
-            </div>
-          )}
-
-          {filteredTickets.length > 0 && (
-            <div className="tickets-table-container">
+              {/* Área de tabla con scroll independiente */}
+              {filteredTickets.length > 0 && (
+                <div className="tickets-table-wrapper">
+                  <div className="tickets-table-container">
               <table className="tickets-table">
                 <thead>
                   <tr>
@@ -298,6 +408,7 @@ const ViewTicketsModal: React.FC<ViewTicketsModalProps> = ({
                     <th>Email</th>
                     <th>Teléfono</th>
                     <th>Precio</th>
+                    <th>Cortesía</th>
                     <th>Estado</th>
                     <th>Método Pago</th>
                   </tr>
@@ -306,7 +417,7 @@ const ViewTicketsModal: React.FC<ViewTicketsModalProps> = ({
                   {filteredTickets.map((ticket) => (
                     <tr key={ticket.id} className={editingTicket?.id === ticket.id ? 'editing' : ''}>
                       {editingTicket?.id === ticket.id ? (
-                        <td colSpan={10}>
+                        <td colSpan={11}>
                           <div className="edit-form">
                             <h4>✏️ Editar Boleto</h4>
                             <div className="form-group">
@@ -377,7 +488,26 @@ const ViewTicketsModal: React.FC<ViewTicketsModalProps> = ({
                           <td>{ticket.buyerName || 'N/A'}</td>
                           <td>{ticket.buyerEmail || 'N/A'}</td>
                           <td>{ticket.buyerPhone || 'N/A'}</td>
-                          <td>${(ticket.price || 0).toLocaleString('es-CO')}</td>
+                          <td>
+                            {(ticket.price || 0) === 0 ? (
+                              <span className="cortesia-badge">Cortesía</span>
+                            ) : (
+                              `$${(ticket.price || 0).toLocaleString('es-CO')}`
+                            )}
+                          </td>
+                          <td className="cortesia-info">
+                            {(ticket.price || 0) === 0 ? (
+                              ticket.isGeneralCourtesy ? (
+                                <span className="cortesia-tag">Evento general</span>
+                              ) : ticket.giftedBy ? (
+                                <span className="cortesia-tag" title="Regalado por">Por: {ticket.giftedBy}</span>
+                              ) : (
+                                <span className="cortesia-tag">—</span>
+                              )
+                            ) : (
+                              '—'
+                            )}
+                          </td>
                           <td>{getStatusBadge(ticket.ticketStatus || ticket.status)}</td>
                           <td>{getPaymentMethodBadge(ticket.paymentMethod, ticket.createdByAdmin)}</td>
                         </>
@@ -387,6 +517,9 @@ const ViewTicketsModal: React.FC<ViewTicketsModalProps> = ({
                 </tbody>
               </table>
             </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* Mantener la lista antigua como fallback para edición */}
@@ -453,7 +586,11 @@ const ViewTicketsModal: React.FC<ViewTicketsModalProps> = ({
                       <div className="detail-item">
                         <span className="detail-label">Precio:</span>
                         <span className="detail-value">
-                          ${(ticket.price || 0).toLocaleString('es-CO')} COP
+                          {(ticket.price || 0) === 0 ? (
+                            <span className="cortesia-badge">Cortesía</span>
+                          ) : (
+                            `$${(ticket.price || 0).toLocaleString('es-CO')} COP`
+                          )}
                         </span>
                       </div>
                       <div className="detail-item">

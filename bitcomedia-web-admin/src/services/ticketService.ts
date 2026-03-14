@@ -28,6 +28,29 @@ export interface TicketData {
   };
 }
 
+// Get tickets by event ID (Admin only - for stats dashboard)
+export async function getTicketsByEventId(eventId: string): Promise<Ticket[]> {
+  try {
+    const ticketsRef = collection(db, 'tickets');
+    const q = query(ticketsRef, where('eventId', '==', eventId));
+    const querySnapshot = await getDocs(q);
+    const tickets = querySnapshot.docs.map((docSnap) => ({
+      id: docSnap.id,
+      ...docSnap.data()
+    })) as Ticket[];
+    return tickets.sort((a, b) => {
+      const aTime = a.createdAt && typeof a.createdAt === 'object' && 'toMillis' in a.createdAt
+        ? (a.createdAt as { toMillis: () => number }).toMillis() : 0;
+      const bTime = b.createdAt && typeof b.createdAt === 'object' && 'toMillis' in b.createdAt
+        ? (b.createdAt as { toMillis: () => number }).toMillis() : 0;
+      return bTime - aTime;
+    });
+  } catch (error) {
+    console.error('Error fetching tickets by event:', error);
+    throw error;
+  }
+}
+
 // Get user tickets from Firestore
 export async function getUserTickets(userId: string): Promise<Ticket[]> {
   try {

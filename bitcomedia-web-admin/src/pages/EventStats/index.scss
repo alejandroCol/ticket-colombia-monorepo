@@ -1,0 +1,436 @@
+@import '../../main.scss';
+
+.event-stats-screen {
+  min-height: 100vh;
+  background: linear-gradient(180deg, $color-primary 0%, darken($color-primary, 3%) 100%);
+}
+
+.event-stats-content {
+  padding: 1.5rem;
+  max-width: 800px;
+  margin: 0 auto;
+  padding-top: 80px;
+  padding-bottom: 3rem;
+}
+
+.event-stats-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 3rem;
+  color: $color-text-secondary;
+
+  .loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba($color-accent, 0.3);
+    border-top-color: $color-accent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+}
+
+.event-stats-hero {
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid rgba($color-accent, 0.2);
+
+  &__title {
+    font-family: 'Outfit', $font-family-primary;
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: $color-text-primary;
+    margin: 0 0 0.35rem;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+
+    @include respond-md {
+      font-size: 2rem;
+    }
+  }
+
+  &__subtitle {
+    font-size: 0.95rem;
+    color: $color-text-secondary;
+    margin: 0 0 1rem;
+  }
+
+  .event-stats-back {
+    margin-top: 0.5rem;
+  }
+}
+
+.stats-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 2rem;
+
+  @media (max-width: 500px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.stat-kpi-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem;
+  background: $color-surface;
+  border-radius: 14px;
+  border: 1px solid rgba($color-accent, 0.15);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  }
+
+  .stat-kpi-icon {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    color: $color-accent;
+
+    svg {
+      width: 28px;
+      height: 28px;
+    }
+  }
+
+  .stat-kpi-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+  }
+
+  .stat-kpi-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: $color-text-primary;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    @include respond-md {
+      font-size: 1.5rem;
+    }
+  }
+
+  .stat-kpi-label {
+    font-size: 0.8rem;
+    color: $color-text-secondary;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  &.stat-kpi--tickets .stat-kpi-icon {
+    background: rgba($color-accent, 0.15);
+  }
+
+  &.stat-kpi--revenue .stat-kpi-icon {
+    background: rgba(34, 197, 94, 0.2);
+    color: #22c55e;
+  }
+
+  &.stat-kpi--users .stat-kpi-icon {
+    background: rgba(139, 92, 246, 0.2);
+    color: #8b5cf6;
+  }
+}
+
+.event-stats-balance {
+  background: $color-surface;
+  border-radius: 16px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  border: 1px solid rgba($color-accent, 0.2);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.balance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.25rem;
+}
+
+.balance-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  .balance-title-icon {
+    width: 24px;
+    height: 24px;
+    color: $color-accent;
+  }
+
+  h3 {
+    margin: 0;
+    font-size: 1.15rem;
+    color: $color-text-primary;
+  }
+}
+
+.balance-expense-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+}
+
+.balance-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.balance-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.15);
+
+  .balance-row-icon {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+  }
+
+  .balance-row-label {
+    flex: 1;
+    font-size: 0.95rem;
+    color: $color-text-secondary;
+  }
+
+  .balance-row-value {
+    font-weight: 700;
+    font-size: 1.05rem;
+  }
+
+  &.balance-row--income {
+    .balance-row-icon { color: #22c55e; }
+    .balance-row-value { color: #22c55e; }
+  }
+
+  &.balance-row--expense {
+    .balance-row-icon { color: #e74c3c; }
+    .balance-row-value { color: #e74c3c; }
+  }
+
+  &.balance-row--profit {
+    margin-top: 0.5rem;
+    padding: 1rem 1.25rem;
+    font-size: 1.1rem;
+
+    .balance-row-icon {
+      width: 28px;
+      height: 28px;
+    }
+
+    &.positive {
+      background: rgba($color-accent, 0.12);
+      border: 1px solid rgba($color-accent, 0.3);
+      .balance-row-icon,
+      .balance-row-value { color: $color-accent; }
+    }
+
+    &.negative {
+      background: rgba(231, 76, 60, 0.12);
+      border: 1px solid rgba(231, 76, 60, 0.3);
+      .balance-row-icon,
+      .balance-row-value { color: #e74c3c; }
+    }
+  }
+}
+
+.balance-expenses-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-left: 2.5rem;
+  padding-left: 1rem;
+  border-left: 2px solid rgba($color-accent, 0.2);
+}
+
+.balance-expense-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  font-size: 0.9rem;
+
+  span:first-child {
+    flex: 1;
+    color: $color-text-primary;
+  }
+
+  .balance-expense-amount {
+    color: #e74c3c;
+    font-weight: 500;
+  }
+
+  .balance-expense-delete {
+    background: none;
+    border: none;
+    color: $color-text-secondary;
+    font-size: 0.8rem;
+    cursor: pointer;
+    padding: 0.2rem 0.5rem;
+
+    &:hover {
+      color: #e74c3c;
+    }
+  }
+}
+
+.stats-section {
+  margin-bottom: 2rem;
+}
+
+.section-header-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+
+  .section-header-icon {
+    width: 22px;
+    height: 22px;
+    color: $color-accent;
+  }
+
+  h3 {
+    margin: 0;
+    color: $color-text-primary;
+    font-size: 1.1rem;
+  }
+}
+
+.section-stats-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.section-stat-item {
+  background: $color-surface;
+  border-radius: 12px;
+  padding: 1.25rem;
+  border: 1px solid rgba($color-accent, 0.15);
+  transition: border-color 0.2s ease;
+
+  &:hover {
+    border-color: rgba($color-accent, 0.3);
+  }
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.6rem;
+
+  .section-name {
+    font-weight: 600;
+    color: $color-text-primary;
+    font-size: 1rem;
+  }
+
+  .section-sold {
+    font-size: 0.9rem;
+    color: $color-text-secondary;
+  }
+}
+
+.progress-bar {
+  height: 10px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 5px;
+  overflow: hidden;
+  margin-bottom: 0.6rem;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, $color-accent, #00a8cc);
+  border-radius: 5px;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.section-footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+
+  .percent-remaining {
+    color: $color-text-secondary;
+  }
+
+  .section-revenue {
+    color: $color-accent;
+    font-weight: 600;
+  }
+}
+
+.demographics-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.demographic-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: $color-surface;
+  border-radius: 10px;
+  border: 1px solid rgba($color-accent, 0.1);
+  transition: border-color 0.2s ease;
+
+  &:hover {
+    border-color: rgba($color-accent, 0.25);
+  }
+
+  .demographic-label {
+    flex: 1;
+    color: $color-text-primary;
+    font-size: 0.9rem;
+  }
+
+  .demographic-count {
+    color: $color-text-secondary;
+    font-size: 0.85rem;
+  }
+
+  .demographic-percent {
+    color: $color-accent;
+    font-weight: 600;
+    min-width: 3.5rem;
+    text-align: right;
+  }
+}
+
+.empty {
+  color: $color-text-secondary;
+  text-align: center;
+  padding: 1.5rem;
+  font-size: 0.95rem;
+}

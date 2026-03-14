@@ -8,11 +8,13 @@ import { generateCustomStyles, generateClassName } from '../../components/types'
 interface TicketCardProps extends CustomStyleProps {
   ticket: Ticket;
   onShowQR?: (ticket: Ticket) => void;
+  onTransfer?: (ticket: Ticket) => void;
 }
 
 const TicketCard: React.FC<TicketCardProps> = ({ 
   ticket, 
   onShowQR,
+  onTransfer,
   theme,
   style,
   cssVariables,
@@ -94,6 +96,10 @@ const TicketCard: React.FC<TicketCardProps> = ({
   };
 
   const canShowQR = ticket.ticketStatus === 'paid' && ticket.qrCode;
+  const canTransfer =
+    (ticket.ticketStatus === 'paid' || (ticket as { status?: string }).status === 'approved') &&
+    ticket.qrCode &&
+    !(ticket as { transferredTo?: string }).transferredTo;
 
   return (
     <div 
@@ -145,25 +151,36 @@ const TicketCard: React.FC<TicketCardProps> = ({
       <div className="ticket-footer">
         <div className="preference-id">
           <span className="code-label">ID:</span>
-          <span className="code-value">{ticket.preferenceId.split('-')[0]}</span>
+          <span className="code-value">{ticket.preferenceId?.split('-')[0] || ticket.id?.substring(0, 8) || '—'}</span>
         </div>
         
-        {canShowQR ? (
-          <button 
-            className="show-qr-btn primary"
-            onClick={() => onShowQR?.(ticket)}
-          >
-            Ver QR
-          </button>
-        ) : (
-          <button 
-            className="show-qr-btn disabled"
-            disabled
-          >
-            {ticket.ticketStatus === 'paid' ? 'QR no disponible' : 
-             ticket.ticketStatus === 'redeemed' ? 'QR validado' : 'No disponible'}
-          </button>
-        )}
+        <div className="ticket-footer-actions">
+          {canTransfer && (
+            <button
+              type="button"
+              className="show-qr-btn secondary"
+              onClick={() => onTransfer?.(ticket)}
+            >
+              Transferir
+            </button>
+          )}
+          {canShowQR ? (
+            <button 
+              className="show-qr-btn primary"
+              onClick={() => onShowQR?.(ticket)}
+            >
+              Ver QR
+            </button>
+          ) : (
+            <button 
+              className="show-qr-btn disabled"
+              disabled
+            >
+              {ticket.ticketStatus === 'paid' ? 'QR no disponible' : 
+               ticket.ticketStatus === 'redeemed' ? 'QR validado' : 'No disponible'}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

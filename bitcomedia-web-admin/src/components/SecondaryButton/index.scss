@@ -57,6 +57,24 @@
     display: flex;
   }
   
+  &.with-icon {
+    .button-text {
+      margin: 0 0.25rem;
+    }
+  }
+  
+  &.icon-left {
+    .button-icon.left {
+      margin-right: 0.5rem;
+    }
+  }
+  
+  &.icon-right {
+    .button-icon.right {
+      margin-left: 0.5rem;
+    }
+  }
+  
   &.loading {
     cursor: wait;
     

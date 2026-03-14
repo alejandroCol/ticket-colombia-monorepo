@@ -8,6 +8,7 @@ import {
 } from "./features/payments";
 import {defineSecret} from "firebase-functions/params";
 import {createManualTicket} from "./features/manual-ticket/create-manual-ticket";
+import {transferTicket} from "./features/ticket-transfer/transfer-ticket";
 
 admin.initializeApp();
 
@@ -248,3 +249,6 @@ exports.testTicketUpdate = functions
 
 // Función para crear tickets manuales (sin pago) - Solo para administradores
 exports.createManualTicket = createManualTicket;
+
+// Función para transferir tickets a otra persona
+exports.transferTicket = transferTicket;

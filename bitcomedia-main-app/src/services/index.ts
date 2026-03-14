@@ -24,6 +24,7 @@ export {
   getEventBySlug,
   getPaymentConfig,
   getContactConfig,
+  getHomeBanners,
   db
 } from './firestore';
 
@@ -44,7 +45,8 @@ export {
 export {
   createTicket,
   getUserTickets,
-  getCurrentUserTickets
+  getCurrentUserTickets,
+  transferTicket
 } from './ticketService';
 
 // Meta Pixel service exports

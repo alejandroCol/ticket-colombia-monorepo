@@ -1,0 +1,235 @@
+@import '../../main.scss';
+
+.bulk-upload-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.bulk-upload-modal-content {
+  background: $color-secondary;
+  border-radius: 16px;
+  max-width: 560px;
+  width: 100%;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba($color-accent, 0.2);
+}
+
+.bulk-upload-modal-content .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgba($color-text-secondary, 0.2);
+
+  h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: $color-text-primary;
+  }
+
+  .close-button {
+    background: none;
+    border: none;
+    color: $color-text-secondary;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0.25rem;
+    line-height: 1;
+
+    &:hover {
+      color: $color-text-primary;
+    }
+  }
+}
+
+.bulk-upload-modal-content .modal-body {
+  position: relative;
+  padding: 1.5rem;
+  overflow-y: auto;
+  flex: 1;
+
+  .event-context {
+    margin: 0 0 1.5rem;
+    color: $color-text-secondary;
+    font-size: 0.95rem;
+
+    strong {
+      color: $color-text-primary;
+    }
+  }
+
+  h3 {
+    margin: 0 0 0.75rem;
+    font-size: 1rem;
+    color: $color-text-primary;
+  }
+
+  .template-section,
+  .upload-section,
+  .preview-section {
+    margin-bottom: 1.5rem;
+  }
+
+  .hint {
+    margin: 0.5rem 0 0;
+    font-size: 0.85rem;
+    color: $color-text-secondary;
+  }
+
+  .file-input-label {
+    display: inline-block;
+    padding: 0.75rem 1.25rem;
+    background: rgba($color-accent, 0.15);
+    border: 2px dashed rgba($color-accent, 0.5);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &:hover {
+      background: rgba($color-accent, 0.25);
+      border-color: $color-accent;
+    }
+
+    input {
+      display: none;
+    }
+
+    .file-input-text {
+      color: $color-accent;
+      font-weight: 600;
+    }
+  }
+
+  .error-message {
+    background: rgba(255, 59, 48, 0.15);
+    border-left: 4px solid #ff3b30;
+    color: #ff6b6b;
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+  }
+
+  .preview-table-wrap {
+    overflow-x: auto;
+    border-radius: 8px;
+    border: 1px solid rgba($color-text-secondary, 0.2);
+  }
+
+  .preview-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+
+    th, td {
+      padding: 0.5rem 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid rgba($color-text-secondary, 0.15);
+    }
+
+    th {
+      background: rgba($color-primary, 0.5);
+      color: $color-text-secondary;
+      font-weight: 600;
+    }
+
+    td {
+      color: $color-text-primary;
+    }
+  }
+
+  .preview-more {
+    padding: 0.5rem 0.75rem;
+    margin: 0;
+    font-size: 0.85rem;
+    color: $color-text-secondary;
+  }
+
+  .progress-section {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: rgba($color-accent, 0.1);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+
+    p {
+      margin: 0;
+      color: $color-text-primary;
+    }
+  }
+
+  .success-modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba($color-primary, 0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    border-radius: 16px;
+  }
+
+  .success-modal {
+    text-align: center;
+    padding: 2rem;
+    max-width: 400px;
+
+    .success-modal-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+
+    h3 {
+      margin: 0 0 0.5rem;
+      font-size: 1.5rem;
+      color: $color-text-primary;
+    }
+
+    .success-count {
+      color: #34c759;
+      font-weight: 600;
+      margin: 0 0 1.5rem;
+      font-size: 1.1rem;
+    }
+
+    .failed-section {
+      margin: 1rem 0 1.5rem;
+      padding: 1rem;
+      background: rgba(255, 59, 48, 0.1);
+      border-radius: 8px;
+      font-size: 0.9rem;
+      text-align: left;
+
+      p {
+        margin: 0 0 0.5rem;
+        color: #ff6b6b;
+      }
+
+      ul {
+        margin: 0;
+        padding-left: 1.25rem;
+        color: $color-text-secondary;
+      }
+    }
+  }
+}
+
+.bulk-upload-modal-content .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid rgba($color-text-secondary, 0.2);
+}

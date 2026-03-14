@@ -25,6 +25,13 @@ export {
   getContactConfig,
   updateContactConfig,
   getVenues,
+  getHomeBanners,
+  saveHomeBanners,
+  getExpenses,
+  addExpense,
+  deleteExpense,
+  getExpensesByEventId,
+  getTotalRevenue,
   db
 } from './firestore';
 
@@ -51,4 +58,5 @@ export {
 
 // Types exports
 export type { UserData, Event, Ticket, Venue } from './types';
+export type { BannerItem } from './firestore';
 export type { TicketData } from './ticketService'; 

@@ -89,7 +89,23 @@ const ConfigScreen: React.FC = () => {
             />
             {error && <p className="config-error">{error}</p>}
             {success && <p className="config-success">Guardado correctamente.</p>}
-            <div className="config-actions">
+            <div className="config-links">
+            <button
+              type="button"
+              className="config-link-btn"
+              onClick={() => navigate('/banners')}
+            >
+              Gestionar banners de la página principal →
+            </button>
+            <button
+              type="button"
+              className="config-link-btn"
+              onClick={() => navigate('/balance')}
+            >
+              Ver balance y egresos →
+            </button>
+          </div>
+          <div className="config-actions">
               <SecondaryButton type="button" onClick={() => navigate('/dashboard')}>
                 Volver
               </SecondaryButton>

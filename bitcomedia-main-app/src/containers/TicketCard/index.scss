@@ -181,6 +181,12 @@
     flex-wrap: wrap;
     gap: 1rem;
 
+    .ticket-footer-actions {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
     .preference-id {
       display: flex;
       flex-direction: column;
@@ -233,6 +239,16 @@
 
         &:active {
           transform: translateY(0);
+        }
+      }
+
+      &.secondary {
+        background: transparent;
+        color: var(--component-accent-color, #{$color-accent});
+        border: 2px solid var(--component-accent-color, #{$color-accent});
+
+        &:hover {
+          background: rgba($color-accent, 0.15);
         }
       }
 

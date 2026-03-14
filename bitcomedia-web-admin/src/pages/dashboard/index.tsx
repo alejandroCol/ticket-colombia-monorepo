@@ -192,6 +192,10 @@ const DashboardScreen: React.FC = () => {
     }
   };
 
+  const handleViewStats = (eventId: string) => {
+    navigate(`/events/${eventId}/stats`);
+  };
+
   const handleToggleRecurringSection = () => {
     setIsRecurringCollapsed(!isRecurringCollapsed);
   };
@@ -266,7 +270,9 @@ const DashboardScreen: React.FC = () => {
         quantity: ticketData.quantity,
         sectionId: ticketData.sectionId || undefined,
         sectionName: ticketData.sectionName || undefined,
-        isCourtesy: ticketData.isCourtesy ?? false
+        isCourtesy: ticketData.isCourtesy ?? false,
+        isGeneralCourtesy: ticketData.isGeneralCourtesy ?? false,
+        giftedBy: ticketData.giftedBy?.trim() || undefined
       });
 
       console.log('Ticket created successfully:', result.data);
@@ -329,6 +335,7 @@ const DashboardScreen: React.FC = () => {
                     onReserve={handleReserveEvent}
                     onCreateTicket={handleCreateTicket}
                     onViewTickets={handleViewTickets}
+                    onViewStats={handleViewStats}
                   />
                 ))}
               </div>
@@ -367,6 +374,7 @@ const DashboardScreen: React.FC = () => {
                   onReserve={handleReserveEvent}
                   onCreateTicket={handleCreateTicket}
                   onViewTickets={handleViewTickets}
+                  onViewStats={handleViewStats}
                 />
               ))}
             </div>

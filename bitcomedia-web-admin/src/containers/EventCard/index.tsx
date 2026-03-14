@@ -1,6 +1,7 @@
 import React from 'react';
 import PrimaryButton from '@components/PrimaryButton';
 import SecondaryButton from '@components/SecondaryButton';
+import { IconCreate, IconViewTickets, IconStats, IconEdit } from '@components/EventCardIcons';
 import './index.scss';
 import { Timestamp } from 'firebase/firestore';
 
@@ -28,9 +29,10 @@ interface EventCardProps {
   onReserve?: (eventId: string, isRecurring?: boolean) => void;
   onCreateTicket?: (eventId: string, eventName: string, eventPrice: number) => void;
   onViewTickets?: (eventId: string, eventName: string) => void;
+  onViewStats?: (eventId: string) => void;
 }
 
-const EventCard: React.FC<EventCardProps> = ({ event, onReserve, onCreateTicket, onViewTickets }) => {
+const EventCard: React.FC<EventCardProps> = ({ event, onReserve, onCreateTicket, onViewTickets, onViewStats }) => {
   // Format date to a readable format
   const formatDate = (dateString: string) => {
     if (!dateString) return '';
@@ -91,6 +93,14 @@ const EventCard: React.FC<EventCardProps> = ({ event, onReserve, onCreateTicket,
     }
   };
 
+  // Handle view stats button click
+  const handleViewStatsClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onViewStats && event.id) {
+      onViewStats(event.id);
+    }
+  };
+
   return (
     <div className={`event-card ${event.status === 'inactive' ? 'inactive' : ''}`}>
       <div className="event-card-image">
@@ -128,14 +138,17 @@ const EventCard: React.FC<EventCardProps> = ({ event, onReserve, onCreateTicket,
         <div className="event-card-footer">
           <div className="event-card-price">{formatPrice(event.ticket_price)}</div>
           <div className="event-card-actions">
-            <SecondaryButton onClick={handleCreateTicketClick} size="small">
-              🎫 Crear
+            <SecondaryButton onClick={handleCreateTicketClick} size="small" icon={<IconCreate size={16} />}>
+              Crear
             </SecondaryButton>
-            <SecondaryButton onClick={handleViewTicketsClick} size="small">
-              👁️ Ver Boletos
+            <SecondaryButton onClick={handleViewTicketsClick} size="small" icon={<IconViewTickets size={16} />}>
+              Ver Boletos
             </SecondaryButton>
-            <PrimaryButton onClick={handleReserveClick} size="small">
-              ✏️ Editar
+            <SecondaryButton onClick={handleViewStatsClick} size="small" icon={<IconStats size={16} />}>
+              Estadísticas
+            </SecondaryButton>
+            <PrimaryButton onClick={handleReserveClick} size="small" icon={<IconEdit size={16} />}>
+              Editar
             </PrimaryButton>
           </div>
         </div>

@@ -48,6 +48,12 @@ service cloud.firestore {
       allow create, delete: if false;
     }
     
+    // Expenses collection - only admin users can read/write
+    match /expenses/{expenseId} {
+      allow read, write: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
+    }
+    
     // Venues collection - only admin users can read/write
     match /venues/{venueId} {
       // Only authenticated admin users can read venues

@@ -10,6 +10,8 @@ interface SecondaryButtonProps {
   size?: 'small' | 'medium' | 'large';
   className?: string;
   loading?: boolean;
+  icon?: React.ReactNode;
+  iconPosition?: 'left' | 'right';
 }
 
 const SecondaryButton: React.FC<SecondaryButtonProps> = ({
@@ -21,12 +23,15 @@ const SecondaryButton: React.FC<SecondaryButtonProps> = ({
   size = 'medium',
   className = '',
   loading = false,
+  icon,
+  iconPosition = 'left',
 }) => {
   const buttonClass = `
     secondary-button
     ${size}
     ${fullWidth ? 'full-width' : ''}
     ${loading ? 'loading' : ''}
+    ${icon ? `with-icon icon-${iconPosition}` : ''}
     ${className}
   `.trim();
 
@@ -38,7 +43,13 @@ const SecondaryButton: React.FC<SecondaryButtonProps> = ({
       disabled={disabled || loading}
     >
       {loading && <div className="loading-spinner" />}
+      {icon && iconPosition === 'left' && !loading && (
+        <span className="button-icon left">{icon}</span>
+      )}
       <span className="button-text">{children}</span>
+      {icon && iconPosition === 'right' && !loading && (
+        <span className="button-icon right">{icon}</span>
+      )}
     </button>
   );
 };

@@ -19,8 +19,10 @@
   background-color: $color-surface;
   border-radius: 12px;
   width: 100%;
-  max-width: 900px;
-  max-height: 90vh;
+  width: min(95vw, 1100px);
+  height: 92vh;
+  max-height: 92vh;
+  min-height: 500px;
   display: flex;
   flex-direction: column;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
@@ -53,11 +55,18 @@
 }
 
 .modal-header {
+  flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 1.5rem;
+  padding: 1rem 1.5rem;
   border-bottom: 1px solid rgba($color-text-secondary, 0.2);
+
+  .modal-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
 
   h2 {
     margin: 0 0 0.5rem 0;
@@ -90,8 +99,11 @@
 
 .modal-body {
   flex: 1;
-  overflow-y: auto;
-  padding: 1.5rem;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 1rem 1.5rem;
 
   .error-message {
     background-color: rgba(255, 59, 48, 0.1);
@@ -115,32 +127,136 @@
   }
 }
 
-.tickets-summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+.tickets-toolbar {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: rgba($color-primary, 0.4);
+  border-radius: 10px;
+  border: 1px solid rgba($color-accent, 0.15);
+}
+
+.tickets-toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 1rem;
-  margin-bottom: 1.5rem;
-  padding: 1rem;
-  background-color: rgba($color-accent, 0.1);
-  border-radius: 8px;
-  border: 1px solid rgba($color-accent, 0.2);
+}
+
+.tickets-filters-row {
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba($color-text-secondary, 0.15);
+}
+
+.tickets-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
 
   .summary-item {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 0.1rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba($color-primary, 0.6);
+    border-radius: 6px;
+    border-left: 3px solid rgba($color-accent, 0.5);
+
+    &.summary-vendidos {
+      border-left-color: #34c759;
+      .summary-value { color: #34c759; }
+    }
+
+    &.summary-cortesias {
+      border-left-color: #ff9500;
+      .summary-value { color: #ff9500; }
+    }
+
+    &.summary-cancelled {
+      border-left-color: rgba($color-text-secondary, 0.5);
+      .summary-value { color: $color-text-secondary; }
+    }
+
+    &.summary-total {
+      border-left-color: $color-accent;
+    }
 
     .summary-label {
-      font-size: 0.85rem;
+      font-size: 0.8rem;
       color: $color-text-secondary;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
     }
 
     .summary-value {
-      font-size: 1.5rem;
+      font-size: 1.25rem;
       font-weight: 700;
       color: $color-accent;
     }
+
+    .summary-hint {
+      font-size: 0.7rem;
+      color: rgba($color-text-secondary, 0.8);
+    }
   }
+}
+
+.tickets-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+
+  .custom-input {
+    min-width: 200px;
+    max-width: 200px;
+    margin-bottom: 0;
+  }
+
+  .filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+
+    label {
+      font-size: 0.75rem;
+      color: $color-text-secondary;
+      font-weight: 600;
+    }
+
+    .filter-select {
+      padding: 0.5rem 0.75rem;
+      background: rgba($color-primary, 0.6);
+      border: 1px solid rgba($color-text-secondary, 0.3);
+      border-radius: 6px;
+      color: $color-text-primary;
+      font-size: 0.9rem;
+      min-width: 120px;
+      cursor: pointer;
+
+      &:focus {
+        outline: none;
+        border-color: $color-accent;
+      }
+    }
+  }
+}
+
+.tickets-table-wrapper {
+  flex: 1;
+  min-height: 350px;
+  overflow-x: scroll;
+  overflow-y: auto;
+  border: 1px solid rgba($color-text-secondary, 0.15);
+  border-radius: 8px;
+  background: rgba($color-primary, 0.2);
 }
 
 .tickets-list {
@@ -197,6 +313,26 @@
     gap: 0.5rem;
     align-items: flex-end;
   }
+}
+
+.cortesia-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: rgba(#ff9500, 0.2);
+  color: #ff9500;
+}
+
+.cortesia-tag {
+  font-size: 0.8rem;
+  color: $color-text-secondary;
+  white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-block;
 }
 
 .status-badge {
@@ -396,16 +532,18 @@
 }
 
 .modal-footer {
-  padding: 1rem 1.5rem;
+  flex-shrink: 0;
+  padding: 0.75rem 1.5rem;
   border-top: 1px solid rgba($color-text-secondary, 0.2);
   display: flex;
   justify-content: flex-end;
 }
 
-// Scrollbar personalizado
-.modal-body {
+// Scrollbar personalizado para el área de tabla
+.tickets-table-wrapper {
   &::-webkit-scrollbar {
     width: 8px;
+    height: 8px;
   }
 
   &::-webkit-scrollbar-track {
@@ -426,9 +564,25 @@
 // Responsive
 @media (max-width: 768px) {
   .view-tickets-modal-content {
+    width: 100%;
     max-width: 100%;
+    height: 100vh;
     max-height: 100vh;
     border-radius: 0;
+  }
+
+  .tickets-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tickets-filters {
+    margin-left: 0;
+    flex-direction: column;
+
+    .custom-input {
+      min-width: 100%;
+    }
   }
 
   .ticket-header {
@@ -455,17 +609,11 @@
 }
 
 // Estilos para la tabla de tickets
-.search-section {
-  margin: 1.5rem 0;
-  
-  .custom-input {
-    margin-bottom: 0;
-  }
-}
 
 .tickets-table-container {
-  overflow-x: auto;
-  margin-top: 1rem;
+  overflow-x: visible;
+  min-width: 100%;
+  display: inline-block;
 }
 
 .tickets-table {
@@ -475,7 +623,10 @@
   font-size: 0.9rem;
 
   thead {
-    background-color: rgba($color-accent, 0.1);
+    background-color: rgba($color-accent, 0.15);
+    position: sticky;
+    top: 0;
+    z-index: 1;
     
     th {
       padding: 0.75rem;
@@ -484,6 +635,7 @@
       color: $color-text-primary;
       border-bottom: 2px solid rgba($color-accent, 0.3);
       white-space: nowrap;
+      background: inherit;
       
       &:first-child {
         padding-left: 1rem;

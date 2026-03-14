@@ -149,4 +149,32 @@ export const getContactConfig = async (): Promise<{ whatsappPhone: string }> => 
   }
 };
 
+// Banner item for home carousel
+export interface BannerItem {
+  id?: string;
+  url: string;
+  order?: number;
+}
+
+// Get home banners from Firestore (configurations/home_banners)
+export const getHomeBanners = async (): Promise<BannerItem[]> => {
+  try {
+    const configDocRef = doc(db, 'configurations', 'home_banners');
+    const configDoc = await getDoc(configDocRef);
+
+    if (configDoc.exists()) {
+      const data = configDoc.data();
+      const banners = data?.banners || [];
+      return banners
+        .filter((b: { url?: string }) => b?.url)
+        .sort((a: { order?: number }, b: { order?: number }) => (a.order ?? 0) - (b.order ?? 0));
+    }
+
+    return [];
+  } catch (error) {
+    console.error('Error fetching home banners:', error);
+    return [];
+  }
+};
+
 export { db }; 

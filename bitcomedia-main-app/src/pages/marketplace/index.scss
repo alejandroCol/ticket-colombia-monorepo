@@ -7,33 +7,9 @@
   flex-direction: column;
 }
 
-// —— Hero compacto: prioridad a los eventos ——
-.marketplace-hero {
-  padding: 0.75rem 1rem 0.5rem;
-  margin-top: 50px;
+// —— Wrapper: banner ——
+.marketplace-hero-wrapper {
   flex-shrink: 0;
-
-  @include respond-sm {
-    padding: 0.85rem 1.5rem 0.6rem;
-    margin-top: 60px;
-  }
-
-  &__title {
-    font-family: 'Outfit', $font-family-primary;
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: $color-text-primary;
-    margin: 0;
-    letter-spacing: -0.02em;
-    line-height: 1.2;
-  }
-
-  &__tagline {
-    font-size: 0.875rem;
-    color: $color-text-secondary;
-    margin: 0.2em 0 0;
-    font-weight: $font-weight-medium;
-  }
 }
 
 // —— Contenido y filtros ——

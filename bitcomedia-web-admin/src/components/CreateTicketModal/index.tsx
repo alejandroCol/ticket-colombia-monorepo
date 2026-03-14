@@ -4,6 +4,7 @@ import CustomSelector from '@components/CustomSelector';
 import PrimaryButton from '@components/PrimaryButton';
 import SecondaryButton from '@components/SecondaryButton';
 import Loader from '@components/Loader';
+import BulkUploadCortesiasModal from '@components/BulkUploadCortesiasModal';
 import type { Event } from '@services/types';
 import './index.scss';
 
@@ -23,6 +24,8 @@ export interface TicketFormData {
   sectionId?: string;
   sectionName?: string;
   isCourtesy?: boolean;
+  isGeneralCourtesy?: boolean;
+  giftedBy?: string;
 }
 
 const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
@@ -39,10 +42,13 @@ const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
     quantity: 1,
     sectionId: undefined,
     sectionName: undefined,
-    isCourtesy: false
+    isCourtesy: false,
+    isGeneralCourtesy: false,
+    giftedBy: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
   
   // Calcular precio: cortesía = 0, sino basado en sección o precio por defecto
   const getTicketPrice = (): number => {
@@ -105,7 +111,9 @@ const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
         quantity: 1,
         sectionId: undefined,
         sectionName: undefined,
-        isCourtesy: false
+        isCourtesy: false,
+        isGeneralCourtesy: false,
+        giftedBy: ''
       });
       onClose();
     } catch (err: any) {
@@ -125,7 +133,9 @@ const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
       quantity: 1,
       sectionId: undefined,
       sectionName: undefined,
-      isCourtesy: false
+      isCourtesy: false,
+      isGeneralCourtesy: false,
+      giftedBy: ''
     });
     setError(null);
     onClose();
@@ -167,6 +177,16 @@ const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
             ) : (
               <p className="event-price">💰 Precio: ${event.ticket_price.toLocaleString('es-CO')} COP</p>
             )}
+          </div>
+
+          <div className="create-ticket-options">
+            <SecondaryButton
+              type="button"
+              onClick={() => setIsBulkUploadOpen(true)}
+              className="excel-upload-btn"
+            >
+              📤 Cargar cortesías desde Excel
+            </SecondaryButton>
           </div>
 
           <form onSubmit={handleSubmit}>
@@ -232,6 +252,28 @@ const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
               </label>
             </div>
 
+            {formData.isCourtesy && (
+              <div className="courtesy-options">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={formData.isGeneralCourtesy ?? false}
+                    onChange={(e) => handleChange('isGeneralCourtesy', e.target.checked)}
+                  />
+                  <span>Cortesía del evento general</span>
+                </label>
+                {!formData.isGeneralCourtesy && (
+                  <CustomInput
+                    label="Quien regala la cortesía"
+                    type="text"
+                    value={formData.giftedBy || ''}
+                    onChange={(e) => handleChange('giftedBy', e.target.value)}
+                    placeholder="Ej: Patrocinador XYZ"
+                  />
+                )}
+              </div>
+            )}
+
             <CustomInput
               label="Número de personas (cantidad de tickets) *"
               type="text"
@@ -290,6 +332,18 @@ const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
             </div>
           </form>
         </div>
+
+        <BulkUploadCortesiasModal
+          isOpen={isBulkUploadOpen}
+          onClose={() => setIsBulkUploadOpen(false)}
+          onSuccess={() => {}}
+          onSuccessClose={() => {
+            setIsBulkUploadOpen(false);
+            onClose();
+          }}
+          eventId={event.id || ''}
+          eventName={event.name || ''}
+        />
       </div>
     </div>
   );

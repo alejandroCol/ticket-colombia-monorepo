@@ -71,6 +71,21 @@ export async function getCurrentUserTickets(): Promise<Ticket[]> {
   }
 }
 
+// Transfer ticket to another person
+export async function transferTicket(
+  ticketId: string,
+  recipientEmail: string,
+  recipientName?: string
+): Promise<{ success: boolean; message: string; newTicketId?: string }> {
+  const functions = getFunctions(app);
+  const transferTicketFn = httpsCallable<
+    { ticketId: string; recipientEmail: string; recipientName?: string },
+    { success: boolean; message: string; newTicketId?: string }
+  >(functions, 'transferTicket');
+  const result = await transferTicketFn({ ticketId, recipientEmail, recipientName });
+  return result.data;
+}
+
 // Create ticket preference for MercadoPago
 export async function createTicket(ticketData: TicketData) {
   try {

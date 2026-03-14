@@ -21,6 +21,7 @@ const TicketsScreen: React.FC = () => {
   const [loadingTickets, setLoadingTickets] = useState<boolean>(false);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [showQRModal, setShowQRModal] = useState<boolean>(false);
+  const [openWithTransfer, setOpenWithTransfer] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
@@ -55,12 +56,20 @@ const TicketsScreen: React.FC = () => {
 
   const handleShowQR = (ticket: Ticket) => {
     setSelectedTicket(ticket);
+    setOpenWithTransfer(false);
+    setShowQRModal(true);
+  };
+
+  const handleTransfer = (ticket: Ticket) => {
+    setSelectedTicket(ticket);
+    setOpenWithTransfer(true);
     setShowQRModal(true);
   };
 
   const handleCloseQRModal = () => {
     setShowQRModal(false);
     setSelectedTicket(null);
+    setOpenWithTransfer(false);
   };
 
   const handleRetry = () => {
@@ -132,6 +141,7 @@ const TicketsScreen: React.FC = () => {
                 key={ticket.id}
                 ticket={ticket}
                 onShowQR={handleShowQR}
+                onTransfer={handleTransfer}
               />
             ))}
           </div>
@@ -176,6 +186,8 @@ const TicketsScreen: React.FC = () => {
         ticket={selectedTicket}
         isOpen={showQRModal}
         onClose={handleCloseQRModal}
+        onTransferSuccess={loadUserTickets}
+        initialShowTransferForm={openWithTransfer}
       />
     </div>
   );

@@ -23,6 +23,10 @@ interface CreateManualTicketRequest {
   sectionName?: string;
   /** Si es true, el ticket es de cortesía (valor $0) y no suma en ingresos */
   isCourtesy?: boolean;
+  /** Si es true, es cortesía del evento general (sin donante específico) */
+  isGeneralCourtesy?: boolean;
+  /** Quien regala la cortesía (cuando isGeneralCourtesy es false) */
+  giftedBy?: string;
 }
 
 /**
@@ -63,7 +67,7 @@ export const createManualTicket = functions
       console.log("[createManualTicket] Auth OK, admin:", context.auth.uid);
 
       // 2. Validación de Datos de Entrada
-      const {eventId, buyerName, buyerEmail, buyerPhone, buyerIdNumber, quantity, sectionId, sectionName, isCourtesy} = data;
+      const {eventId, buyerName, buyerEmail, buyerPhone, buyerIdNumber, quantity, sectionId, sectionName, isCourtesy, isGeneralCourtesy, giftedBy} = data;
 
       if (!eventId || !buyerName || !buyerEmail || !quantity || quantity <= 0) {
         throw new functions.https.HttpsError(
@@ -121,6 +125,8 @@ export const createManualTicket = functions
           amount: ticketPrice,
           purchaseAmount: ticketPrice, // Para reportes de ingresos (cortesía = 0)
           isCourtesy: !!isCourtesy, // No suma en ingresos cuando es true
+          isGeneralCourtesy: !!isGeneralCourtesy, // Cortesía del evento general
+          giftedBy: giftedBy?.trim() || null, // Quien regala la cortesía
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           validatedAt: null,
           validatedBy: null,

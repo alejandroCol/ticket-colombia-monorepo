@@ -11,6 +11,9 @@ import DashboardScreen from '@pages/dashboard';
 import EventFormScreen from '@pages/EventForm';
 import TicketValidationScreen from '@pages/TicketValidation';
 import ConfigScreen from '@pages/Config';
+import BannersScreen from '@pages/Banners';
+import EventStatsScreen from '@pages/EventStats';
+import BalanceScreen from '@pages/Balance';
 
 // Dashboard and other pages would be imported here
 // import Dashboard from '../dashboard';
@@ -139,6 +142,42 @@ const MainLayout: React.FC = () => {
           element={
             (user && isAdmin) ? (
               <ConfigScreen />
+            ) : (
+              <Navigate to="/login" />
+            )
+          } 
+        />
+
+        {/* Event Stats Route */}
+        <Route 
+          path="/events/:eventId/stats" 
+          element={
+            (user && isAdmin) ? (
+              <EventStatsScreen />
+            ) : (
+              <Navigate to="/login" />
+            )
+          } 
+        />
+
+        {/* Balance Route */}
+        <Route 
+          path="/balance" 
+          element={
+            (user && isAdmin) ? (
+              <BalanceScreen />
+            ) : (
+              <Navigate to="/login" />
+            )
+          } 
+        />
+
+        {/* Banners Route */}
+        <Route 
+          path="/banners" 
+          element={
+            (user && isAdmin) ? (
+              <BannersScreen />
             ) : (
               <Navigate to="/login" />
             )

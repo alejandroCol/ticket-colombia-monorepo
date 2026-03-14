@@ -299,7 +299,7 @@ const CheckoutScreen: React.FC = () => {
     
     if (paymentMethod === "mercadopago") {
       return isAuthenticated
-                        ? "Pagar en línea"
+        ? "Pagar en línea"
         : "¡Crea tu cuenta y paga!";
     }
     return "Confirmar reserva";

@@ -7,7 +7,8 @@ import EventCard from '../../containers/EventCard';
 import BottomNavBar from '../../containers/BottomNavBar';
 import TopNavBar from '../../containers/TopNavBar';
 import WhatsAppButton from '../../components/WhatsAppButton';
-import { getCurrentUser } from '../../services';
+import BannerCarousel from '../../components/BannerCarousel';
+import { getCurrentUser, getHomeBanners } from '../../services';
 import { Timestamp, collection, getDocs, query, where, orderBy, limit, startAfter, type QueryDocumentSnapshot, type DocumentData } from 'firebase/firestore';
 import { db } from '../../services/firestore';
 
@@ -33,10 +34,31 @@ interface EventData {
 
 type DateFilter = 'Hoy' | 'Esta semana' | 'Este mes' | 'Proximamente';
 
+// Default banners when none configured (2 banners de prueba - alta calidad)
+const getDefaultBanners = (firstSlug?: string) => [
+  {
+    id: '1',
+    url: 'https://images.unsplash.com/photo-1514306191717-452ec28c7814?w=1920&q=90&fit=crop',
+    order: 0,
+    title: 'Teatro en Vivo',
+    date: '2026-04-15',
+    eventSlug: firstSlug || '',
+  },
+  {
+    id: '2',
+    url: 'https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=1920&q=90&fit=crop',
+    order: 1,
+    title: 'Noche de Improvisación',
+    date: '2026-04-22',
+    eventSlug: firstSlug || '',
+  },
+];
+
 const MarketplaceScreen: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [activeFilter, setActiveFilter] = useState<DateFilter>('Proximamente');
   const [events, setEvents] = useState<EventData[]>([]);
+  const [banners, setBanners] = useState<{ id?: string; url: string; order?: number; title?: string; date?: string; eventSlug?: string }[]>(getDefaultBanners());
   const [loading, setLoading] = useState<boolean>(true);
   const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
   const [hasMore, setHasMore] = useState<boolean>(true);
@@ -69,6 +91,26 @@ const MarketplaceScreen: React.FC = () => {
     setHasMore(true);
     fetchEvents(activeFilter, true);
   }, [activeFilter]);
+
+  useEffect(() => {
+    const loadBanners = async () => {
+      const data = await getHomeBanners();
+      if (data.length > 0) setBanners(data);
+    };
+    loadBanners();
+  }, []);
+
+  // Actualizar eventSlug en banners por defecto cuando carguen los eventos
+  useEffect(() => {
+    const firstSlug = events[0]?.slug || events[0]?.id;
+    if (firstSlug && banners.some((b) => !b.eventSlug && (b.id === '1' || b.id === '2'))) {
+      setBanners((prev) =>
+        prev.map((b) =>
+          (b.id === '1' || b.id === '2') && !b.eventSlug ? { ...b, eventSlug: firstSlug } : b
+        )
+      );
+    }
+  }, [events]);
 
   const createQueryForFilter = (filter: DateFilter) => {
     const today = new Date();
@@ -191,10 +233,9 @@ const MarketplaceScreen: React.FC = () => {
     <div className="marketplace-screen">
       <TopNavBar isAuthenticated={isAuthenticated} />
 
-      <header className="marketplace-hero">
-        <h1 className="marketplace-hero__title">Eventos</h1>
-        <p className="marketplace-hero__tagline">Reserva tu entrada en segundos</p>
-      </header>
+      <div className="marketplace-hero-wrapper">
+        <BannerCarousel banners={banners} intervalMs={5000} />
+      </div>
 
       <div className="marketplace-content">
         <nav className="marketplace-filters" aria-label="Filtrar por fecha">

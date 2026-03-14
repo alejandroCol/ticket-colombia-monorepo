@@ -50,6 +50,24 @@
   margin: 0;
 }
 
+.config-links {
+  margin-bottom: 1rem;
+}
+
+.config-link-btn {
+  background: none;
+  border: none;
+  color: $color-accent;
+  cursor: pointer;
+  font-size: 0.95rem;
+  text-decoration: underline;
+  padding: 0;
+
+  &:hover {
+    opacity: 0.9;
+  }
+}
+
 .config-actions {
   display: flex;
   gap: 0.75rem;
