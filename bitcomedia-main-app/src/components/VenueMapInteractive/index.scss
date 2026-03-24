@@ -76,16 +76,16 @@
 
     &:hover,
     &:focus-visible {
-      background: rgba($color-accent, 0.28);
+      background: $color-accent;
       border-color: $color-accent;
-      box-shadow: 0 0 0 1px rgba($color-accent, 0.5);
+      box-shadow: 0 0 0 2px rgba($color-accent, 0.55);
       outline: none;
     }
 
     &--active {
       border-color: $color-accent;
-      background: rgba($color-accent, 0.32);
-      box-shadow: 0 0 0 2px rgba($color-accent, 0.45);
+      background: $color-accent;
+      box-shadow: 0 0 0 2px rgba($color-accent, 0.5);
     }
   }
 

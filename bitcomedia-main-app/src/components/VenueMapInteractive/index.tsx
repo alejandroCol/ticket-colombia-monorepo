@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import type { EventSection, VenueMapVisualConfig, VenueMapZone } from "../../services/types";
 import { publicZoneButtonStyle } from "../../utils/venueMapZoneStyle";
 import VenueMapVisualLayer from "../VenueMapVisualLayer";
@@ -48,6 +48,8 @@ const VenueMapInteractive: React.FC<VenueMapInteractiveProps> = ({
   const showRasterOnly = Boolean(imageUrl) && !visualCanRender;
   const showVector = visualCanRender && Boolean(visual);
 
+  const [hoveredZoneId, setHoveredZoneId] = useState<string | null>(null);
+
   return (
     <div className="venue-map-interactive">
       <h4 className="venue-map-interactive__title">Mapa del lugar</h4>
@@ -71,7 +73,8 @@ const VenueMapInteractive: React.FC<VenueMapInteractiveProps> = ({
             const sec = resolveSection(z.sectionId);
             if (!sec) return null;
             const active = selectedSectionId === z.sectionId;
-            const tint = publicZoneButtonStyle(z.color, active);
+            const hovered = hoveredZoneId === z.id;
+            const tint = publicZoneButtonStyle(z.color, active, hovered);
             const hasTint = Object.keys(tint).length > 0;
             return (
               <button
@@ -87,6 +90,14 @@ const VenueMapInteractive: React.FC<VenueMapInteractiveProps> = ({
                 }}
                 title={z.label || sec.name}
                 aria-label={`Seleccionar ${sec.name}`}
+                onMouseEnter={() => setHoveredZoneId(z.id)}
+                onMouseLeave={(e) => {
+                  if (e.currentTarget !== document.activeElement) {
+                    setHoveredZoneId(null);
+                  }
+                }}
+                onFocus={() => setHoveredZoneId(z.id)}
+                onBlur={() => setHoveredZoneId(null)}
                 onClick={() => onSelectSection(sec)}
               >
                 <span className="venue-map-interactive__zone-label">{z.label || sec.name}</span>

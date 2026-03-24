@@ -25,15 +25,21 @@ function rgbaFromHex(hex: string, alpha: number): string {
 /** Estilos del botón-zona en el mapa público cuando hay color guardado. */
 export function publicZoneButtonStyle(
   color: string | undefined,
-  active: boolean
+  active: boolean,
+  hovered: boolean
 ): CSSProperties {
   const raw = color?.trim();
   if (!raw) return {};
   const hex = normalizeHex(raw.startsWith("#") ? raw : `#${raw}`);
   if (!hex) return {};
+  const solid = active || hovered;
   return {
     borderColor: hex,
-    background: rgbaFromHex(hex, active ? 0.32 : 0.12),
-    boxShadow: active ? `0 0 0 2px ${rgbaFromHex(hex, 0.5)}` : undefined,
+    background: solid ? hex : rgbaFromHex(hex, 0.12),
+    boxShadow: active
+      ? `0 0 0 2px ${rgbaFromHex(hex, 0.55)}`
+      : hovered
+        ? `0 0 0 2px ${rgbaFromHex(hex, 0.4)}`
+        : undefined,
   };
 }
