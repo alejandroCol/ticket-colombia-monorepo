@@ -35,6 +35,85 @@ export interface EventSection {
   price: number;
 }
 
+/** Zona clickeable en el mapa (coordenadas en % 0–100) */
+export interface VenueMapZone {
+  id: string;
+  label: string;
+  sectionId: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Color de la zona en el mapa (hex #rrggbb). Vacío = estilo por defecto. */
+  color?: string;
+}
+
+/** Elementos decorativos del mapa (no clicables; % 0–100) */
+export type VenueMapDecorationType =
+  | 'stage'
+  | 'palco_tier'
+  | 'dance_floor'
+  | 'bar_counter'
+  | 'dj_booth'
+  | 'theater_fan'
+  | 'vip_box'
+  | 'lounge_sofa'
+  | 'high_table'
+  | 'entrance_arch'
+  | 'stairs'
+  | 'balcony'
+  | 'pillar'
+  | 'light_rig'
+  | 'pool_ring';
+
+export interface VenueMapDecoration {
+  id: string;
+  type: VenueMapDecorationType;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  rotation: number;
+  label?: string;
+  color?: string;
+  zIndex?: number;
+}
+
+export interface VenueMapVisualConfig {
+  background: string;
+  /** Imagen de fondo del plano (Storage), muy comprimida al subir. */
+  backgroundImageUrl?: string;
+  /** Mapa aplanado exportado como PNG (opcional). Si existe, la app puede mostrarlo como imagen única. */
+  flatRenderUrl?: string;
+  decorations: VenueMapDecoration[];
+}
+
+export interface VenueMapConfig {
+  zones?: VenueMapZone[];
+  visual?: VenueMapVisualConfig;
+}
+
+/** Zona guardada en una plantilla (sin sectionId; precio/cupo sugeridos al aplicar). */
+export interface VenueMapTemplateZoneLayout {
+  label: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  defaultPrice?: number;
+  defaultAvailable?: number;
+  color?: string;
+}
+
+/** Documento en Firestore `venue_map_templates` */
+export interface VenueMapTemplateDocument {
+  id: string;
+  name: string;
+  organizer_id: string;
+  visual: VenueMapVisualConfig;
+  zone_layouts: VenueMapTemplateZoneLayout[];
+}
+
 // Event interface
 export interface Event {
   id: string;
@@ -58,6 +137,11 @@ export interface Event {
   organizer_id: string;
   recurring_event_id?: string;
   external_url?: string;
+  venue_map?: VenueMapConfig;
+  /** Tarifa de servicio al comprador (solo super admin en el evento); prevalece sobre tarifa del organizador y la global */
+  platform_commission_type?: 'percent_payer' | 'fixed_per_ticket' | '' | string;
+  /** Porcentaje (0–100) o COP fijos por entrada según platform_commission_type */
+  platform_commission_value?: number;
   [key: string]: string | number | boolean | Timestamp | Date | object | undefined;
 }
 

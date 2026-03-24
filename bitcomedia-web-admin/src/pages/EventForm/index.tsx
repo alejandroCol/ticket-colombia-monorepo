@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import type { ChangeEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Timestamp, collection, addDoc, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { Timestamp, collection, addDoc, doc, getDoc, updateDoc, deleteField } from 'firebase/firestore';
 import PrimaryButton from '@components/PrimaryButton';
 import SecondaryButton from '@components/SecondaryButton';
 import CustomInput from '@components/CustomInput';
@@ -9,10 +9,19 @@ import CustomTextarea from '@components/CustomTextarea';
 import CustomSelector from '@components/CustomSelector';
 import CustomDateTimePicker from '@components/CustomDateTimePicker';
 import VenueAutocomplete from '@components/VenueAutocomplete';
+import VenueMapBuilder, { DEFAULT_VENUE_MAP_BACKGROUND } from '@components/VenueMapBuilder';
 import TopNavBar from '@TopNavBar';
-import { logoutUser, getUserSession, uploadFile, db, getVenues } from '@services';
+import {
+  logoutUser,
+  getUserSession,
+  uploadFile,
+  db,
+  getVenues,
+  getCurrentUser,
+  isSuperAdmin,
+} from '@services';
 import { compressImageForBoleto } from '../../utils/imageCompression';
-import type { Venue, EventSection } from '@services/types';
+import type { Venue, EventSection, VenueMapConfig, VenueMapVisualConfig, VenueMapZone } from '@services/types';
 import './index.scss';
 
 interface RecurrenceData {
@@ -24,6 +33,23 @@ interface RecurrenceData {
 interface VenueData {
   name: string;
   address: string;
+}
+
+function buildVenueMapForSave(
+  zones: VenueMapZone[],
+  visual: VenueMapVisualConfig
+): VenueMapConfig | null {
+  const hasZones = zones.length > 0;
+  const hasVisual =
+    visual.decorations.length > 0 ||
+    visual.background !== DEFAULT_VENUE_MAP_BACKGROUND ||
+    Boolean(visual.backgroundImageUrl?.trim()) ||
+    Boolean(visual.flatRenderUrl?.trim());
+  if (!hasZones && !hasVisual) return null;
+  return {
+    ...(hasZones ? { zones } : {}),
+    ...(hasVisual ? { visual } : {}),
+  };
 }
 
 interface FormDataType {
@@ -44,6 +70,15 @@ interface FormDataType {
   ticket_price: number | string;
   sections: EventSection[];
   status: string;
+  /** Etiquetas separadas por coma (ej: Teatro,Comedia) */
+  event_labels_text: string;
+  /** Zonas rectangulares clickeables (% sobre la imagen) */
+  venue_map_zones: VenueMapZone[];
+  /** Diseño vectorial del mapa (editor visual) */
+  venue_map_visual: VenueMapVisualConfig;
+  /** Comisión tiquetera — solo edita super admin */
+  platform_commission_type: string;
+  platform_commission_value: string;
 }
 
 interface EventFormScreenProps {
@@ -59,6 +94,7 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
   const [isEditMode, setIsEditMode] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDuplicating, setIsDuplicating] = useState(false);
+  const [isSuperAdminUser, setIsSuperAdminUser] = useState(false);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [isLoadingVenues, setIsLoadingVenues] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -86,6 +122,11 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
   useEffect(() => {
     loadVenues();
   }, [loadVenues]);
+
+  useEffect(() => {
+    const u = getCurrentUser();
+    if (u) void isSuperAdmin(u.uid).then(setIsSuperAdminUser);
+  }, []);
 
   // Handle venue selection from autocomplete
   const handleVenueSelect = (venue: Venue) => {
@@ -124,7 +165,17 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
     capacity_per_occurrence: '',
     ticket_price: '',
     sections: [],
-    status: 'active'
+    status: 'active',
+    event_labels_text: '',
+    venue_map_zones: [],
+    venue_map_visual: {
+      background: DEFAULT_VENUE_MAP_BACKGROUND,
+      decorations: [],
+      backgroundImageUrl: '',
+      flatRenderUrl: '',
+    },
+    platform_commission_type: '',
+    platform_commission_value: ''
   });
 
   // Fetch event data from Firestore
@@ -138,6 +189,15 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
       
       if (docSnap.exists()) {
         const data = docSnap.data();
+        // Ownership: only super admin or event owner can edit
+        const user = getCurrentUser();
+        if (user) {
+          const superA = await isSuperAdmin(user.uid);
+          if (!superA && data.organizer_id !== user.uid) {
+            navigate('/dashboard', { replace: true });
+            return;
+          }
+        }
         
         // For recurring events, set isRecurring to true
         if (isRecurring || data.recurrence_pattern) {
@@ -175,7 +235,42 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
           capacity_per_occurrence: data.capacity_per_occurrence || 0,
           ticket_price: data.ticket_price || 0,
           sections: data.sections || [],
-          status: data.status || 'active'
+          status: data.status || 'active',
+          event_labels_text: Array.isArray(data.event_labels) ? data.event_labels.join(', ') : '',
+          venue_map_zones: Array.isArray(data.venue_map?.zones)
+            ? [...data.venue_map.zones]
+            : [],
+          venue_map_visual: (() => {
+            const legacyMapUrl =
+              typeof data.venue_map_url === 'string' ? data.venue_map_url.trim() : '';
+            const rawVis = data.venue_map?.visual;
+            let v: VenueMapVisualConfig = rawVis
+              ? {
+                  background: rawVis.background || DEFAULT_VENUE_MAP_BACKGROUND,
+                  decorations: Array.isArray(rawVis.decorations) ? [...rawVis.decorations] : [],
+                  backgroundImageUrl:
+                    typeof rawVis.backgroundImageUrl === 'string' ? rawVis.backgroundImageUrl : '',
+                  flatRenderUrl: typeof rawVis.flatRenderUrl === 'string' ? rawVis.flatRenderUrl : '',
+                }
+              : {
+                  background: DEFAULT_VENUE_MAP_BACKGROUND,
+                  decorations: [],
+                  backgroundImageUrl: '',
+                  flatRenderUrl: '',
+                };
+            if (
+              legacyMapUrl &&
+              !v.flatRenderUrl?.trim() &&
+              v.decorations.length === 0 &&
+              !v.backgroundImageUrl?.trim()
+            ) {
+              v = { ...v, flatRenderUrl: legacyMapUrl };
+            }
+            return v;
+          })(),
+          platform_commission_type: (data.platform_commission_type as string) || '',
+          platform_commission_value:
+            data.platform_commission_value != null ? String(data.platform_commission_value) : ''
         });
       } else {
         alert("No se encontró el evento que intentas editar");
@@ -410,6 +505,11 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
         eventSlug = generateSlug(formData.name, formData.single_date);
       }
 
+      const eventLabels = formData.event_labels_text
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+
       // Prepare the data for submission
       const eventData = {
         name: formData.name,
@@ -426,7 +526,22 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
         status: formData.status,
         organizer_id: userSession?.uid || '',
         slug: eventSlug, // Add the generated slug
+        event_labels: eventLabels.length > 0 ? eventLabels : [],
+        venue_map: buildVenueMapForSave(
+          formData.venue_map_zones,
+          formData.venue_map_visual
+        ),
       };
+
+      if (isSuperAdminUser) {
+        Object.assign(eventData, {
+          platform_commission_type:
+            !formData.platform_commission_type || formData.platform_commission_type === 'none'
+              ? ''
+              : formData.platform_commission_type,
+          platform_commission_value: Number(formData.platform_commission_value) || 0
+        });
+      }
 
       // If it's a new event, add creation_date
       if (!isEditMode) {
@@ -471,7 +586,10 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
       if (isEditMode && eventId) {
         // Update existing document
         const eventRef = doc(db, collectionName, eventId);
-        await updateDoc(eventRef, eventData);
+        await updateDoc(eventRef, {
+          ...eventData,
+          venue_map_url: deleteField(),
+        });
         console.log(`${isRecurring ? 'Evento recurrente' : 'Evento'} actualizado correctamente`);
         
         // Show success alert and redirect
@@ -709,7 +827,11 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
         eventSlug = generateSlug(formData.name, formData.single_date);
       }
 
-      // Prepare duplicated event data
+      const dupLabels = formData.event_labels_text
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+
       const duplicatedEventData = {
         name: formData.name,
         description: formData.description,
@@ -723,6 +845,15 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
           : undefined,
         capacity_per_occurrence: Number(formData.capacity_per_occurrence) || 0,
         ticket_price: Number(formData.ticket_price) || 0,
+        sections: formData.sections.length > 0 ? formData.sections : undefined,
+        event_labels: dupLabels.length > 0 ? dupLabels : [],
+        venue_map: buildVenueMapForSave(
+          formData.venue_map_zones.map((z) => ({ ...z })),
+          {
+            ...formData.venue_map_visual,
+            decorations: formData.venue_map_visual.decorations.map((d) => ({ ...d })),
+          }
+        ),
         status: formData.status,
         organizer_id: userSession?.uid || '',
         slug: eventSlug,
@@ -1174,6 +1305,66 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
                   <small className="helper-text">Este precio se usará si no defines localidades específicas</small>
                 </div>
 
+                <div className="form-group">
+                  <CustomInput
+                    label="Etiquetas del evento (separadas por coma)"
+                    type="text"
+                    name="event_labels_text"
+                    value={formData.event_labels_text}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, event_labels_text: e.target.value }))}
+                    placeholder="Teatro, Comedia, Familiar"
+                  />
+                  <small className="helper-text">Se muestran en la página pública del evento</small>
+                </div>
+
+                <div className="form-section">
+                  <h2>Editor visual del mapa</h2>
+                  <p className="helper-text">
+                    Arma el plano con piezas arrastrables (discoteca, teatro, bar, tarima…). Puedes subir una imagen de
+                    fondo y definir las zonas azules en el lienzo; opcionalmente genera un PNG aplanado para la tienda.
+                  </p>
+                  <VenueMapBuilder
+                    sections={formData.sections}
+                    onSectionsChange={(next) =>
+                      setFormData((prev) => ({ ...prev, sections: next }))
+                    }
+                    zones={formData.venue_map_zones}
+                    onZonesChange={(next) =>
+                      setFormData((prev) => ({ ...prev, venue_map_zones: next }))
+                    }
+                    visual={formData.venue_map_visual}
+                    onVisualChange={(venue_map_visual) =>
+                      setFormData((prev) => ({ ...prev, venue_map_visual }))
+                    }
+                    defaultNewSectionPrice={Number(formData.ticket_price) || 0}
+                    defaultNewSectionAvailable={
+                      Math.max(1, Number(formData.capacity_per_occurrence) || 0) || 100
+                    }
+                    uploadMapPng={async (file) => {
+                      const slug = (formData.name || 'map')
+                        .toLowerCase()
+                        .replace(/[^a-z0-9]+/g, '_')
+                        .replace(/^_|_$/g, '')
+                        .slice(0, 48);
+                      const path = `venue-maps/${slug || 'map'}_${Date.now()}.png`;
+                      return uploadFile(file, path);
+                    }}
+                    uploadBackgroundImage={async (file) => {
+                      const path = `venue-maps/bg_${Date.now()}.jpg`;
+                      return uploadFile(file, path);
+                    }}
+                    onFlatRenderExported={(url) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        venue_map_visual: { ...prev.venue_map_visual, flatRenderUrl: url },
+                      }))
+                    }
+                    organizerId={
+                      getUserSession()?.uid || getCurrentUser()?.uid || ''
+                    }
+                  />
+                </div>
+
                 <div className="form-section">
                   <h2>Localidades (Secciones)</h2>
                   <p className="helper-text">Define diferentes localidades con precios y disponibilidad. Si no defines localidades, se usará el precio por defecto.</p>
@@ -1242,6 +1433,44 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
                     </SecondaryButton>
                   </div>
                 </div>
+
+                {isSuperAdminUser && (
+                  <div className="form-group super-admin-commission-block">
+                    <h2>Tarifa de servicio al comprador (este evento)</h2>
+                    <p className="helper-text">
+                      Solo super administrador. En el checkout el usuario verá siempre el concepto{' '}
+                      <strong>Tarifa de servicio</strong>. Si eliges una regla aquí, tiene prioridad sobre la tarifa por
+                      defecto del organizador (Configuración → administradores) y sobre el porcentaje global de la
+                      plataforma.
+                    </p>
+                    <CustomSelector
+                      label="Tipo de tarifa"
+                      name="platform_commission_type"
+                      value={formData.platform_commission_type || 'none'}
+                      onChange={handleInputChange}
+                      options={[
+                        { value: 'none', label: 'Heredar (organizador o tarifa global)' },
+                        { value: 'percent_payer', label: 'Porcentaje sobre subtotal de entradas' },
+                        { value: 'fixed_per_ticket', label: 'Valor fijo COP por entrada' }
+                      ]}
+                    />
+                    {(formData.platform_commission_type === 'percent_payer' ||
+                      formData.platform_commission_type === 'fixed_per_ticket') && (
+                      <CustomInput
+                        label={
+                          formData.platform_commission_type === 'percent_payer'
+                            ? 'Porcentaje (%)'
+                            : 'Valor fijo por boleto (COP)'
+                        }
+                        type="text"
+                        name="platform_commission_value"
+                        value={formData.platform_commission_value}
+                        onChange={handleInputChange}
+                        placeholder={formData.platform_commission_type === 'percent_payer' ? 'Ej: 8.5' : 'Ej: 5000'}
+                      />
+                    )}
+                  </div>
+                )}
                 
                 <div className="form-group">
                   <CustomSelector

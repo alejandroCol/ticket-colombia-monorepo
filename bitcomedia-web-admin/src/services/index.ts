@@ -11,6 +11,7 @@ export {
   onAuthStateChange,
   getCurrentUser,
   hasAdminAccess,
+  isSuperAdmin,
   sendPasswordResetEmail,
   auth
 } from './auth';
@@ -21,7 +22,10 @@ export {
   createUserDocument,
   updateUserDocument,
   getEventById,
+  getEventOrRecurringById,
   getPaymentConfig,
+  getOrganizerBuyerFee,
+  setOrganizerBuyerFee,
   getContactConfig,
   updateContactConfig,
   getVenues,
@@ -32,8 +36,16 @@ export {
   deleteExpense,
   getExpensesByEventId,
   getTotalRevenue,
+  getAdminUsersList,
   db
 } from './firestore';
+
+export {
+  saveVenueMapTemplate,
+  listVenueMapTemplates,
+  getVenueMapTemplate,
+  deleteVenueMapTemplate,
+} from './venueMapTemplates';
 
 // Storage service exports
 export {
@@ -53,10 +65,20 @@ export {
 export {
   createTicket,
   getUserTickets,
-  getCurrentUserTickets
+  getCurrentUserTickets,
+  getTicketsSince,
+  isTicketValidForSalesStats,
+  ticketCreatedAtMs
 } from './ticketService';
 
 // Types exports
-export type { UserData, Event, Ticket, Venue } from './types';
-export type { BannerItem } from './firestore';
-export type { TicketData } from './ticketService'; 
+export type {
+  UserData,
+  Event,
+  Ticket,
+  Venue,
+  VenueMapTemplateDocument,
+  VenueMapTemplateZoneLayout,
+} from './types';
+export type { BannerItem, OrganizerBuyerFeeDoc } from './firestore';
+export type { TicketData, CreateReservationResult } from './ticketService'; 

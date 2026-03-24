@@ -126,6 +126,33 @@ export const getPaymentConfig = async (): Promise<{ fees: number; taxes: number 
   }
 };
 
+export type OrganizerBuyerFeeDoc = {
+  fee_type: 'percent_payer' | 'fixed_per_ticket';
+  fee_value: number;
+};
+
+/** Tarifa por defecto al comprador para eventos de este organizador (si el evento no tiene override). */
+export const getOrganizerBuyerFee = async (
+  organizerId: string
+): Promise<OrganizerBuyerFeeDoc | null> => {
+  try {
+    const id = String(organizerId || '').trim();
+    if (!id) return null;
+    const ref = doc(db, 'organizer_buyer_fees', id);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return null;
+    const d = snap.data();
+    const fee_type = String(d?.fee_type || '').trim();
+    const fee_value = Number(d?.fee_value) || 0;
+    if (!fee_type || fee_type === 'none' || fee_value <= 0) return null;
+    if (fee_type !== 'percent_payer' && fee_type !== 'fixed_per_ticket') return null;
+    return { fee_type: fee_type as OrganizerBuyerFeeDoc['fee_type'], fee_value };
+  } catch (e) {
+    console.error('Error fetching organizer buyer fee:', e);
+    return null;
+  }
+};
+
 const DEFAULT_WHATSAPP_PHONE = '573016929622';
 
 // Get contact configuration from Firestore (WhatsApp number for landing/contact)
@@ -155,6 +182,22 @@ export interface BannerItem {
   url: string;
   order?: number;
 }
+
+// Get event labels (etiquetas) from configurations - used when event.event_labels is empty
+export const getEventLabelsConfig = async (): Promise<string[]> => {
+  try {
+    const configDocRef = doc(db, 'configurations', 'event_labels');
+    const configDoc = await getDoc(configDocRef);
+    if (configDoc.exists()) {
+      const data = configDoc.data();
+      const labels = data?.labels;
+      return Array.isArray(labels) ? labels.filter((l: unknown) => typeof l === 'string') : [];
+    }
+    return [];
+  } catch {
+    return [];
+  }
+};
 
 // Get home banners from Firestore (configurations/home_banners)
 export const getHomeBanners = async (): Promise<BannerItem[]> => {

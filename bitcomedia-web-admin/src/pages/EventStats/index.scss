@@ -60,8 +60,16 @@
     margin: 0 0 1rem;
   }
 
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.65rem;
+    margin-top: 0.25rem;
+  }
+
   .event-stats-back {
-    margin-top: 0.5rem;
+    margin-top: 0;
   }
 }
 

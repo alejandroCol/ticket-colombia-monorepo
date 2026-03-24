@@ -1,0 +1,164 @@
+@import '../../main.scss';
+
+.venue-map-visual-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.venue-map-visual-layer__bg-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.venue-map-visual-layer__dec {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+
+  &-inner {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 2px 3px;
+    box-sizing: border-box;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    overflow: visible;
+  }
+
+  /* Tamaño respecto al mapa completo (cqw), no a la caja pequeña de la pieza — legible en evento/checkout */
+  &-label {
+    font-size: clamp(8px, 3vmin, 11px);
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.92);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+    line-height: 1.2;
+    font-family: $font-family-primary;
+    max-width: none;
+  }
+}
+
+@supports (width: 1cqw) {
+  .venue-map-interactive__generated .venue-map-visual-layer__dec-label {
+    font-size: clamp(8px, 4.35cqw, 13px);
+  }
+}
+
+@mixin vmvl-dec-fill($c) {
+  .venue-map-visual-layer__dec-inner {
+    background: linear-gradient(145deg, lighten($c, 8%), darken($c, 6%));
+  }
+}
+
+.venue-map-visual-layer__dec--stage .venue-map-visual-layer__dec-inner {
+  clip-path: polygon(8% 0, 92% 0, 100% 100%, 0 100%);
+  @include vmvl-dec-fill(#4a4e6e);
+}
+
+.venue-map-visual-layer__dec--palco_tier .venue-map-visual-layer__dec-inner {
+  background: repeating-linear-gradient(
+    180deg,
+    #5c4a6e 0px,
+    #5c4a6e 18%,
+    transparent 18%,
+    transparent 22%
+  );
+  background-color: #4a3d5c;
+}
+
+.venue-map-visual-layer__dec--dance_floor .venue-map-visual-layer__dec-inner {
+  background: repeating-conic-gradient(#2d3548 0% 25%, #1e2538 0% 50%) 50% / 12px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.venue-map-visual-layer__dec--bar_counter .venue-map-visual-layer__dec-inner {
+  @include vmvl-dec-fill(#5c4033);
+  box-shadow: inset 0 4px 0 rgba(255, 255, 255, 0.08);
+}
+
+.venue-map-visual-layer__dec--dj_booth .venue-map-visual-layer__dec-inner {
+  @include vmvl-dec-fill(#3d4456);
+  background-image: radial-gradient(circle at 28% 28%, #1a1a24 0 22%, transparent 23%),
+    radial-gradient(circle at 72% 28%, #1a1a24 0 22%, transparent 23%),
+    linear-gradient(180deg, #3d4456, #2a3040);
+}
+
+.venue-map-visual-layer__dec--theater_fan .venue-map-visual-layer__dec-inner {
+  clip-path: polygon(50% 100%, 0 100%, 2% 25%, 50% 5%, 98% 25%, 100% 100%);
+  background: radial-gradient(ellipse 80% 60% at 50% 70%, #2a3545 0%, #3a4a5c 100%);
+}
+
+.venue-map-visual-layer__dec--vip_box .venue-map-visual-layer__dec-inner {
+  @include vmvl-dec-fill(#6b5b48);
+  border: 3px solid #c9a227 !important;
+  box-shadow: 0 0 12px rgba(201, 162, 39, 0.25);
+}
+
+.venue-map-visual-layer__dec--lounge_sofa .venue-map-visual-layer__dec-inner {
+  border-radius: 22%;
+  @include vmvl-dec-fill(#4a5568);
+}
+
+.venue-map-visual-layer__dec--high_table .venue-map-visual-layer__dec-inner {
+  border-radius: 50%;
+  @include vmvl-dec-fill(#374151);
+  background-image: linear-gradient(90deg, transparent 48%, rgba(255, 255, 255, 0.12) 48%, rgba(255, 255, 255, 0.12) 52%, transparent 52%);
+}
+
+.venue-map-visual-layer__dec--entrance_arch .venue-map-visual-layer__dec-inner {
+  clip-path: polygon(0 100%, 0 35%, 15% 0, 85% 0, 100% 35%, 100% 100%);
+  @include vmvl-dec-fill(#4b5563);
+}
+
+.venue-map-visual-layer__dec--stairs .venue-map-visual-layer__dec-inner {
+  background: linear-gradient(
+    180deg,
+    #4a4a58 0%,
+    #3a3a48 16%,
+    #4a4a58 16%,
+    #3a3a48 32%,
+    #4a4a58 32%,
+    #3a3a48 48%,
+    #4a4a58 48%,
+    #3a3a48 64%,
+    #4a4a58 64%,
+    #3a3a48 80%,
+    #4a4a58 80%,
+    #3a3a48 100%
+  );
+}
+
+.venue-map-visual-layer__dec--balcony .venue-map-visual-layer__dec-inner {
+  @include vmvl-dec-fill(#5c5c6e);
+  background-image: linear-gradient(180deg, #5c5c6e 0 55%, transparent 55%),
+    repeating-linear-gradient(90deg, transparent, transparent 7%, rgba(255, 255, 255, 0.2) 7%, rgba(255, 255, 255, 0.2) 8%);
+}
+
+.venue-map-visual-layer__dec--pillar .venue-map-visual-layer__dec-inner {
+  background: linear-gradient(90deg, #2a2a32, #4a4a58, #2a2a32);
+}
+
+.venue-map-visual-layer__dec--light_rig .venue-map-visual-layer__dec-inner {
+  @include vmvl-dec-fill(#312e81);
+  background-image: linear-gradient(180deg, #312e81 0 40%, transparent 40%),
+    conic-gradient(from 180deg at 50% 100%, rgba(255, 220, 120, 0.4) 0deg, transparent 25deg, transparent 335deg, rgba(255, 220, 120, 0.35) 360deg);
+  background-size: 100%, 14px 100%;
+  background-repeat: no-repeat, repeat-x;
+  background-position: center bottom;
+}
+
+.venue-map-visual-layer__dec--pool_ring .venue-map-visual-layer__dec-inner {
+  border-radius: 50%;
+  @include vmvl-dec-fill(#1e3a5f);
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.2);
+  background-image: radial-gradient(circle at 50% 50%, transparent 32%, rgba(255, 255, 255, 0.12) 33%, rgba(255, 255, 255, 0.12) 36%, transparent 37%);
+}

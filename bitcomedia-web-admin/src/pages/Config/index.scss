@@ -8,8 +8,12 @@
 .config-content {
   padding: 1.5rem;
   padding-top: 2rem;
-  max-width: 480px;
+  max-width: 560px;
   margin: 0 auto;
+
+  &:has(.config-card--super) {
+    max-width: 720px;
+  }
 }
 
 .config-card {
@@ -23,6 +27,86 @@
     font-size: 1.5rem;
     color: $color-text-primary;
   }
+
+  &--super {
+    margin-top: 1.5rem;
+  }
+}
+
+.config-admin-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.config-admin-block {
+  padding: 0.85rem 0;
+  border-bottom: 1px solid rgba($color-text-secondary, 0.12);
+}
+
+.config-admin-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.config-admin-fee {
+  margin-top: 0.75rem;
+  padding: 0.75rem 0 0.25rem;
+  border-top: 1px dashed rgba($color-text-secondary, 0.15);
+
+  &__label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: $font-weight-semi-bold;
+    color: $color-text-secondary;
+    margin-bottom: 0.5rem;
+  }
+
+  &__controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  &__select {
+    flex: 1 1 200px;
+    min-width: 0;
+    padding: 0.45rem 0.5rem;
+    border-radius: 8px;
+    border: 1px solid rgba($color-text-secondary, 0.35);
+    background: rgba($color-primary, 0.35);
+    color: $color-text-primary;
+    font-size: 0.85rem;
+  }
+
+  &__input {
+    width: 120px;
+    padding: 0.45rem 0.5rem;
+    border-radius: 8px;
+    border: 1px solid rgba($color-text-secondary, 0.35);
+    background: rgba($color-primary, 0.35);
+    color: $color-text-primary;
+    font-size: 0.9rem;
+  }
+}
+
+.config-admin-meta {
+  display: block;
+  font-size: 0.8rem;
+  color: $color-text-secondary;
+}
+
+.config-admin-badge {
+  display: inline-block;
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  background: rgba(#c0392b, 0.2);
+  color: #ff8a80;
 }
 
 .config-description {

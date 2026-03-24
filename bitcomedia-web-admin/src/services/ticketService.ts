@@ -10,6 +10,44 @@ import type { Ticket } from './types';
 const functions = getFunctions(app);
 const createTicketPreference = httpsCallable(functions, 'createTicketPreference');
 
+export interface CreateReservationResult {
+  reservationId: string;
+  expiresAt: number;
+  holdMinutes: number;
+}
+
+/** Reserva de cupo (misma callable que la app pública); el admin usa su uid autenticado. */
+async function createTicketReservationForAdmin(params: {
+  eventId: string;
+  quantity: number;
+  sectionId?: string;
+  sectionName?: string;
+}): Promise<CreateReservationResult> {
+  const fn = httpsCallable<
+    {
+      eventId: string;
+      quantity: number;
+      sectionId?: string;
+      sectionName?: string;
+      holderSessionKey?: string;
+    },
+    CreateReservationResult
+  >(functions, 'createTicketReservation');
+  const payload: {
+    eventId: string;
+    quantity: number;
+    sectionId?: string;
+    sectionName?: string;
+  } = {
+    eventId: params.eventId,
+    quantity: params.quantity,
+  };
+  if (params.sectionId?.trim()) payload.sectionId = params.sectionId.trim();
+  if (params.sectionName?.trim()) payload.sectionName = params.sectionName.trim();
+  const result = await fn(payload);
+  return result.data;
+}
+
 // Ticket data interface
 export interface TicketData {
   userId: string;
@@ -17,6 +55,8 @@ export interface TicketData {
   amount: number;
   quantity: number;
   buyerEmail: string;
+  /** Si ya tienes una reserva activa (poco habitual en admin) */
+  reservationId?: string;
   metadata: {
     userName: string;
     eventName: string;
@@ -24,8 +64,53 @@ export interface TicketData {
     eventTime: string;
     venue: string;
     city: string;
+    /** Nombre de localidad (debe coincidir con la reserva y con el evento) */
     seatNumber?: string;
+    sectionId?: string;
   };
+}
+
+function chunkIds<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+export function ticketCreatedAtMs(t: Ticket): number {
+  const c = t.createdAt as { toMillis?: () => number } | undefined;
+  if (c && typeof c.toMillis === 'function') return c.toMillis();
+  return 0;
+}
+
+/** Boletos válidos para métricas de ventas (misma lógica que EventStats) */
+export function isTicketValidForSalesStats(t: Ticket): boolean {
+  const status = t.ticketStatus as string;
+  const invalid = ['cancelled', 'disabled'].includes(status) || (t as { transferredTo?: string }).transferredTo;
+  const valid = ['paid', 'reserved', 'used', 'redeemed'].includes(status);
+  return valid && !invalid;
+}
+
+/**
+ * Tickets con createdAt >= since. Si eventIds es null o vacío (super admin), trae todos los que cumplan la fecha.
+ */
+export async function getTicketsSince(since: Date, eventIds: string[] | null): Promise<Ticket[]> {
+  const sinceTs = Timestamp.fromDate(since);
+  const ticketsRef = collection(db, 'tickets');
+  const out: Ticket[] = [];
+
+  if (!eventIds || eventIds.length === 0) {
+    const q = query(ticketsRef, where('createdAt', '>=', sinceTs));
+    const snap = await getDocs(q);
+    snap.forEach((d) => out.push({ id: d.id, ...d.data() } as Ticket));
+    return out;
+  }
+
+  for (const ids of chunkIds(eventIds, 10)) {
+    const q = query(ticketsRef, where('eventId', 'in', ids), where('createdAt', '>=', sinceTs));
+    const snap = await getDocs(q);
+    snap.forEach((d) => out.push({ id: d.id, ...d.data() } as Ticket));
+  }
+  return out;
 }
 
 // Get tickets by event ID (Admin only - for stats dashboard)
@@ -196,10 +281,22 @@ export async function createTicket(ticketData: TicketData) {
       throw new Error('Usuario debe estar autenticado');
     }
 
+    let reservationId = ticketData.reservationId?.trim();
+    if (!reservationId) {
+      const res = await createTicketReservationForAdmin({
+        eventId: ticketData.eventId,
+        quantity: ticketData.quantity,
+        sectionId: ticketData.metadata.sectionId,
+        sectionName: ticketData.metadata.seatNumber,
+      });
+      reservationId = res.reservationId;
+    }
+
     // Asegurar que el userId coincida con el usuario autenticado
     const finalTicketData = {
       ...ticketData,
-      userId: user.uid // Usar el UID del usuario autenticado
+      userId: user.uid,
+      reservationId,
     };
 
     console.log('Creando ticket con datos:', finalTicketData);

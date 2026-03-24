@@ -10,15 +10,24 @@ import ticketsIcon from '../../assets/tickets.svg';
 import profileIcon from '../../assets/profile.svg';
 import logo from '../../assets/logo.png';
 
+export interface TopNavBarEventSearchProps {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}
+
 interface TopNavBarProps extends CustomStyleProps {
   isAuthenticated?: boolean;
   logoOnly?: boolean;
+  /** Buscador en el header (p. ej. home de eventos): nombre o ciudad */
+  eventSearch?: TopNavBarEventSearchProps;
 }
 
 const TopNavBar: React.FC<TopNavBarProps> = ({ 
   className, 
   isAuthenticated = false,
   logoOnly = false,
+  eventSearch,
   theme,
   style,
   cssVariables,
@@ -60,6 +69,29 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
     setMenuOpen(false);
   };
 
+  const searchBar = eventSearch ? (
+    <div className="top-nav-bar__event-search-wrap">
+      <span className="top-nav-bar__event-search-icon" aria-hidden>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </svg>
+      </span>
+      <input
+        type="search"
+        className="top-nav-bar__event-search-input"
+        placeholder={eventSearch.placeholder ?? 'Buscar por nombre o ciudad…'}
+        value={eventSearch.value}
+        onChange={(e) => eventSearch.onChange(e.target.value)}
+        aria-label="Buscar eventos"
+        autoComplete="off"
+        enterKeyHint="search"
+      />
+    </div>
+  ) : null;
+
+  const withSearchClass = eventSearch ? ' top-nav-bar--with-event-search' : '';
+
   // If logoOnly is true, render a simplified version with just the logo
   if (logoOnly) {
     return (
@@ -86,22 +118,27 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
 
   return (
     <div 
-      className={containerClassName}
+      className={`${containerClassName}${withSearchClass}`}
       style={{ ...customStyles, ...style }}
     >
-      {/* Mobile layout - Just centered logo */}
-      <div className="nav-container-mobile">
-        <div className="logo-container-mobile" onClick={() => handleNavigation('/')}>
-          <img src={logo} alt="Bitcomedia" className="logo" />
+      {/* Mobile layout */}
+      <div className={`nav-container-mobile${eventSearch ? ' nav-container-mobile--with-search' : ''}`}>
+        <div className="nav-container-mobile__top">
+          <div className="logo-container-mobile" onClick={() => handleNavigation('/')}>
+            <img src={logo} alt="Bitcomedia" className="logo" />
+          </div>
         </div>
+        {eventSearch ? <div className="nav-container-mobile__search">{searchBar}</div> : null}
       </div>
       
       {/* Tablet and Desktop layout */}
-      <div className="nav-container">
+      <div className={`nav-container${eventSearch ? ' nav-container--has-event-search' : ''}`}>
         {/* Logo */}
         <div className="logo-container" onClick={() => handleNavigation('/')}>
           <img src={logo} alt="Ticket Colombia" className="logo" />
         </div>
+
+        {eventSearch ? <div className="top-nav-bar__event-search-slot">{searchBar}</div> : null}
         
         {/* Navigation for large screens */}
         <div className="nav-links-desktop">

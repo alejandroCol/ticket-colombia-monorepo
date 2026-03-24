@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -7,10 +7,12 @@ import SecondaryButton from '@components/SecondaryButton';
 import EventCard from '@containers/EventCard';
 import TopNavBar from '@TopNavBar';
 import CreateTicketModal, { type TicketFormData } from '@components/CreateTicketModal';
-import { logoutUser, db, functions } from '@services';
+import { IconScanTickets } from '@components/ScanIcons';
+import { logoutUser, db, functions, getCurrentUser, isSuperAdmin, getTicketsSince, isTicketValidForSalesStats, ticketCreatedAtMs } from '@services';
 import './index.scss';
 
 import type { EventSection } from '@services/types';
+import type { Ticket } from '@services/types';
 
 // Event data interface
 interface EventData {
@@ -43,6 +45,34 @@ interface RecurringEventData extends EventData {
   is_recurring: boolean;
 }
 
+function eventTimestampMillis(ts: Timestamp | undefined | null): number | null {
+  if (!ts || typeof ts.toMillis !== 'function') return null;
+  return ts.toMillis();
+}
+
+function startOfLocalDayFromInput(dateStr: string): number {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+}
+
+function endOfLocalDayFromInput(dateStr: string): number {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
+}
+
+function startOfLocalDay(d = new Date()): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+}
+
+function startOfLocalWeekMonday(d = new Date()): Date {
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() + diff);
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+}
+
 const DashboardScreen: React.FC = () => {
   const [events, setEvents] = useState<EventData[]>([]);
   const [recurringEvents, setRecurringEvents] = useState<RecurringEventData[]>([]);
@@ -51,21 +81,75 @@ const DashboardScreen: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [errorRecurring, setErrorRecurring] = useState<string | null>(null);
   const [isRecurringCollapsed, setIsRecurringCollapsed] = useState(true);
+  const [topSoldExpanded, setTopSoldExpanded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<EventData | null>(null);
+  const [eventNameQuery, setEventNameQuery] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const navigate = useNavigate();
+  const [dashTickets, setDashTickets] = useState<Ticket[]>([]);
+  const [dashTicketsLoading, setDashTicketsLoading] = useState(false);
+
+  const filteredEvents = useMemo(() => {
+    const q = eventNameQuery.trim().toLowerCase();
+    const fromMs = dateFrom ? startOfLocalDayFromInput(dateFrom) : null;
+    const toMs = dateTo ? endOfLocalDayFromInput(dateTo) : null;
+
+    return events.filter((e) => {
+      if (q) {
+        const name = (e.name || '').toLowerCase();
+        if (!name.includes(q)) return false;
+      }
+      const ms = eventTimestampMillis(e.event_date);
+      if (ms == null) return !fromMs && !toMs;
+      if (fromMs != null && ms < fromMs) return false;
+      if (toMs != null && ms > toMs) return false;
+      return true;
+    });
+  }, [events, eventNameQuery, dateFrom, dateTo]);
+
+  const filteredRecurringEvents = useMemo(() => {
+    const q = eventNameQuery.trim().toLowerCase();
+    const fromMs = dateFrom ? startOfLocalDayFromInput(dateFrom) : null;
+    const toMs = dateTo ? endOfLocalDayFromInput(dateTo) : null;
+
+    return recurringEvents.filter((e) => {
+      if (q) {
+        const name = (e.name || '').toLowerCase();
+        if (!name.includes(q)) return false;
+      }
+      const ms = eventTimestampMillis(e.event_date);
+      if (ms == null) return !fromMs && !toMs;
+      if (fromMs != null && ms < fromMs) return false;
+      if (toMs != null && ms > toMs) return false;
+      return true;
+    });
+  }, [recurringEvents, eventNameQuery, dateFrom, dateTo]);
+
+  const hasActiveFilters = Boolean(eventNameQuery.trim() || dateFrom || dateTo);
+
+  const clearEventFilters = () => {
+    setEventNameQuery('');
+    setDateFrom('');
+    setDateTo('');
+  };
   
   // Fetch recurring events from Firestore
   useEffect(() => {
     const fetchRecurringEvents = async () => {
       try {
         setLoadingRecurring(true);
-        
-        // Create a query against the recurring_events collection
-        // Get both active and inactive recurring events
-        const recurringEventsQuery = query(
-          collection(db, 'recurring_events')
-        );
+        const user = getCurrentUser();
+        const superAdmin = user ? await isSuperAdmin(user.uid) : false;
+
+        // Super admin: all. Regular admin: only their recurring events
+        const recRef = collection(db, 'recurring_events');
+        const recurringEventsQuery = superAdmin
+          ? query(recRef)
+          : user
+            ? query(recRef, where('organizer_id', '==', user.uid))
+            : query(recRef);
         
         const querySnapshot = await getDocs(recurringEventsQuery);
         const recurringEventsData: RecurringEventData[] = [];
@@ -116,18 +200,16 @@ const DashboardScreen: React.FC = () => {
     const fetchEvents = async () => {
       try {
         setLoading(true);
-        
-        // Get the start of today to filter events from today onwards
-        const today = new Date();
-        today.setHours(0, 0, 0, 0); // Set to beginning of today
-        const todayTimestamp = Timestamp.fromDate(today);
-        
-        // Create a query against the events collection
-        // Get only future events (from today onwards)
-        const eventsQuery = query(
-          collection(db, 'events'),
-          where('event_date', '>=', todayTimestamp)
-        );
+        const user = getCurrentUser();
+        const superAdmin = user ? await isSuperAdmin(user.uid) : false;
+
+        // Super admin: all events. Regular admin: only their events. Include past events for stats.
+        const eventsRef = collection(db, 'events');
+        const eventsQuery = superAdmin
+          ? query(eventsRef)
+          : user
+            ? query(eventsRef, where('organizer_id', '==', user.uid))
+            : query(eventsRef);
         
         const querySnapshot = await getDocs(eventsQuery);
         const eventsData: EventData[] = [];
@@ -155,9 +237,16 @@ const DashboardScreen: React.FC = () => {
           });
         });
         
-        // Sort events by date (nearest first)
+        // Sort events: future first (nearest first), then past (most recent first)
+        const now = Date.now();
         eventsData.sort((a, b) => {
-          return a.event_date.toMillis() - b.event_date.toMillis();
+          const ma = a.event_date.toMillis();
+          const mb = b.event_date.toMillis();
+          const aFuture = ma >= now;
+          const bFuture = mb >= now;
+          if (aFuture && bFuture) return ma - mb; // both future: nearest first
+          if (!aFuture && !bFuture) return mb - ma; // both past: most recent first
+          return aFuture ? -1 : 1; // future before past
         });
         
         setEvents(eventsData);
@@ -171,7 +260,101 @@ const DashboardScreen: React.FC = () => {
     
     fetchEvents();
   }, []);
-  
+
+  useEffect(() => {
+    if (loading || loadingRecurring) return;
+    const run = async () => {
+      const user = getCurrentUser();
+      if (!user) return;
+      setDashTicketsLoading(true);
+      try {
+        const superAdmin = await isSuperAdmin(user.uid);
+        const ids = superAdmin ? null : [...events, ...recurringEvents].map((e) => e.id);
+        if (!superAdmin && (!ids || ids.length === 0)) {
+          setDashTickets([]);
+          return;
+        }
+        const since = new Date();
+        since.setFullYear(since.getFullYear() - 1);
+        const tix = await getTicketsSince(since, ids);
+        setDashTickets(tix);
+      } catch (e) {
+        console.error(e);
+        setDashTickets([]);
+      } finally {
+        setDashTicketsLoading(false);
+      }
+    };
+    void run();
+  }, [loading, loadingRecurring, events, recurringEvents]);
+
+  const eventNameById = useMemo(() => {
+    const m: Record<string, string> = {};
+    [...events, ...recurringEvents].forEach((e) => {
+      m[e.id] = e.name;
+    });
+    return m;
+  }, [events, recurringEvents]);
+
+  const formatCOP = (n: number) =>
+    new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n);
+
+  const salesSnapshot = useMemo(() => {
+    const valid = dashTickets.filter(isTicketValidForSalesStats);
+    const day0 = startOfLocalDay().getTime();
+    const week0 = startOfLocalWeekMonday().getTime();
+    let dayRev = 0;
+    let weekRev = 0;
+    for (const t of valid) {
+      const ms = ticketCreatedAtMs(t);
+      const amt = Number(t.amount) || 0;
+      if (ms >= day0) dayRev += amt;
+      if (ms >= week0) weekRev += amt;
+    }
+    const byEvent = new Map<string, { rev: number; qty: number }>();
+    for (const t of valid) {
+      const cur = byEvent.get(t.eventId) || { rev: 0, qty: 0 };
+      cur.rev += Number(t.amount) || 0;
+      cur.qty += Number(t.quantity) || 1;
+      byEvent.set(t.eventId, cur);
+    }
+    const top = [...byEvent.entries()]
+      .map(([id, v]) => ({ id, name: eventNameById[id] || id, ...v }))
+      .sort((a, b) => b.rev - a.rev)
+      .slice(0, 5);
+
+    const soldByKey = new Map<string, number>();
+    for (const t of valid) {
+      const secKey = (t.sectionId || t.sectionName || 'general').trim() || 'general';
+      const k = `${t.eventId}::${secKey}`;
+      soldByKey.set(k, (soldByKey.get(k) || 0) + (Number(t.quantity) || 1));
+    }
+
+    const soldOut: { label: string }[] = [];
+    for (const ev of [...events, ...recurringEvents]) {
+      const secs = ev.sections;
+      if (secs && secs.length > 0) {
+        for (const sec of secs) {
+          const cap = Number(sec.available) || 0;
+          if (cap <= 0) continue;
+          const s1 = soldByKey.get(`${ev.id}::${sec.id}`) || 0;
+          const s2 = sec.name ? soldByKey.get(`${ev.id}::${sec.name}`) || 0 : 0;
+          const sold = Math.max(s1, s2);
+          if (sold >= cap) soldOut.push({ label: `${ev.name} — ${sec.name}` });
+        }
+      } else {
+        const cap = Number(ev.capacity_per_occurrence) || 0;
+        if (cap <= 0) continue;
+        const sold = valid
+          .filter((t) => t.eventId === ev.id)
+          .reduce((s, t) => s + (Number(t.quantity) || 1), 0);
+        if (sold >= cap) soldOut.push({ label: ev.name });
+      }
+    }
+
+    return { dayRev, weekRev, top, soldOut };
+  }, [dashTickets, events, recurringEvents, eventNameById]);
+
   const handleAddEvent = () => {
     navigate('/events/new');
   };
@@ -289,6 +472,113 @@ const DashboardScreen: React.FC = () => {
       />
 
       <div className="dashboard-content">
+        <div className="dashboard-scan-card" onClick={() => navigate('/scan-tickets')}>
+          <span className="scan-card-icon"><IconScanTickets size={32} /></span>
+          <div className="scan-card-text">
+            <h2>Leer Boletos</h2>
+            <p>Escanear y validar entradas en taquilla</p>
+          </div>
+          <span className="scan-card-arrow">→</span>
+        </div>
+
+        <section className="dashboard-sales-summary" aria-label="Resumen de ventas">
+          <div className="dashboard-sales-summary__head">
+            <h2 className="dashboard-sales-summary__title">Resumen rápido</h2>
+          </div>
+          {dashTicketsLoading ? (
+            <p className="dashboard-sales-summary__muted">Cargando ventas…</p>
+          ) : (
+            <>
+              <p className="dashboard-sales-summary__muted">
+                Ventas de los últimos 12 meses. Alertas de cupo: comparación entre cupo y ventas registradas en ese periodo.
+              </p>
+              <div className="dashboard-sales-kpis">
+                <div className="dashboard-sales-kpi">
+                  <span className="dashboard-sales-kpi__value">{formatCOP(salesSnapshot.dayRev)}</span>
+                  <span className="dashboard-sales-kpi__label">Ventas hoy</span>
+                </div>
+                <div className="dashboard-sales-kpi">
+                  <span className="dashboard-sales-kpi__value">{formatCOP(salesSnapshot.weekRev)}</span>
+                  <span className="dashboard-sales-kpi__label">Ventas esta semana</span>
+                </div>
+              </div>
+              {salesSnapshot.top.length > 0 && (
+                <div className="dashboard-sales-top">
+                  <div className="dashboard-sales-top__head">
+                    <h3>Más vendidos (por ingresos)</h3>
+                    <button
+                      type="button"
+                      className="dashboard-sales-top__toggle"
+                      onClick={() => setTopSoldExpanded((v) => !v)}
+                      aria-expanded={topSoldExpanded}
+                    >
+                      {topSoldExpanded ? 'Ver menos' : 'Ver más'}
+                    </button>
+                  </div>
+                  {topSoldExpanded && (
+                    <ol>
+                      {salesSnapshot.top.map((row) => (
+                        <li key={row.id}>
+                          <span className="dashboard-sales-top__name">{row.name}</span>
+                          <span className="dashboard-sales-top__meta">
+                            {formatCOP(row.rev)} · {row.qty} entradas
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+              )}
+              {salesSnapshot.soldOut.length > 0 && (
+                <div className="dashboard-sales-alerts" role="alert">
+                  <h3>Alertas de cupo</h3>
+                  <ul>
+                    {salesSnapshot.soldOut.map((a) => (
+                      <li key={a.label}>Cupo agotado o completo: {a.label}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          )}
+        </section>
+
+        <div className="dashboard-event-filters" aria-label="Filtros de eventos">
+          <input
+            type="search"
+            className="dashboard-filter-input dashboard-filter-search"
+            placeholder="Buscar por nombre del evento…"
+            value={eventNameQuery}
+            onChange={(e) => setEventNameQuery(e.target.value)}
+            autoComplete="off"
+          />
+          <div className="dashboard-filter-dates">
+            <label className="dashboard-filter-date-field">
+              <span className="dashboard-filter-label">Desde</span>
+              <input
+                type="date"
+                className="dashboard-filter-input"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+              />
+            </label>
+            <label className="dashboard-filter-date-field">
+              <span className="dashboard-filter-label">Hasta</span>
+              <input
+                type="date"
+                className="dashboard-filter-input"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+              />
+            </label>
+          </div>
+          {hasActiveFilters && (
+            <button type="button" className="dashboard-filter-clear" onClick={clearEventFilters}>
+              Limpiar filtros
+            </button>
+          )}
+        </div>
+
         <div className="dashboard-header">
           <div className="header-title-wrapper">
             <h1>Eventos recurrentes</h1>
@@ -317,9 +607,9 @@ const DashboardScreen: React.FC = () => {
               <div className="error-state">
                 <p>{errorRecurring}</p>
               </div>
-            ) : recurringEvents.length > 0 ? (
+            ) : filteredRecurringEvents.length > 0 ? (
               <div className="events-grid">
-                {recurringEvents.map((event) => (
+                {filteredRecurringEvents.map((event) => (
                   <EventCard
                     key={event.id}
                     event={event}
@@ -329,6 +619,10 @@ const DashboardScreen: React.FC = () => {
                     onViewStats={handleViewStats}
                   />
                 ))}
+              </div>
+            ) : recurringEvents.length > 0 ? (
+              <div className="empty-state">
+                <p>Ningún evento recurrente coincide con los filtros.</p>
               </div>
             ) : (
               <div className="empty-state">
@@ -356,9 +650,9 @@ const DashboardScreen: React.FC = () => {
             <div className="error-state">
               <p>{error}</p>
             </div>
-          ) : events.length > 0 ? (
+          ) : filteredEvents.length > 0 ? (
             <div className="events-grid">
-              {events.map((event) => (
+              {filteredEvents.map((event) => (
                 <EventCard
                   key={event.id}
                   event={event}
@@ -368,6 +662,10 @@ const DashboardScreen: React.FC = () => {
                   onViewStats={handleViewStats}
                 />
               ))}
+            </div>
+          ) : events.length > 0 ? (
+            <div className="empty-state">
+              <p>Ningún evento coincide con los filtros.</p>
             </div>
           ) : (
             <div className="empty-state">

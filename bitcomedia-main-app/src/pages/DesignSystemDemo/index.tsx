@@ -188,7 +188,11 @@ const MarketplaceDemo: React.FC = () => {
     }, 800);
   };
   
-  const navigateToEvent = (identifier: string) => {
+  const navigateToEvent = (
+    identifier: string,
+    _isRecurring?: boolean,
+    _sourceEvent?: EventData
+  ) => {
     console.log(`Navigating to event: ${identifier}`);
     // En el demo no navegamos realmente
     alert(`Demo: Navegando al evento ${identifier}`);

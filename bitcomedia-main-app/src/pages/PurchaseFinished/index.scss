@@ -1,12 +1,15 @@
 @import '../../main.scss';
 
 .purchase-finished {
-  min-height: 100vh;
+  min-height: 100dvh;
   background-color: $color-primary;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 2rem 1rem;
+  padding-left: max(1rem, env(safe-area-inset-left, 0px));
+  padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
 
   &__container {
     width: 100%;
@@ -34,11 +37,62 @@
     margin-bottom: 2rem;
     display: flex;
     justify-content: center;
-    
-    svg {
-      filter: drop-shadow(0 4px 12px rgba($color-accent, 0.3));
-      animation: successPulse 2s ease-in-out infinite;
+  }
+
+  &__icon-svg {
+    filter: drop-shadow(0 6px 20px rgba(0, 0, 0, 0.35));
+
+    circle {
+      fill: rgba($color-surface, 0.9);
     }
+
+    path {
+      stroke: $color-accent;
+    }
+
+    &--ok {
+      circle {
+        fill: $color-accent;
+      }
+
+      path {
+        stroke: $color-primary;
+      }
+    }
+
+    &--pending {
+      circle {
+        fill: rgba(255, 186, 90, 0.95);
+      }
+
+      path {
+        stroke: rgba($color-primary, 0.92);
+      }
+    }
+
+    &--fail {
+      circle {
+        fill: rgba(232, 93, 93, 0.92);
+      }
+
+      path {
+        stroke: #fff;
+      }
+    }
+
+    &--neutral {
+      circle {
+        fill: rgba($color-secondary, 0.95);
+      }
+
+      path {
+        stroke: $color-accent;
+      }
+    }
+  }
+
+  &--mp-approved &__icon-svg--ok {
+    animation: successPulse 2.2s ease-in-out infinite;
   }
 
   &__title {
@@ -61,10 +115,66 @@
     font-size: 1.1rem;
     line-height: 1.6;
     margin: 0 0 1.5rem 0;
-    opacity: 0.9;
+    opacity: 0.95;
 
     @include respond-md {
       font-size: 1.2rem;
+    }
+  }
+
+  &__summary {
+    text-align: left;
+    background: rgba($color-surface, 0.5);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    margin: 0 0 1.5rem;
+    font-size: 0.95rem;
+    line-height: 1.6;
+
+    p {
+      margin: 0.35rem 0;
+      color: $color-text-primary;
+    }
+
+    strong {
+      color: $color-text-secondary;
+      font-weight: $font-weight-semi-bold;
+    }
+  }
+
+  &__mp-refs {
+    text-align: left;
+    background: rgba($color-primary, 0.4);
+    border-radius: 12px;
+    padding: 0.9rem 1.1rem;
+    margin: 0 0 1.5rem;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    border: 1px solid rgba($color-accent, 0.1);
+
+    p {
+      margin: 0.3rem 0;
+      color: $color-text-secondary;
+      word-break: break-all;
+    }
+
+    &-title {
+      margin: 0 0 0.5rem !important;
+      font-weight: $font-weight-semi-bold;
+      color: $color-text-primary !important;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    &-label {
+      color: $color-text-secondary;
+      font-weight: $font-weight-medium;
+    }
+
+    &-mono {
+      font-family: ui-monospace, monospace;
+      font-size: 0.8em;
     }
   }
 
@@ -83,6 +193,10 @@
 
   &__button {
     margin-bottom: 2rem;
+
+    &-secondary {
+      margin-top: 0.85rem;
+    }
 
     .primary-button {
       background: linear-gradient(135deg, $color-accent 0%, lighten($color-accent, 10%) 100%);

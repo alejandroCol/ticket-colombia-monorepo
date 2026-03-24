@@ -173,8 +173,14 @@ const Teatro911Screen: React.FC = () => {
     }
   };
 
-  const navigateToEvent = (identifier: string) => {
-    navigate(`/evento/${identifier}`);
+  const navigateToEvent = (identifier: string, sourceEvent?: EventData) => {
+    if (sourceEvent) {
+      navigate(`/evento/${identifier}`, {
+        state: { eventFromList: sourceEvent },
+      });
+    } else {
+      navigate(`/evento/${identifier}`);
+    }
   };
 
   return (
@@ -235,7 +241,9 @@ const Teatro911Screen: React.FC = () => {
                     <div key={event.id} ref={lastEventElementRef}>
                       <EventCard
                         event={event}
-                        onReserve={navigateToEvent}
+                        onReserve={(identifier, _isRecurring, src) =>
+                          navigateToEvent(identifier, src)
+                        }
                         theme="teatro911"
                       />
                     </div>
@@ -245,7 +253,9 @@ const Teatro911Screen: React.FC = () => {
                     <EventCard
                       key={event.id}
                       event={event}
-                      onReserve={navigateToEvent}
+                      onReserve={(identifier, _isRecurring, src) =>
+                        navigateToEvent(identifier, src)
+                      }
                       theme="teatro911"
                     />
                   );

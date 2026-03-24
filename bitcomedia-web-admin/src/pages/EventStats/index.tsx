@@ -5,7 +5,9 @@ import PrimaryButton from '@components/PrimaryButton';
 import SecondaryButton from '@components/SecondaryButton';
 import CustomInput from '@components/CustomInput';
 import {
-  getEventById,
+  getEventOrRecurringById,
+  getCurrentUser,
+  isSuperAdmin,
   logoutUser,
   getExpensesByEventId,
   addExpense,
@@ -24,6 +26,7 @@ import {
 import type { Event, EventSection } from '@services/types';
 import type { Ticket } from '@services/types';
 import type { Expense } from '@services/firestore';
+import { exportTicketsToExcel } from '@utils/exportTicketsExcel';
 import './index.scss';
 
 interface SectionStats {
@@ -61,7 +64,7 @@ const EventStatsScreen: React.FC = () => {
     try {
       setLoading(true);
       const [eventData, ticketsData, expensesData] = await Promise.all([
-        getEventById(eventId),
+        getEventOrRecurringById(eventId),
         getTicketsByEventId(eventId),
         getExpensesByEventId(eventId)
       ]);
@@ -78,6 +81,22 @@ const EventStatsScreen: React.FC = () => {
   useEffect(() => {
     loadData();
   }, [eventId]);
+
+  // Ownership guard: only super admin or event owner can access
+  useEffect(() => {
+    if (loading || !event || !eventId) return;
+    const check = async () => {
+      const user = getCurrentUser();
+      if (!user) return;
+      const superA = await isSuperAdmin(user.uid);
+      if (superA) return;
+      const ownerId = event.organizer_id;
+      if (ownerId !== user.uid) {
+        navigate('/dashboard', { replace: true });
+      }
+    };
+    check();
+  }, [event, eventId, loading, navigate]);
 
   const formatCOP = (amount: number) =>
     new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(amount);
@@ -180,6 +199,19 @@ const EventStatsScreen: React.FC = () => {
     await loadData();
   };
 
+  const handleExportExcel = () => {
+    if (!eventId || !event) return;
+    const stamp = new Date().toISOString().slice(0, 10);
+    const slug = event.name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\w\s-]+/g, '')
+      .trim()
+      .replace(/\s+/g, '-')
+      .slice(0, 48) || 'evento';
+    exportTicketsToExcel(tickets, { [eventId]: event.name }, `boletos-${slug}-${stamp}`);
+  };
+
   if (loading) {
     return (
       <div className="event-stats-screen">
@@ -213,9 +245,19 @@ const EventStatsScreen: React.FC = () => {
         <div className="event-stats-hero">
           <h1 className="event-stats-hero__title">{event.name}</h1>
           <p className="event-stats-hero__subtitle">Estadísticas y balance del evento</p>
-          <SecondaryButton onClick={() => navigate('/dashboard')} className="event-stats-back">
-            ← Volver al dashboard
-          </SecondaryButton>
+          <div className="event-stats-hero__actions">
+            <SecondaryButton
+              type="button"
+              size="small"
+              onClick={handleExportExcel}
+              disabled={tickets.length === 0}
+            >
+              Exportar Excel
+            </SecondaryButton>
+            <SecondaryButton onClick={() => navigate('/dashboard')} className="event-stats-back">
+              ← Volver al dashboard
+            </SecondaryButton>
+          </div>
         </div>
 
         <div className="stats-kpi-grid">

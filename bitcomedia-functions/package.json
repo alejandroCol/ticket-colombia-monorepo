@@ -8,11 +8,12 @@
     "serve": "firebase emulators:start --only functions",
     "shell": "firebase functions:shell",
     "start": "npm run shell",
-    "deploy": "firebase deploy --only functions",
+    "deploy": "node scripts/firebase-deploy-with-local-tmp.cjs",
+    "deploy:debug": "node scripts/firebase-deploy-with-local-tmp.cjs --debug",
     "logs": "firebase functions:log"
   },
   "engines": {
-    "node": "18"
+    "node": "22"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.16.0",

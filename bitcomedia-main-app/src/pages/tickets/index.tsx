@@ -12,6 +12,14 @@ import Loader from '../../components/Loader';
 import PrimaryButton from '../../components/PrimaryButton';
 import SecondaryButton from '../../components/SecondaryButton';
 import WhatsAppButton from '../../components/WhatsAppButton';
+import {
+  ProfileIconArrowBack,
+  ProfileIconTicket,
+} from '../../components/ProfileScreenIcons';
+import {
+  clearMercadoPagoReturnIntent,
+  resolvePostMercadoPagoRedirectFromTickets,
+} from '../../utils/mpCheckoutReturnIntent';
 import './index.scss';
 
 const TicketsScreen: React.FC = () => {
@@ -24,21 +32,6 @@ const TicketsScreen: React.FC = () => {
   const [openWithTransfer, setOpenWithTransfer] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const checkAuthStatus = async () => {
-      const user = getCurrentUser();
-      
-      if (user) {
-        setIsAuthenticated(true);
-        await loadUserTickets();
-      }
-      
-      setIsLoading(false);
-    };
-    
-    checkAuthStatus();
-  }, []);
 
   const loadUserTickets = async () => {
     try {
@@ -76,6 +69,28 @@ const TicketsScreen: React.FC = () => {
     loadUserTickets();
   };
 
+  useEffect(() => {
+    const checkAuthStatus = async () => {
+      const user = getCurrentUser();
+
+      if (user) {
+        clearMercadoPagoReturnIntent();
+        setIsAuthenticated(true);
+        await loadUserTickets();
+      } else {
+        const target = resolvePostMercadoPagoRedirectFromTickets();
+        if (target) {
+          navigate(target, { replace: true });
+          return;
+        }
+      }
+
+      setIsLoading(false);
+    };
+
+    void checkAuthStatus();
+  }, [navigate]);
+
   if (isLoading) {
     return <Loader fullScreen />;
   }
@@ -87,17 +102,18 @@ const TicketsScreen: React.FC = () => {
         <TopNavBar isAuthenticated={isAuthenticated} />
         
         <div className="tickets-content">
-          <AccountlessState 
-            title="¡Tus tickets están esperando por ti! 🎫" 
-            message="Crea tu cuenta para acceder a tus entradas y disfrutar de los mejores eventos sin complicaciones."
+          <AccountlessState
+            variant="tickets"
+            eyebrow="Mis entradas"
+            title="Activa tu cuenta y ve tus boletos aquí"
+            message="Si pagaste con Mercado Pago sin iniciar sesión, revisa tu correo: te enviamos la confirmación. Crea una cuenta gratuita con el mismo correo para ver el código QR y tus entradas en la app."
+            benefitsTitle="Por qué crear cuenta"
             benefits={[
-              '🎫 Todos tus tickets en un solo lugar',
-              '📱 Código QR listo para escanear',
-              '⚡ Entrada súper rápida al evento',
-              '🔔 Recordatorios antes del show',
-              '🎭 Historial de eventos asistidos'
+              'QR y entradas siempre a mano en el celular',
+              'Entrada más rápida en taquilla',
+              'Historial de compras y eventos',
+              'Soporte más ágil si necesitas ayuda',
             ]}
-            icon="🎫"
           />
           <div className="bottom-nav-spacer"></div>
         </div>
@@ -107,18 +123,46 @@ const TicketsScreen: React.FC = () => {
     );
   }
 
-  return (
-    <div className="tickets-screen">
-      <TopNavBar isAuthenticated={isAuthenticated} />
-      
-      <div className="tickets-header">
-        <h1>Mis Tickets</h1>
-        <SecondaryButton onClick={() => navigate('/')}>
-          ← Volver al inicio
-        </SecondaryButton>
-      </div>
+  const ticketCountLabel =
+    tickets.length === 1
+      ? '1 entrada en tu cuenta'
+      : `${tickets.length} entradas en tu cuenta`;
 
-      <div className="tickets-content">
+  return (
+    <div className="tickets-screen tickets-screen--authenticated">
+      <TopNavBar isAuthenticated={isAuthenticated} />
+
+      <main className="tickets-main">
+        <header className="tickets-hero">
+          <div className="tickets-hero__toolbar">
+            <button
+              type="button"
+              className="tickets-back-link"
+              onClick={() => navigate('/')}
+            >
+              <ProfileIconArrowBack size={20} />
+              <span>Inicio</span>
+            </button>
+          </div>
+          <div className="tickets-hero__layout">
+            <div className="tickets-hero__mark" aria-hidden>
+              <ProfileIconTicket size={34} />
+            </div>
+            <div className="tickets-hero__text">
+              <p className="tickets-hero__eyebrow">Tus compras</p>
+              <h1 className="tickets-hero__title">Mis entradas</h1>
+              {!loadingTickets && !error && tickets.length > 0 ? (
+                <p className="tickets-hero__meta">{ticketCountLabel}</p>
+              ) : !loadingTickets && !error && tickets.length === 0 ? (
+                <p className="tickets-hero__meta">
+                  Explora eventos y guarda aquí tus boletos
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </header>
+
+        <div className="tickets-body">
         {loadingTickets ? (
           <div className="loading-container">
             <Loader size="large" />
@@ -149,8 +193,8 @@ const TicketsScreen: React.FC = () => {
           <div className="no-tickets">
             <div className="no-tickets-message">
               <div className="no-tickets-icon">🎫</div>
-              <h3>Aún no tienes tickets</h3>
-              <p>Explora eventos disponibles y compra tus entradas</p>
+              <h3>Aún no tienes entradas</h3>
+              <p>Explora el marketplace y compra tus boletos; aparecerán aquí.</p>
               <PrimaryButton onClick={() => navigate('/')}>
                 Explorar eventos
               </PrimaryButton>
@@ -158,27 +202,25 @@ const TicketsScreen: React.FC = () => {
           </div>
         )}
 
-        {/* Sección de soporte para tickets */}
-        {isAuthenticated && (
-          <div className="ticket-support-section">
-            <div className="ticket-support-content">
-              <h3>¿Necesitas ayuda con tus tickets?</h3>
-              <p>
-                Si tienes dudas sobre tus entradas, problemas con el código QR o necesitas hacer algún reclamo, contáctanos por{' '}
-                <WhatsAppButton 
-                  message={`Hola, necesito ayuda con mis tickets:\n\n[Describe tu consulta aquí]\n\nGracias!`}
-                  trackingLabel="tickets-support"
-                >
-                  WhatsApp
-                </WhatsAppButton>
-                {' '}y te ayudaremos rápidamente.
-              </p>
-            </div>
-          </div>
-        )}
-        
-        <div className="bottom-nav-spacer"></div>
-      </div>
+        <section className="tickets-support-panel" aria-labelledby="tickets-support-title">
+          <h2 id="tickets-support-title" className="tickets-support-panel__title">
+            ¿Ayuda con una entrada?
+          </h2>
+          <p className="tickets-support-panel__text">
+            Dudas con el QR, cambios o reembolsos: escríbenos por{' '}
+            <WhatsAppButton
+              message={`Hola, necesito ayuda con mis entradas:\n\n[Describe tu consulta]\n\nGracias.`}
+              trackingLabel="tickets-support"
+            >
+              WhatsApp
+            </WhatsAppButton>
+            .
+          </p>
+        </section>
+
+        <div className="bottom-nav-spacer" />
+        </div>
+      </main>
       
       <BottomNavBar />
       

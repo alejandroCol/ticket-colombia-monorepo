@@ -403,6 +403,9 @@ body {
     }
 
     .admin-nav-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
       background: none;
       border: none;
       color: $color-text-secondary;
@@ -415,6 +418,19 @@ body {
 
       &:hover {
         color: $color-text-primary;
+      }
+
+      &.admin-nav-scan {
+        color: $color-accent;
+        font-weight: $font-weight-semi-bold;
+
+        &:hover {
+          color: lighten($color-accent, 10%);
+        }
+
+        svg {
+          flex-shrink: 0;
+        }
       }
     }
   }
@@ -439,9 +455,16 @@ body {
       align-items: center;
       gap: 0.75rem;
       margin-left: auto;
+
+      .admin-logout-btn {
+        display: none;
+      }
     }
 
     .admin-nav-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
       background: none;
       border: none;
       color: $color-text-secondary;
@@ -454,6 +477,19 @@ body {
 
       &:hover {
         color: $color-text-primary;
+      }
+
+      &.admin-nav-scan {
+        color: $color-accent;
+        font-weight: $font-weight-semi-bold;
+
+        &:hover {
+          color: lighten($color-accent, 10%);
+        }
+
+        svg {
+          flex-shrink: 0;
+        }
       }
     }
   }

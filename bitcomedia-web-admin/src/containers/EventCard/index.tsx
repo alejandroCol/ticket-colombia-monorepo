@@ -71,7 +71,8 @@ const EventCard: React.FC<EventCardProps> = ({ event, onReserve, onCreateTicket,
   };
 
   // Handle reserve button click
-  const handleReserveClick = () => {
+  const handleReserveClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
     if (onReserve && event.id) {
       onReserve(event.id, event.is_recurring);
     }
@@ -101,56 +102,92 @@ const EventCard: React.FC<EventCardProps> = ({ event, onReserve, onCreateTicket,
     }
   };
 
+  const goToStats = () => {
+    if (onViewStats && event.id) {
+      onViewStats(event.id);
+    }
+  };
+
+  const handleTapTargetKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    goToStats();
+  };
+
   return (
     <div className={`event-card ${event.status === 'inactive' ? 'inactive' : ''}`}>
-      <div className="event-card-image">
-        <img src={event.cover_image_url} alt={event.name} />
-        {event.status === 'inactive' && (
-          <div className="inactive-overlay">
-            <span className="inactive-label">INACTIVO</span>
-          </div>
-        )}
-      </div>
-      
-      <div className="event-card-content">
-        <h3 className="event-card-title">{event.name}</h3>
-        
-        <div className="event-card-details">
-          <div className="event-card-date-time">
-            {event.is_recurring ? (
-              <span className="event-card-recurrence">{event.recurrence_pattern}</span>
-            ) : (
-              <>
-                <span className="event-card-date">{formatDate(event.date)}</span>
-                <span className="event-card-time">{formatTime(event.time)}</span>
-              </>
-            )}
-          </div>
-          
-          <div className="event-card-location">
-            <div className="event-card-venue">{event.venue.name}</div>
-            <div className="event-card-city">{event.city}</div>
+      <div
+        className={`event-card__tap-target ${onViewStats && event.id ? "event-card__tap-target--active" : ""}`}
+        onClick={onViewStats && event.id ? goToStats : undefined}
+        onKeyDown={onViewStats && event.id ? handleTapTargetKeyDown : undefined}
+        role={onViewStats && event.id ? "button" : undefined}
+        tabIndex={onViewStats && event.id ? 0 : undefined}
+        aria-label={
+          onViewStats && event.id
+            ? `Ver estadísticas de ${event.name}`
+            : undefined
+        }
+      >
+        <div className="event-card-image">
+          <img src={event.cover_image_url} alt="" />
+          {event.status === "inactive" && (
+            <div className="inactive-overlay">
+              <span className="inactive-label">INACTIVO</span>
+            </div>
+          )}
+        </div>
+
+        <div className="event-card-content">
+          <h3 className="event-card-title">{event.name}</h3>
+
+          <div className="event-card-details">
+            <div className="event-card-date-time">
+              {event.is_recurring ? (
+                <span className="event-card-recurrence">
+                  {event.recurrence_pattern}
+                </span>
+              ) : (
+                <>
+                  <span className="event-card-date">{formatDate(event.date)}</span>
+                  <span className="event-card-time">{formatTime(event.time)}</span>
+                </>
+              )}
+            </div>
           </div>
         </div>
-        
-        <p className="event-card-description">{event.description}</p>
-        
-        <div className="event-card-footer">
-          <div className="event-card-price">{formatPrice(event.ticket_price)}</div>
-          <div className="event-card-actions">
-            <SecondaryButton onClick={handleCreateTicketClick} size="small" icon={<IconCreate size={16} />}>
-              Crear
-            </SecondaryButton>
-            <SecondaryButton onClick={handleViewTicketsClick} size="small" icon={<IconViewTickets size={16} />}>
-              Ver Boletos
-            </SecondaryButton>
-            <SecondaryButton onClick={handleViewStatsClick} size="small" icon={<IconStats size={16} />}>
-              Estadísticas
-            </SecondaryButton>
-            <PrimaryButton onClick={handleReserveClick} size="small" icon={<IconEdit size={16} />}>
-              Editar
-            </PrimaryButton>
-          </div>
+      </div>
+
+      <div className="event-card-footer">
+        <div className="event-card-price">{formatPrice(event.ticket_price)}</div>
+        <div className="event-card-actions">
+          <SecondaryButton
+            onClick={handleCreateTicketClick}
+            size="small"
+            icon={<IconCreate size={16} />}
+          >
+            Crear
+          </SecondaryButton>
+          <SecondaryButton
+            onClick={handleViewTicketsClick}
+            size="small"
+            icon={<IconViewTickets size={16} />}
+          >
+            Ver Boletos
+          </SecondaryButton>
+          <SecondaryButton
+            onClick={handleViewStatsClick}
+            size="small"
+            icon={<IconStats size={16} />}
+          >
+            Estadísticas
+          </SecondaryButton>
+          <PrimaryButton
+            onClick={handleReserveClick}
+            size="small"
+            icon={<IconEdit size={16} />}
+          >
+            Editar
+          </PrimaryButton>
         </div>
       </div>
     </div>

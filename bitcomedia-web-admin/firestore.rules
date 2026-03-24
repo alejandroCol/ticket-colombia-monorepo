@@ -2,6 +2,16 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function isPanelAdmin() {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN' ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN'
+        );
+    }
     // Events collection - publicly readable, authenticated users can write
     match /events/{eventId} {
       allow read: if true; // Allow anyone to read event data
@@ -14,21 +24,35 @@ service cloud.firestore {
       allow create, update, delete: if request.auth != null; // Only authenticated users can write
     }
     
-    // Users collection - only authenticated users can read/write
+    // Users: perfil propio; lectura para admins; solo SUPER_ADMIN puede crear/editar documentos de otros usuarios
     match /users/{userId} {
-      // Users can only read/write their own data
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      
-      // Admin users can access all user data
-      allow read, write: if request.auth != null && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN'
+      );
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update, delete: if request.auth != null && request.auth.uid == userId;
+      allow update, delete: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN';
     }
     
+    // Tarifa al comprador por organizador (solo super admin escribe; lectura pública para checkout)
+    match /organizer_buyer_fees/{organizerId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN';
+    }
+
     // Configurations collection - publicly readable, only admins can write
     match /configurations/{configId} {
       allow read: if true; // Allow anyone to read configuration data (landing, app)
-      allow create, update: if request.auth != null &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
+      allow create, update: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN'
+      );
       allow delete: if false;
     }
     
@@ -37,12 +61,17 @@ service cloud.firestore {
       // Users can read their own tickets, admins can read any ticket
       allow read: if request.auth != null && (
         resource.data.userId == request.auth.uid ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN'
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN'
       );
       
       // Only admin users can update ticket status (for validation)
-      allow update: if request.auth != null && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
+      allow update: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN'
+      );
       
       // No one can create or delete tickets through Firestore directly
       allow create, delete: if false;
@@ -50,19 +79,50 @@ service cloud.firestore {
     
     // Expenses collection - only admin users can read/write
     match /expenses/{expenseId} {
-      allow read, write: if request.auth != null &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
+      allow read, write: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN'
+      );
     }
     
     // Venues collection - only admin users can read/write
     match /venues/{venueId} {
       // Only authenticated admin users can read venues
-      allow read: if request.auth != null && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
+      allow read: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN'
+      );
       
       // Only authenticated admin users can create, update, delete venues
-      allow create, update, delete: if request.auth != null && 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
+      allow create, update, delete: if request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN'
+      );
+    }
+
+    // Reservas de cupo (solo Cloud Functions / Admin SDK)
+    match /ticket_reservations/{reservationId} {
+      allow read, write: if false;
+    }
+
+    // Plantillas de mapa de localidades (por organizador)
+    match /venue_map_templates/{templateId} {
+      allow read: if request.auth != null && (
+        resource.data.organizer_id == request.auth.uid ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN'
+        )
+      );
+      allow create: if request.auth != null &&
+        isPanelAdmin() &&
+        request.resource.data.organizer_id == request.auth.uid;
+      allow update, delete: if request.auth != null &&
+        isPanelAdmin() &&
+        resource.data.organizer_id == request.auth.uid;
     }
     
     // Default deny all other collections

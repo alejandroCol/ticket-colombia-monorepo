@@ -8,6 +8,7 @@ import ticketsIcon from '@assets/tickets.svg';
 import profileIcon from '@assets/profile.svg';
 import logo from '@assets/logo.png';
 import SecondaryButton from '@components/SecondaryButton';
+import { IconScanTickets } from '@components/ScanIcons';
 
 interface TopNavBarProps {
   className?: string;
@@ -68,13 +69,21 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
           <div className="admin-nav-actions">
             <button
               type="button"
+              className="admin-nav-link admin-nav-scan"
+              onClick={() => handleNavigation('/scan-tickets')}
+            >
+              <IconScanTickets size={18} />
+              Leer Boletos
+            </button>
+            <button
+              type="button"
               className="admin-nav-link"
               onClick={() => handleNavigation('/config')}
             >
               Configuración
             </button>
             {showLogout && onLogout && (
-              <SecondaryButton onClick={onLogout} size="small">
+              <SecondaryButton className="admin-logout-btn" onClick={onLogout} size="small">
                 Cerrar sesión
               </SecondaryButton>
             )}
@@ -87,6 +96,14 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
             <img src={logo} alt="Ticket Colombia" className="logo" />
           </div>
           <div className="admin-nav-actions">
+            <button
+              type="button"
+              className="admin-nav-link admin-nav-scan"
+              onClick={() => handleNavigation('/scan-tickets')}
+            >
+              <IconScanTickets size={18} />
+              Leer Boletos
+            </button>
             <button
               type="button"
               className="admin-nav-link"

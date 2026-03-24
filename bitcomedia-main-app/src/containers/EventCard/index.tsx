@@ -6,7 +6,7 @@ import type { CustomStyleProps } from '../../components/types';
 import { generateCustomStyles, generateClassName } from '../../components/types';
 
 interface EventData {
-  id?: string;
+  id: string;
   slug?: string;
   name: string;
   description: string;
@@ -27,7 +27,8 @@ interface EventData {
 
 interface EventCardProps extends CustomStyleProps {
   event: EventData;
-  onReserve?: (identifier: string, isRecurring?: boolean) => void;
+  /** Tercer argumento: documento del listado para abrir el detalle al instante (React Router state). */
+  onReserve?: (identifier: string, isRecurring?: boolean, sourceEvent?: EventData) => void;
 }
 
 const EventCard: React.FC<EventCardProps> = ({
@@ -63,20 +64,11 @@ const EventCard: React.FC<EventCardProps> = ({
     return `${hour12}:${minute} ${period}`;
   };
 
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(price);
-  };
-
   const handleReserveClick = () => {
     if (onReserve) {
       const identifier = event.slug || event.id;
       if (identifier) {
-        onReserve(identifier, event.is_recurring);
+        onReserve(identifier, event.is_recurring, event);
       }
     }
   };
@@ -103,15 +95,15 @@ const EventCard: React.FC<EventCardProps> = ({
         <p className="event-card__meta">{locationLine}</p>
 
         <div className="event-card__footer">
-          <span className="event-card__price">{formatPrice(event.ticket_price)}</span>
           <PrimaryButton
             onClick={handleReserveClick}
             size="small"
             theme={theme}
             grungeEffect={grungeEffect}
             animated={animated}
+            fullWidth
           >
-            Ver entrada
+            Ver evento
           </PrimaryButton>
         </div>
       </div>

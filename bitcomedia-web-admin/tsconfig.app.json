@@ -24,7 +24,9 @@
       "@assets/*": ["src/assets/*"],
       "@pages/*": ["src/pages/*"],
       "@containers/*": ["src/containers/*"],
-      "@TopNavBar": ["src/containers/TopNavBar"]
+      "@TopNavBar": ["src/containers/TopNavBar"],
+      "@utils": ["src/utils"],
+      "@utils/*": ["src/utils/*"]
     },
 
     /* Linting */

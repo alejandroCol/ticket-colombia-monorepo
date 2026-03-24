@@ -96,6 +96,21 @@ export class FirestoreTicketRepository implements TicketRepository {
   }
 
   /**
+   * Elimina un ticket (rollback si falla MercadoPago u otro paso posterior al consumo de reserva)
+   */
+  async delete(ticketId: string): Promise<void> {
+    try {
+      await this.db.collection(this.collection).doc(ticketId).delete();
+      console.log(`Ticket ${ticketId} deleted`);
+    } catch (error) {
+      console.error(`Error deleting ticket ${ticketId}:`, error);
+      throw new Error(
+        `Failed to delete ticket: ${(error as Error).message}`
+      );
+    }
+  }
+
+  /**
    * Busca un ticket por ID de pago
    * @param {string} paymentId - ID del pago
    * @return {Promise<Ticket | null>} Ticket encontrado o null

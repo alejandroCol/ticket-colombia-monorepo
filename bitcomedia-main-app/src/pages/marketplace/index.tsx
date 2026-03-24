@@ -57,6 +57,7 @@ const getDefaultBanners = (firstSlug?: string) => [
 const MarketplaceScreen: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [activeFilter, setActiveFilter] = useState<DateFilter>('Proximamente');
+  const [searchTerm, setSearchTerm] = useState<string>('');
   const [events, setEvents] = useState<EventData[]>([]);
   const [banners, setBanners] = useState<{ id?: string; url: string; order?: number; title?: string; date?: string; eventSlug?: string }[]>(getDefaultBanners());
   const [loading, setLoading] = useState<boolean>(true);
@@ -91,6 +92,14 @@ const MarketplaceScreen: React.FC = () => {
     setHasMore(true);
     fetchEvents(activeFilter, true);
   }, [activeFilter]);
+
+  const filteredEvents = searchTerm.trim()
+    ? events.filter(
+        (e) =>
+          e.name.toLowerCase().includes(searchTerm.toLowerCase().trim()) ||
+          e.city.toLowerCase().includes(searchTerm.toLowerCase().trim())
+      )
+    : events;
 
   useEffect(() => {
     const loadBanners = async () => {
@@ -225,13 +234,26 @@ const MarketplaceScreen: React.FC = () => {
     setActiveFilter(filter);
   };
 
-  const navigateToEvent = (identifier: string) => {
-    navigate(`/evento/${identifier}`);
+  const navigateToEvent = (identifier: string, sourceEvent?: EventData) => {
+    if (sourceEvent) {
+      navigate(`/evento/${identifier}`, {
+        state: { eventFromList: sourceEvent },
+      });
+    } else {
+      navigate(`/evento/${identifier}`);
+    }
   };
 
   return (
     <div className="marketplace-screen">
-      <TopNavBar isAuthenticated={isAuthenticated} />
+      <TopNavBar
+        isAuthenticated={isAuthenticated}
+        eventSearch={{
+          value: searchTerm,
+          onChange: setSearchTerm,
+          placeholder: 'Nombre o ciudad…',
+        }}
+      />
 
       <div className="marketplace-hero-wrapper">
         <BannerCarousel banners={banners} intervalMs={5000} />
@@ -256,16 +278,26 @@ const MarketplaceScreen: React.FC = () => {
             <div className="marketplace-loading">
               <Loader size="large" color="accent" />
             </div>
-          ) : events.length > 0 ? (
+          ) : filteredEvents.length > 0 ? (
             <div className="event-grid">
-              {events.map((event, index) => (
-                index === events.length - 1 ? (
+              {filteredEvents.map((event, index) => (
+                index === filteredEvents.length - 1 ? (
                   <div key={event.id} ref={lastEventElementRef} className="event-grid__item">
-                    <EventCard event={event} onReserve={navigateToEvent} />
+                    <EventCard
+                      event={event}
+                      onReserve={(identifier, _isRecurring, sourceEvent) =>
+                        navigateToEvent(identifier, sourceEvent)
+                      }
+                    />
                   </div>
                 ) : (
                   <div key={event.id} className="event-grid__item">
-                    <EventCard event={event} onReserve={navigateToEvent} />
+                    <EventCard
+                      event={event}
+                      onReserve={(identifier, _isRecurring, sourceEvent) =>
+                        navigateToEvent(identifier, sourceEvent)
+                      }
+                    />
                   </div>
                 )
               ))}
@@ -278,8 +310,14 @@ const MarketplaceScreen: React.FC = () => {
           ) : (
             <div className="marketplace-empty">
               <div className="marketplace-empty__icon" aria-hidden>📅</div>
-              <p>No hay eventos para esta fecha.</p>
-              <p className="marketplace-empty__hint">Prueba otro filtro.</p>
+              <p>
+                {searchTerm.trim()
+                  ? 'No se encontraron eventos con esa búsqueda.'
+                  : 'No hay eventos para esta fecha.'}
+              </p>
+              <p className="marketplace-empty__hint">
+                {searchTerm.trim() ? 'Prueba otro término o quita el filtro.' : 'Prueba otro filtro.'}
+              </p>
             </div>
           )}
         </section>

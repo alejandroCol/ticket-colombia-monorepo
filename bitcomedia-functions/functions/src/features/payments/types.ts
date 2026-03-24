@@ -7,10 +7,15 @@ export interface CreateTicketRequest {
   amount: number;
   quantity: number; // Cantidad de tickets/reservas
   buyerEmail: string;
+  /** Reserva de 10 min (callable createTicketReservation) obligatoria para compra pública */
+  reservationId: string;
+  /** Compra sin cuenta: el backend genera userId guest_* */
+  guestCheckout?: boolean;
   metadata?: {
     userName?: string;
     eventName?: string;
     seatNumber?: string;
+    sectionId?: string;
   };
 }
 
@@ -118,6 +123,7 @@ export interface TicketRepository {
   create(ticket: Omit<Ticket, "createdAt" | "updatedAt">): Promise<string>;
   findById(ticketId: string): Promise<Ticket | null>;
   update(ticketId: string, updates: Partial<Ticket>): Promise<void>;
+  delete(ticketId: string): Promise<void>;
   findByPaymentId(paymentId: string): Promise<Ticket | null>;
   findByUserId(userId: string): Promise<Ticket[]>;
 }

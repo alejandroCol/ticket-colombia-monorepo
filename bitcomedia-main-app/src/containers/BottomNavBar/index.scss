@@ -6,8 +6,14 @@
   position: fixed;
   bottom: 0;
   left: 0;
+  right: 0;
   width: 100%;
-  height: 60px;
+  max-width: 100%;
+  min-height: 60px;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  box-sizing: border-box;
   background-color: var(--component-primary-color, #{$color-primary});
   border-top: 1px solid var(--component-border-color, #{rgba($color-text-secondary, 0.2)});
   display: flex;
@@ -82,7 +88,7 @@
 // Apply styling to the body when bottom nav is present
 body.has-bottom-nav {
   @media (max-width: $breakpoint-md) {
-    padding-bottom: 90px !important; // Increased to 90px for extra safety
+    padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px)) !important;
   }
 }
 
@@ -90,10 +96,8 @@ body.has-bottom-nav {
 .marketplace-screen,
 .profile-screen,
 .tickets-screen {
-  // Adjust top padding for mobile screens to account for the TopNavBar
   @media (max-width: $breakpoint-md) {
-    padding-top: 50px;
-    padding-bottom: 80px;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
   }
 }
 
@@ -140,9 +144,10 @@ body.has-bottom-nav {
 
 // Create a spacer that can be added to the end of scrollable content
 .bottom-nav-spacer {
-  height: 90px;
+  height: calc(90px + env(safe-area-inset-bottom, 0px));
   width: 100%;
-  
+  flex-shrink: 0;
+
   @media (min-width: $breakpoint-md) {
     display: none;
   }

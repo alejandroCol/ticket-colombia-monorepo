@@ -3,6 +3,8 @@ import {
   signInWithEmailAndPassword, 
   signOut, 
   onAuthStateChanged,
+  setPersistence,
+  browserLocalPersistence,
   createUserWithEmailAndPassword as firebaseCreateUser,
   sendPasswordResetEmail as firebaseSendPasswordResetEmail
 } from 'firebase/auth';
@@ -25,6 +27,8 @@ export const loginWithEmailAndPassword = async (
   email: string, 
   password: string
 ): Promise<UserCredential> => {
+  // Asegurar persistencia en localStorage para mantener sesión al cerrar el navegador
+  await setPersistence(auth, browserLocalPersistence);
   const userCredential = await signInWithEmailAndPassword(auth, email, password);
   
   // Get user data from Firestore and store in localStorage
@@ -87,13 +91,28 @@ export const getCurrentUser = (): User | null => {
   return auth.currentUser;
 };
 
-// Check if the user has admin access
+// Admin roles that can access the admin panel (admin/admin = regular, SUPER_ADMIN = see all events)
+const ADMIN_ROLES = ['ADMIN', 'admin', 'SUPER_ADMIN'] as const;
+
+// Check if the user has admin access (ADMIN or SUPER_ADMIN)
 export const hasAdminAccess = async (uid: string): Promise<boolean> => {
   try {
     const userData = await getUserData(uid);
-    return !!(userData && userData.role === 'ADMIN');
+    const role = userData?.role;
+    return !!(userData && role && ADMIN_ROLES.includes(role as typeof ADMIN_ROLES[number]));
   } catch (error) {
     console.error('Error checking admin access:', error);
+    return false;
+  }
+};
+
+// Check if the user is super admin (can see and manage all events)
+export const isSuperAdmin = async (uid: string): Promise<boolean> => {
+  try {
+    const userData = await getUserData(uid);
+    return !!(userData && userData.role === 'SUPER_ADMIN');
+  } catch (error) {
+    console.error('Error checking super admin:', error);
     return false;
   }
 };

@@ -16,6 +16,8 @@ export interface TicketData {
   amount: number;
   quantity: number;
   buyerEmail: string;
+  reservationId: string;
+  guestCheckout?: boolean;
   metadata: {
     userName: string;
     eventName: string;
@@ -24,6 +26,7 @@ export interface TicketData {
     venue: string;
     city: string;
     seatNumber?: string;
+    sectionId?: string;
   };
 }
 
@@ -86,28 +89,30 @@ export async function transferTicket(
   return result.data;
 }
 
-// Create ticket preference for MercadoPago
+// Create ticket preference for MercadoPago (con cuenta o invitado)
 export async function createTicket(ticketData: TicketData) {
   try {
-    // Verificar que el usuario esté autenticado
     const auth = getAuth();
     const user = auth.currentUser;
-    
-    if (!user) {
-      throw new Error('Usuario debe estar autenticado');
-    }
 
-    // Asegurar que el userId coincida con el usuario autenticado
-    const finalTicketData = {
-      ...ticketData,
-      userId: user.uid // Usar el UID del usuario autenticado
-    };
+    const finalTicketData =
+      ticketData.guestCheckout || !user
+        ? {
+            ...ticketData,
+            userId: ticketData.userId || 'pending',
+            guestCheckout: true as const,
+          }
+        : {
+            ...ticketData,
+            userId: user.uid,
+            guestCheckout: false,
+          };
 
     console.log('Creando ticket con datos:', finalTicketData);
-    
+
     const result = await createTicketPreference(finalTicketData);
     console.log('Preferencia creada:', result.data);
-    
+
     return result.data;
   } catch (error) {
     console.error('Error creando ticket:', error);

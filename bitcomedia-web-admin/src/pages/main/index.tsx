@@ -15,6 +15,8 @@ import BannersScreen from '@pages/Banners';
 import EventStatsScreen from '@pages/EventStats';
 import EventTicketsScreen from '@pages/EventTickets';
 import BalanceScreen from '@pages/Balance';
+import ScanTicketsScreen from '@pages/ScanTickets';
+import SuperAdminEarningsScreen from '@pages/SuperAdminEarnings';
 
 // Dashboard and other pages would be imported here
 // import Dashboard from '../dashboard';
@@ -125,6 +127,18 @@ const MainLayout: React.FC = () => {
           } 
         />
         
+        {/* Scan Tickets Route - Taquillas de entrada */}
+        <Route 
+          path="/scan-tickets" 
+          element={
+            (user && isAdmin) ? (
+              <ScanTicketsScreen />
+            ) : (
+              <Navigate to="/login" />
+            )
+          } 
+        />
+
         {/* Ticket Validation Route */}
         <Route 
           path="/validate-ticket/:ticketId" 
@@ -195,6 +209,17 @@ const MainLayout: React.FC = () => {
               <Navigate to="/login" />
             )
           } 
+        />
+
+        <Route
+          path="/super-admin/earnings"
+          element={
+            user && isAdmin ? (
+              <SuperAdminEarningsScreen />
+            ) : (
+              <Navigate to="/login" />
+            )
+          }
         />
         
         {/* Default Route - Redirect to login or dashboard based on auth status */}

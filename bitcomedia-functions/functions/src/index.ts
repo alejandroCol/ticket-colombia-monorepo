@@ -1,5 +1,6 @@
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
+import {randomUUID} from "crypto";
 import {EventServiceFactory, RecurringEvent} from "./features/events";
 import {
   PaymentServiceFactory,
@@ -9,6 +10,10 @@ import {
 import {defineSecret} from "firebase-functions/params";
 import {createManualTicket} from "./features/manual-ticket/create-manual-ticket";
 import {transferTicket} from "./features/ticket-transfer/transfer-ticket";
+import {getEventAvailability} from "./features/events/get-event-availability";
+import {createTicketReservation} from "./features/reservations/create-ticket-reservation";
+import {releaseTicketReservation} from "./features/reservations/release-ticket-reservation";
+import {cleanupExpiredReservations} from "./features/reservations/cleanup-expired-reservations";
 
 admin.initializeApp();
 
@@ -76,16 +81,26 @@ exports.createTicketPreference = functions
       amount: data?.amount,
     });
     try {
-      // Verificar autenticación
+      let payload = {...data};
       if (!context.auth) {
-        throw new functions.https.HttpsError(
-          "unauthenticated",
-          "Usuario debe estar autenticado"
-        );
-      }
-
-      // Verificar que el userId coincida con el usuario autenticado
-      if (context.auth.uid !== data.userId) {
+        if (!data.guestCheckout) {
+          throw new functions.https.HttpsError(
+            "unauthenticated",
+            "Inicia sesión o usa compra sin cuenta"
+          );
+        }
+        if (!data.buyerEmail?.trim() || !data.metadata?.userName?.trim()) {
+          throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Email y nombre completos son requeridos"
+          );
+        }
+        payload = {
+          ...data,
+          userId: `guest_${randomUUID().replace(/-/g, "")}`,
+          guestCheckout: true,
+        };
+      } else if (context.auth.uid !== data.userId) {
         throw new functions.https.HttpsError(
           "permission-denied",
           "No tienes permisos para crear este ticket"
@@ -115,8 +130,8 @@ exports.createTicketPreference = functions
 
       const paymentService = PaymentServiceFactory.createPaymentService(config);
 
-      // Crear ticket y preferencia usando el servicio
-      const result = await paymentService.createTicketPreference(data, context.auth.uid);
+      const uid = payload.userId;
+      const result = await paymentService.createTicketPreference(payload, uid);
 
       console.log("[createTicketPreference] OK", {ticketId: result?.ticketId});
       return result;
@@ -252,3 +267,11 @@ exports.createManualTicket = createManualTicket;
 
 // Función para transferir tickets a otra persona
 exports.transferTicket = transferTicket;
+
+// Obtener disponibilidad por sección (público; incluye reservas activas)
+exports.getEventAvailability = getEventAvailability;
+
+// Reserva de cupo 10 min (checkout)
+exports.createTicketReservation = createTicketReservation;
+exports.releaseTicketReservation = releaseTicketReservation;
+exports.cleanupExpiredReservations = cleanupExpiredReservations;

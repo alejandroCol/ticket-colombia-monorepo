@@ -7,7 +7,8 @@ import Loader from '@components/Loader';
 import PrimaryButton from '@components/PrimaryButton';
 import SecondaryButton from '@components/SecondaryButton';
 import BulkUploadCortesiasModal from '@components/BulkUploadCortesiasModal';
-import { getEventById } from '@services';
+import { getEventOrRecurringById, getCurrentUser, isSuperAdmin } from '@services';
+import { validateTicket } from '@services/ticketService';
 import './index.scss';
 
 interface Ticket {
@@ -33,7 +34,7 @@ interface Ticket {
 const EventTicketsScreen: React.FC = () => {
   const { eventId } = useParams<{ eventId: string }>();
   const navigate = useNavigate();
-  const [event, setEvent] = useState<{ name: string } | null>(null);
+  const [event, setEvent] = useState<{ name: string; organizer_id?: string } | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,8 +50,8 @@ const EventTicketsScreen: React.FC = () => {
   const loadEvent = async () => {
     if (!eventId) return;
     try {
-      const eventData = await getEventById(eventId);
-      setEvent(eventData ? { name: eventData.name } : null);
+      const eventData = await getEventOrRecurringById(eventId);
+      setEvent(eventData ? { name: eventData.name, organizer_id: eventData.organizer_id } : null);
     } catch {
       setEvent(null);
     }
@@ -86,6 +87,21 @@ const EventTicketsScreen: React.FC = () => {
   useEffect(() => {
     if (eventId) loadTickets();
   }, [eventId]);
+
+  // Ownership guard: only super admin or event owner can access
+  useEffect(() => {
+    if (loading || !event || !eventId) return;
+    const check = async () => {
+      const user = getCurrentUser();
+      if (!user) return;
+      const superA = await isSuperAdmin(user.uid);
+      if (superA) return;
+      if (event.organizer_id !== user.uid) {
+        navigate('/dashboard', { replace: true });
+      }
+    };
+    check();
+  }, [event, eventId, loading, navigate]);
 
   const localidades = useMemo(() => {
     const set = new Set<string>();
@@ -152,6 +168,27 @@ const EventTicketsScreen: React.FC = () => {
       loadTickets();
     } catch (err) {
       alert('❌ Error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const canValidate = (t: Ticket) =>
+    !t.validatedAt &&
+    t.ticketStatus !== 'cancelled' &&
+    t.ticketStatus !== 'disabled' &&
+    (t.ticketStatus === 'paid' || t.status === 'approved');
+
+  const handleValidate = async (t: Ticket) => {
+    if (!canValidate(t)) return;
+    if (!window.confirm(`¿Validar entrada del boleto de ${t.buyerName || t.buyerEmail || 'este comprador'}?`)) return;
+    setLoading(true);
+    try {
+      await validateTicket(t.id);
+      alert('✅ Boleto validado');
+      loadTickets();
+    } catch (err) {
+      alert(`❌ ${(err as Error).message || 'Error al validar'}`);
     } finally {
       setLoading(false);
     }
@@ -302,8 +339,11 @@ const EventTicketsScreen: React.FC = () => {
                           <>
                             <td>{ticket.validatedAt ? <span className="badge ok">✓ Validado</span> : <span className="badge pending">Pendiente</span>}</td>
                             <td>
-                              <button className="btn-icon edit" onClick={() => handleEdit(ticket)} title="Editar">✏️</button>
-                              <button className={`btn-icon ${(ticket.ticketStatus === 'cancelled' || ticket.ticketStatus === 'disabled') ? 'enable' : 'disable'}`} onClick={() => handleDisable(ticket)} title={(ticket.ticketStatus === 'cancelled' || ticket.ticketStatus === 'disabled') ? 'Habilitar' : 'Deshabilitar'}>{(ticket.ticketStatus === 'cancelled' || ticket.ticketStatus === 'disabled') ? '✓' : '✕'}</button>
+                              {canValidate(ticket) && (
+                                <button className="btn-icon validate" onClick={() => handleValidate(ticket)} title="Validar" disabled={loading}>✓</button>
+                              )}
+                              <button className="btn-icon edit" onClick={() => handleEdit(ticket)} title="Editar" disabled={loading}>✏️</button>
+                              <button className={`btn-icon ${(ticket.ticketStatus === 'cancelled' || ticket.ticketStatus === 'disabled') ? 'enable' : 'disable'}`} onClick={() => handleDisable(ticket)} title={(ticket.ticketStatus === 'cancelled' || ticket.ticketStatus === 'disabled') ? 'Habilitar' : 'Deshabilitar'} disabled={loading}>{(ticket.ticketStatus === 'cancelled' || ticket.ticketStatus === 'disabled') ? '✓' : '✕'}</button>
                             </td>
                             <td>{ticket.sectionName || 'General'}</td>
                             <td>{ticket.buyerIdNumber || '—'}</td>

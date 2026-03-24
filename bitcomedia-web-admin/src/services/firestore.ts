@@ -1,4 +1,18 @@
-import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, getDocs, addDoc, query, where } from 'firebase/firestore';
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  collection,
+  getDocs,
+  addDoc,
+  query,
+  where,
+  limit,
+  deleteDoc,
+  serverTimestamp,
+} from 'firebase/firestore';
 
 export interface BannerItem {
   id?: string;
@@ -61,7 +75,22 @@ export const updateUserDocument = async (uid: string, userData: Partial<UserData
   }
 };
 
-// Get event data from Firestore
+/** Listado de usuarios con rol administrador (panel taquilla). Uso: super admin. */
+export const getAdminUsersList = async (): Promise<UserData[]> => {
+  const usersRef = collection(db, 'users');
+  const roles = ['ADMIN', 'admin'] as const;
+  const byUid = new Map<string, UserData>();
+  for (const role of roles) {
+    const q = query(usersRef, where('role', '==', role), limit(200));
+    const snap = await getDocs(q);
+    snap.forEach((d) => {
+      byUid.set(d.id, { uid: d.id, ...d.data() } as UserData);
+    });
+  }
+  return [...byUid.values()].sort((a, b) => (a.email || '').localeCompare(b.email || ''));
+};
+
+// Get event data from Firestore (events collection only)
 export const getEventById = async (eventId: string): Promise<Event | null> => {
   try {
     const eventDocRef = doc(db, 'events', eventId);
@@ -79,6 +108,22 @@ export const getEventById = async (eventId: string): Promise<Event | null> => {
     console.error('Error fetching event data:', error);
     return null;
   }
+};
+
+// Get event from events or recurring_events (for pages that receive id from either)
+export const getEventOrRecurringById = async (eventId: string): Promise<Event | null> => {
+  const fromEvents = await getEventById(eventId);
+  if (fromEvents) return fromEvents;
+  try {
+    const recRef = doc(db, 'recurring_events', eventId);
+    const recSnap = await getDoc(recRef);
+    if (recSnap.exists()) {
+      return { id: recSnap.id, ...recSnap.data() } as Event;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
 };
 
 // Get payment configuration from Firestore
@@ -109,6 +154,55 @@ export const getPaymentConfig = async (): Promise<{ fees: number; taxes: number 
       taxes: 19
     };
   }
+};
+
+/** Tarifa al comprador por organizador (super admin). Lectura pública en la app. */
+export type OrganizerBuyerFeeDoc = {
+  fee_type: 'percent_payer' | 'fixed_per_ticket';
+  fee_value: number;
+};
+
+export const getOrganizerBuyerFee = async (
+  organizerId: string
+): Promise<OrganizerBuyerFeeDoc | null> => {
+  try {
+    const id = String(organizerId || '').trim();
+    if (!id) return null;
+    const ref = doc(db, 'organizer_buyer_fees', id);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return null;
+    const d = snap.data();
+    const fee_type = String(d?.fee_type || '').trim();
+    const fee_value = Number(d?.fee_value) || 0;
+    if (!fee_type || fee_type === 'none' || fee_value <= 0) return null;
+    if (fee_type !== 'percent_payer' && fee_type !== 'fixed_per_ticket') return null;
+    return { fee_type: fee_type as OrganizerBuyerFeeDoc['fee_type'], fee_value };
+  } catch (e) {
+    console.error('Error fetching organizer buyer fee:', e);
+    return null;
+  }
+};
+
+export const setOrganizerBuyerFee = async (
+  organizerId: string,
+  payload: { fee_type: 'percent_payer' | 'fixed_per_ticket' | 'none'; fee_value: number }
+): Promise<void> => {
+  const id = String(organizerId || '').trim();
+  if (!id) throw new Error('Organizador inválido');
+  const ref = doc(db, 'organizer_buyer_fees', id);
+  if (payload.fee_type === 'none' || payload.fee_value <= 0) {
+    await deleteDoc(ref).catch(() => undefined);
+    return;
+  }
+  await setDoc(
+    ref,
+    {
+      fee_type: payload.fee_type,
+      fee_value: payload.fee_value,
+      updated_at: serverTimestamp(),
+    },
+    { merge: true }
+  );
 };
 
 const DEFAULT_WHATSAPP_PHONE = '573016929622';

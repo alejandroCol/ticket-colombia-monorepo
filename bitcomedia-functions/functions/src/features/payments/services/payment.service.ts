@@ -11,6 +11,31 @@ import {
   PaymentConfig,
   Ticket,
 } from "../types";
+import {consumeReservation, restoreReservationActive} from "../../reservations/consume-reservation";
+import {assertEnoughCapacityForPurchase} from "../../reservations/availability";
+import {
+  expectedTotalCOP,
+  unitPriceFromEventData,
+  type OrganizerBuyerFeeInput,
+} from "../pricing-from-event";
+
+const RESERVATION_HOLD_MS = 10 * 60 * 1000;
+
+async function loadOrganizerBuyerFee(
+  db: admin.firestore.Firestore,
+  organizerId: string
+): Promise<OrganizerBuyerFeeInput> {
+  const id = String(organizerId || "").trim();
+  if (!id) return null;
+  const snap = await db.collection("organizer_buyer_fees").doc(id).get();
+  if (!snap.exists) return null;
+  const d = snap.data()!;
+  const t = String(d.fee_type || "").trim();
+  const v = Number(d.fee_value) || 0;
+  if (!t || t === "none" || v <= 0) return null;
+  if (t !== "percent_payer" && t !== "fixed_per_ticket") return null;
+  return { type: t, value: v };
+}
 
 /**
  * Servicio principal de pagos
@@ -61,32 +86,87 @@ export class MercadoPagoPaymentService implements PaymentService {
 
       const db = admin.firestore();
 
-      // Obtener datos del evento
+      // Obtener datos del evento (eventos puntuales o recurrentes)
       console.log("[createTicketPreference] Leyendo evento:", request.eventId);
-      const eventDoc = await db.collection("events").doc(request.eventId).get();
+      let eventDoc = await db.collection("events").doc(request.eventId).get();
+      if (!eventDoc.exists) {
+        eventDoc = await db.collection("recurring_events").doc(request.eventId).get();
+      }
       if (!eventDoc.exists) {
         throw new Error("Evento no encontrado");
       }
       const eventData = eventDoc.data()!;
       console.log("[createTicketPreference] Evento OK:", eventData?.name);
 
-      // Obtener datos del usuario
-      console.log("[createTicketPreference] Leyendo usuario:", userId);
-      const userDoc = await db.collection("users").doc(userId).get();
-      if (!userDoc.exists) {
-        throw new Error("Usuario no encontrado");
-      }
-      const userData = userDoc.data()!;
-      console.log("[createTicketPreference] Usuario OK");
+      const payCfgSnap = await db.collection("configurations").doc("payments_config").get();
+      const rawGlobalFees = payCfgSnap.exists ?
+        Number(payCfgSnap.data()?.fees) :
+        9;
+      const globalFeesPercent = Number.isFinite(rawGlobalFees) ? rawGlobalFees : 9;
 
-      // Verificar si es entrada libre (precio = 0)
-      const isFreeEvent = request.amount === 0;
+      const unitPriceCOP = unitPriceFromEventData(
+        eventData,
+        request.metadata?.sectionId
+      );
+      const subtotalCOP = Math.round(unitPriceCOP * request.quantity);
+
+      const reservationId = request.reservationId?.trim();
+      if (!reservationId) {
+        throw new Error(
+          "Falta la reserva de cupo. Vuelve al evento y entra de nuevo al checkout."
+        );
+      }
+
+      let userData: Record<string, unknown>;
+      if (request.guestCheckout) {
+        if (!request.buyerEmail?.trim() || !request.metadata?.userName?.trim()) {
+          throw new Error("Email y nombre completos son requeridos para compra sin cuenta");
+        }
+        userData = {
+          name: request.metadata.userName.trim(),
+          email: request.buyerEmail.trim(),
+          displayName: request.metadata.userName.trim(),
+          document: "12345678",
+        };
+        console.log("[createTicketPreference] Compra invitado:", request.buyerEmail);
+      } else {
+        console.log("[createTicketPreference] Leyendo usuario:", userId);
+        const userDoc = await db.collection("users").doc(userId).get();
+        if (!userDoc.exists) {
+          throw new Error("Usuario no encontrado");
+        }
+        userData = userDoc.data()!;
+        console.log("[createTicketPreference] Usuario OK");
+      }
+
+      await consumeReservation(db, reservationId, request);
+      try {
+        await assertEnoughCapacityForPurchase(
+          db,
+          request.eventId,
+          eventData,
+          request.quantity,
+          request.metadata?.sectionId,
+          request.metadata?.seatNumber
+        );
+      } catch (capErr) {
+        await restoreReservationActive(db, reservationId, RESERVATION_HOLD_MS);
+        throw capErr;
+      }
+
+      // Entrada gratuita: subtotal según precios del evento = 0
+      const isFreeEvent = subtotalCOP === 0;
 
       if (isFreeEvent) {
+        if (request.amount !== 0) {
+          throw new Error(
+            "Este evento es gratuito. Actualiza la página del checkout e intenta de nuevo."
+          );
+        }
         console.log(`Creating free ticket for event: ${request.eventId}`);
 
         // Crear ticket directamente como aprobado para entrada libre
-        const ticketData: Omit<Ticket, "createdAt" | "updatedAt"> = {
+        const ticketData: Omit<Ticket, "createdAt" | "updatedAt"> & {sectionId?: string; sectionName?: string} = {
           userId: request.userId,
           eventId: request.eventId,
           preferenceId: "free_event", // Identificador especial para entradas libres
@@ -100,11 +180,13 @@ export class MercadoPagoPaymentService implements PaymentService {
           qrCode: "", // Se generará inmediatamente
           buyerEmail: request.buyerEmail,
           initPoint: "", // Se llenará después de crear el ticket
+          sectionId: request.metadata?.sectionId,
+          sectionName: request.metadata?.seatNumber || "",
           metadata: {
             userName: request.metadata?.userName ||
-              userData.name ||
-              userData.displayName ||
-              userData.email,
+              (userData.name as string) ||
+              (userData.displayName as string) ||
+              (userData.email as string),
             eventName: request.metadata?.eventName ||
               eventData.title ||
               eventData.name,
@@ -112,57 +194,104 @@ export class MercadoPagoPaymentService implements PaymentService {
           },
         };
 
-        const ticketId = await this.ticketRepository.create(ticketData);
+        let freeTicketId: string | undefined;
+        try {
+          freeTicketId = await this.ticketRepository.create(ticketData);
 
-        // Generar QR code inmediatamente para entrada libre
-        const qrCode = await this.qrGenerator.generateQRCode(ticketId, this.config.appUrl);
+          const qrCode = await this.qrGenerator.generateQRCode(
+            freeTicketId,
+            this.config.appUrl
+          );
 
-        // Crear initPoint para entrada libre
-        const initPoint = `${this.config.appUrl}/tickets`;
+          const doneParams = new URLSearchParams({
+            event: String(eventData.slug || eventData.id),
+            value: "0",
+            name: String(eventData.name || ""),
+            qty: String(request.quantity),
+          });
+          if (request.metadata?.seatNumber) {
+            doneParams.set("section", request.metadata.seatNumber);
+          }
+          const initPoint = request.guestCheckout
+            ? `${this.config.appUrl}/compra-finalizada?${doneParams.toString()}`
+            : `${this.config.appUrl}/tickets`;
 
-        // Actualizar el ticket con el QR code y initPoint
-        await this.ticketRepository.update(ticketId, {
-          qrCode: qrCode,
-          initPoint: initPoint,
-        });
+          await this.ticketRepository.update(freeTicketId, {
+            qrCode: qrCode,
+            initPoint: initPoint,
+          });
 
-        console.log(`Free ticket created and approved: ${ticketId} for user: ${userId}`);
+          console.log(
+            `Free ticket created and approved: ${freeTicketId} for user: ${userId}`
+          );
 
-        // Retornar respuesta especial para entradas libres
-        return {
-          ticketId: ticketId,
-          preferenceId: "free_event",
-          initPoint: initPoint, // Redirigir directamente al ticket
-          sandboxInitPoint: initPoint,
-        };
+          return {
+            ticketId: freeTicketId,
+            preferenceId: "free_event",
+            initPoint: initPoint,
+            sandboxInitPoint: initPoint,
+          };
+        } catch (freeErr) {
+          if (freeTicketId) {
+            await this.ticketRepository.delete(freeTicketId).catch(() => undefined);
+          }
+          await restoreReservationActive(db, reservationId, RESERVATION_HOLD_MS);
+          throw freeErr;
+        }
       }
 
-      // Flujo normal para eventos de pago
-      // Validar monto mínimo solo para eventos de pago
-      if (request.amount < this.config.minAmount) {
+      // Flujo normal: subtotal + tarifa (override evento → organizador → global)
+      const organizerFee = await loadOrganizerBuyerFee(
+        db,
+        String(eventData.organizer_id || "")
+      );
+      const priced = expectedTotalCOP(
+        subtotalCOP,
+        request.quantity,
+        eventData,
+        globalFeesPercent,
+        organizerFee
+      );
+      const finalAmount = priced.total;
+      if (Math.abs(request.amount - finalAmount) > 2) {
+        throw new Error(
+          `El total no coincide con el precio vigente (${finalAmount} COP). Recarga el checkout e intenta de nuevo.`
+        );
+      }
+      console.log("[createTicketPreference] Precios:", {
+        subtotalCOP,
+        feeCOP: priced.feeCOP,
+        total: finalAmount,
+        feeSource: priced.feeSource,
+        clientAmount: request.amount,
+      });
+
+      if (finalAmount < this.config.minAmount) {
         throw new Error(`El monto mínimo es $${this.config.minAmount} COP`);
       }
 
       // Crear ticket con estado pendiente
-      const ticketData: Omit<Ticket, "createdAt" | "updatedAt"> = {
+      const ticketData: Omit<Ticket, "createdAt" | "updatedAt"> & {sectionId?: string; sectionName?: string} = {
         userId: request.userId,
         eventId: request.eventId,
         preferenceId: "", // Se llenará después de crear la preferencia
         paymentId: "",
         paymentStatus: "pending",
         paymentMethod: "",
-        amount: request.amount,
+        amount: finalAmount,
         quantity: request.quantity, // Cantidad de tickets/reservas
         currency: "COP",
         ticketStatus: "reserved",
         qrCode: "", // Se generará cuando se confirme el pago
         buyerEmail: request.buyerEmail,
         initPoint: "", // Se llenará después de crear la preferencia
+        sectionId: request.metadata?.sectionId,
+        sectionName: request.metadata?.seatNumber || "",
         metadata: {
           userName: request.metadata?.userName ||
-            userData.name ||
-            userData.displayName ||
-            userData.email,
+            (userData.name as string) ||
+            (userData.displayName as string) ||
+            (userData.email as string),
           eventName: request.metadata?.eventName ||
             eventData.title ||
             eventData.name,
@@ -171,17 +300,23 @@ export class MercadoPagoPaymentService implements PaymentService {
       };
 
       console.log("[createTicketPreference] Creando ticket en Firestore...");
-      const ticketId = await this.ticketRepository.create(ticketData);
-      console.log("[createTicketPreference] Ticket creado:", ticketId);
+      let paidTicketId: string;
+      try {
+        paidTicketId = await this.ticketRepository.create(ticketData);
+      } catch (createErr) {
+        await restoreReservationActive(db, reservationId, RESERVATION_HOLD_MS);
+        throw createErr;
+      }
+      console.log("[createTicketPreference] Ticket creado:", paidTicketId);
 
-      // Calcular precio unitario basado en cantidad
-      const unitPrice = Math.round(request.amount / request.quantity);
+      // Calcular precio unitario basado en cantidad (total incluye comisión)
+      const unitPrice = Math.round(finalAmount / request.quantity);
       // Crear la preferencia en MercadoPago
-      console.log("[createTicketPreference] Creando preferencia MercadoPago:", {quantity: request.quantity, unitPrice, amount: request.amount});
+      console.log("[createTicketPreference] Creando preferencia MercadoPago:", {quantity: request.quantity, unitPrice, amount: finalAmount});
       const preferenceData = {
         items: [
           {
-            id: ticketId,
+            id: paidTicketId,
             title: `${this.config.isDevelopment ? "[DEV] " : ""}Ticket - ${
               eventData.title || eventData.name}`,
             description: `${this.config.isDevelopment ? "[DESARROLLO] " : ""}${request.quantity} entrada(s) para ${
@@ -194,22 +329,36 @@ export class MercadoPagoPaymentService implements PaymentService {
         ],
 
         payer: {
-          name: userData.name || userData.displayName || "",
+          name: (userData.name as string) || (userData.displayName as string) || "",
           email: request.buyerEmail,
           identification: {
             type: "CC",
-            number: userData.document || "12345678",
+            number: (userData.document as string) || "12345678",
           },
         },
 
-        back_urls: {
-          success: `${this.config.appUrl}/compra-finalizada?event=${eventData.slug || eventData.id}&value=${request.amount}`,
-          failure: `${this.config.appUrl}/tickets`,
-          pending: `${this.config.appUrl}/compra-finalizada?event=${eventData.slug || eventData.id}&value=${request.amount}`,
-        },
+        back_urls: (() => {
+          const base = `${this.config.appUrl}/compra-finalizada`;
+          const q = new URLSearchParams({
+            event: String(eventData.slug || eventData.id),
+            value: String(finalAmount),
+            name: String(eventData.name || ""),
+            qty: String(request.quantity),
+          });
+          if (request.metadata?.seatNumber) {
+            q.set("section", request.metadata.seatNumber);
+          }
+          const done = `${base}?${q.toString()}`;
+          return {
+            success: done,
+            // Misma página que success/pending: MP añade status, payment_id, etc. por GET
+            failure: done,
+            pending: done,
+          };
+        })(),
         auto_return: "approved",
 
-        external_reference: ticketId,
+        external_reference: paidTicketId,
 
         payment_methods: {
           excluded_payment_methods: [],
@@ -233,19 +382,26 @@ export class MercadoPagoPaymentService implements PaymentService {
       } catch (mpError) {
         const e = mpError as Error;
         console.error("[createTicketPreference] Error MercadoPago createPreference:", e.message, e.stack);
+        await this.ticketRepository.delete(paidTicketId).catch(() => undefined);
+        await restoreReservationActive(db, reservationId, RESERVATION_HOLD_MS);
         throw mpError;
       }
 
-      // Actualizar el ticket con el preferenceId e initPoint
-      await this.ticketRepository.update(ticketId, {
-        preferenceId: mpPreference.id || "",
-        initPoint: mpPreference.init_point || "",
-      });
+      try {
+        await this.ticketRepository.update(paidTicketId, {
+          preferenceId: mpPreference.id || "",
+          initPoint: mpPreference.init_point || "",
+        });
+      } catch (updErr) {
+        await this.ticketRepository.delete(paidTicketId).catch(() => undefined);
+        await restoreReservationActive(db, reservationId, RESERVATION_HOLD_MS);
+        throw updErr;
+      }
 
-      console.log(`Ticket created: ${ticketId} for user: ${userId}`);
+      console.log(`Ticket created: ${paidTicketId} for user: ${userId}`);
 
       return {
-        ticketId: ticketId,
+        ticketId: paidTicketId,
         preferenceId: mpPreference.id,
         initPoint: mpPreference.init_point,
         sandboxInitPoint: mpPreference.sandbox_init_point,

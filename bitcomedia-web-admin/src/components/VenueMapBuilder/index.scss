@@ -1,0 +1,457 @@
+@import '../../main.scss';
+
+.vmb {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 1rem 0;
+  padding: 1rem;
+  border-radius: 14px;
+  background: rgba($color-surface, 0.5);
+  border: 1px solid rgba($color-text-secondary, 0.15);
+
+  &__intro {
+    margin: 0;
+    font-size: 0.88rem;
+    color: $color-text-secondary;
+    line-height: 1.5;
+  }
+
+  &__toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    align-items: center;
+  }
+
+  &__toolbar-label {
+    width: 100%;
+    font-size: 0.75rem;
+    font-weight: $font-weight-semi-bold;
+    color: $color-text-secondary;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.15rem;
+  }
+
+  &__chip {
+    padding: 0.4rem 0.65rem;
+    font-size: 0.78rem;
+    font-weight: $font-weight-medium;
+    color: $color-text-primary;
+    background: rgba($color-primary, 0.35);
+    border: 1px solid rgba($color-accent, 0.25);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+
+    &:hover {
+      background: rgba($color-accent, 0.15);
+      transform: translateY(-1px);
+    }
+  }
+
+  &__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+
+  &__canvas-wrap {
+    flex: 1;
+    min-width: min(100%, 320px);
+    max-width: 100%;
+  }
+
+  &__canvas {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 2px solid rgba($color-accent, 0.35);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+    cursor: default;
+    touch-action: none;
+    user-select: none;
+
+    &--dragging {
+      cursor: grabbing;
+    }
+  }
+
+  &__bg {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  &__bg-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  &__hidden-file {
+    position: absolute;
+    width: 0;
+    height: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  &__hint--block {
+    margin: 0.35rem 0 0;
+    width: 100%;
+  }
+
+  &__hint--export {
+    margin: 0.5rem 0 0;
+    max-width: 42rem;
+    line-height: 1.45;
+  }
+
+  &__actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+
+  &__linkish {
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    color: $color-accent;
+    text-decoration: underline;
+    cursor: pointer;
+    font: inherit;
+  }
+
+  &__zones-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 50;
+    pointer-events: none;
+
+    .vmb-zone {
+      pointer-events: auto;
+    }
+  }
+
+  /** Por encima de las zonas para poder seleccionar/editar piezas (palco, tarima…) aunque queden debajo en el plano. */
+  &__decorations-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 60;
+    pointer-events: none;
+
+    .vmb-decoration {
+      pointer-events: auto;
+    }
+
+    &--zones-priority {
+      pointer-events: none !important;
+
+      .vmb-decoration {
+        pointer-events: none !important;
+      }
+    }
+  }
+
+  &__inspector {
+    flex: 0 0 220px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    padding: 0.85rem;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    font-size: 0.82rem;
+
+    h4 {
+      margin: 0;
+      font-size: 0.85rem;
+      color: $color-text-primary;
+    }
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      color: $color-text-secondary;
+    }
+
+    input[type='text'],
+    input[type='number'],
+    input[type='color'] {
+      padding: 0.35rem 0.5rem;
+      border-radius: 6px;
+      border: 1px solid rgba($color-text-secondary, 0.25);
+      background: rgba($color-surface, 0.8);
+      color: $color-text-primary;
+      font-size: 0.85rem;
+    }
+
+    input[type='color'] {
+      min-height: 36px;
+      padding: 2px;
+      cursor: pointer;
+    }
+  }
+
+  &__hint {
+    margin: 0;
+    font-size: 0.78rem;
+    color: $color-text-secondary;
+    font-style: italic;
+  }
+
+  &__templates {
+    padding: 0.85rem 1rem;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.18);
+    border: 1px solid rgba($color-accent, 0.15);
+  }
+
+  &__templates-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    margin-top: 0.5rem;
+
+    &:first-of-type {
+      margin-top: 0.35rem;
+    }
+  }
+
+  &__templates-input,
+  &__templates-select {
+    flex: 1;
+    min-width: 160px;
+    padding: 0.45rem 0.65rem;
+    border-radius: 8px;
+    border: 1px solid rgba($color-text-secondary, 0.25);
+    background: rgba($color-surface, 0.85);
+    color: $color-text-primary;
+    font-size: 0.85rem;
+  }
+}
+
+.vmb-decoration {
+  position: absolute;
+  box-sizing: border-box;
+  cursor: grab;
+
+  &:active {
+    cursor: grabbing;
+  }
+
+  &--selected {
+    outline: 2px solid $color-accent;
+    outline-offset: 1px;
+    z-index: 40 !important;
+  }
+
+  &__inner {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 4px;
+    box-sizing: border-box;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    overflow: hidden;
+  }
+
+  &__label {
+    font-size: clamp(9px, 1.8vw, 13px);
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.92);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+    pointer-events: none;
+    line-height: 1.15;
+  }
+
+  &__resize {
+    position: absolute;
+    right: -6px;
+    bottom: -6px;
+    width: 14px;
+    height: 14px;
+    padding: 0;
+    border-radius: 3px;
+    background: $color-accent;
+    border: 2px solid #fff;
+    cursor: nwse-resize;
+    z-index: 2;
+  }
+}
+
+@mixin dec-fill($c) {
+  background: $c;
+  .vmb-decoration__inner {
+    background: linear-gradient(145deg, lighten($c, 8%), darken($c, 6%));
+  }
+}
+
+.vmb-decoration--stage .vmb-decoration__inner {
+  clip-path: polygon(8% 0, 92% 0, 100% 100%, 0 100%);
+  @include dec-fill(#4a4e6e);
+}
+
+.vmb-decoration--palco_tier .vmb-decoration__inner {
+  background: repeating-linear-gradient(
+    180deg,
+    #5c4a6e 0px,
+    #5c4a6e 18%,
+    transparent 18%,
+    transparent 22%
+  );
+  background-color: #4a3d5c;
+}
+
+.vmb-decoration--dance_floor .vmb-decoration__inner {
+  background: repeating-conic-gradient(#2d3548 0% 25%, #1e2538 0% 50%) 50% / 12px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.vmb-decoration--bar_counter .vmb-decoration__inner {
+  @include dec-fill(#5c4033);
+  box-shadow: inset 0 4px 0 rgba(255, 255, 255, 0.08);
+}
+
+.vmb-decoration--dj_booth .vmb-decoration__inner {
+  @include dec-fill(#3d4456);
+  background-image: radial-gradient(circle at 28% 28%, #1a1a24 0 22%, transparent 23%),
+    radial-gradient(circle at 72% 28%, #1a1a24 0 22%, transparent 23%),
+    linear-gradient(180deg, #3d4456, #2a3040);
+}
+
+.vmb-decoration--theater_fan .vmb-decoration__inner {
+  clip-path: polygon(50% 100%, 0 100%, 2% 25%, 50% 5%, 98% 25%, 100% 100%);
+  background: radial-gradient(ellipse 80% 60% at 50% 70%, #2a3545 0%, #3a4a5c 100%);
+}
+
+.vmb-decoration--vip_box .vmb-decoration__inner {
+  @include dec-fill(#6b5b48);
+  border: 3px solid #c9a227 !important;
+  box-shadow: 0 0 12px rgba(201, 162, 39, 0.25);
+}
+
+.vmb-decoration--lounge_sofa .vmb-decoration__inner {
+  border-radius: 22%;
+  @include dec-fill(#4a5568);
+}
+
+.vmb-decoration--high_table .vmb-decoration__inner {
+  border-radius: 50%;
+  @include dec-fill(#374151);
+  background-image: linear-gradient(90deg, transparent 48%, rgba(255, 255, 255, 0.12) 48%, rgba(255, 255, 255, 0.12) 52%, transparent 52%);
+}
+
+.vmb-decoration--entrance_arch .vmb-decoration__inner {
+  clip-path: polygon(0 100%, 0 35%, 15% 0, 85% 0, 100% 35%, 100% 100%);
+  @include dec-fill(#4b5563);
+}
+
+.vmb-decoration--stairs .vmb-decoration__inner {
+  background: linear-gradient(
+    180deg,
+    #4a4a58 0%,
+    #3a3a48 16%,
+    #4a4a58 16%,
+    #3a3a48 32%,
+    #4a4a58 32%,
+    #3a3a48 48%,
+    #4a4a58 48%,
+    #3a3a48 64%,
+    #4a4a58 64%,
+    #3a3a48 80%,
+    #4a4a58 80%,
+    #3a3a48 100%
+  );
+}
+
+.vmb-decoration--balcony .vmb-decoration__inner {
+  @include dec-fill(#5c5c6e);
+  background-image: linear-gradient(180deg, #5c5c6e 0 55%, transparent 55%),
+    repeating-linear-gradient(90deg, transparent, transparent 7%, rgba(255, 255, 255, 0.2) 7%, rgba(255, 255, 255, 0.2) 8%);
+}
+
+.vmb-decoration--pillar .vmb-decoration__inner {
+  background: linear-gradient(90deg, #2a2a32, #4a4a58, #2a2a32);
+}
+
+.vmb-decoration--light_rig .vmb-decoration__inner {
+  @include dec-fill(#312e81);
+  background-image: linear-gradient(180deg, #312e81 0 40%, transparent 40%),
+    conic-gradient(from 180deg at 50% 100%, rgba(255, 220, 120, 0.4) 0deg, transparent 25deg, transparent 335deg, rgba(255, 220, 120, 0.35) 360deg);
+  background-size: 100%, 14px 100%;
+  background-repeat: no-repeat, repeat-x;
+  background-position: center bottom;
+}
+
+.vmb-decoration--pool_ring .vmb-decoration__inner {
+  border-radius: 50%;
+  @include dec-fill(#1e3a5f);
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.2);
+  background-image: radial-gradient(circle at 50% 50%, transparent 32%, rgba(255, 255, 255, 0.12) 33%, rgba(255, 255, 255, 0.12) 36%, transparent 37%);
+}
+
+.vmb-zone {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px dashed rgba(0, 200, 255, 0.85);
+  background: rgba(0, 200, 255, 0.12);
+  cursor: grab;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 2px;
+
+  &:active {
+    cursor: grabbing;
+  }
+
+  &--selected {
+    border-color: #ffab40;
+    background: rgba(255, 171, 64, 0.18);
+    z-index: 55;
+  }
+
+  &__tag {
+    font-size: clamp(8px, 1.5vw, 11px);
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 1px 2px #000;
+    pointer-events: none;
+    padding: 0 4px;
+    text-align: center;
+    line-height: 1.1;
+  }
+
+  &__resize {
+    position: absolute;
+    right: -5px;
+    bottom: -5px;
+    width: 12px;
+    height: 12px;
+    background: #ffab40;
+    border: 2px solid #fff;
+    cursor: nwse-resize;
+    border-radius: 2px;
+    padding: 0;
+    pointer-events: auto;
+  }
+}
