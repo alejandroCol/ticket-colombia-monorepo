@@ -94,7 +94,7 @@ export const getCurrentUser = (): User | null => {
 // Admin roles that can access the admin panel (admin/admin = regular, SUPER_ADMIN = see all events)
 const ADMIN_ROLES = ['ADMIN', 'admin', 'SUPER_ADMIN'] as const;
 
-// Check if the user has admin access (ADMIN or SUPER_ADMIN)
+// Check if the user has admin access (ADMIN or SUPER_ADMIN) — excluye PARTNER
 export const hasAdminAccess = async (uid: string): Promise<boolean> => {
   try {
     const userData = await getUserData(uid);
@@ -102,6 +102,29 @@ export const hasAdminAccess = async (uid: string): Promise<boolean> => {
     return !!(userData && role && ADMIN_ROLES.includes(role as typeof ADMIN_ROLES[number]));
   } catch (error) {
     console.error('Error checking admin access:', error);
+    return false;
+  }
+};
+
+/** Admin de taquilla o partner con acceso al panel (login permitido). */
+export const hasPanelAccess = async (uid: string): Promise<boolean> => {
+  try {
+    const userData = await getUserData(uid);
+    const role = userData?.role;
+    if (!userData || !role) return false;
+    if (ADMIN_ROLES.includes(role as (typeof ADMIN_ROLES)[number])) return true;
+    return role === 'PARTNER';
+  } catch (error) {
+    console.error('Error checking panel access:', error);
+    return false;
+  }
+};
+
+export const isPartnerUserAuth = async (uid: string): Promise<boolean> => {
+  try {
+    const userData = await getUserData(uid);
+    return userData?.role === 'PARTNER';
+  } catch {
     return false;
   }
 };

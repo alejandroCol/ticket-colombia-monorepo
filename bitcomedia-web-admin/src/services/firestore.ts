@@ -90,6 +90,71 @@ export const getAdminUsersList = async (): Promise<UserData[]> => {
   return [...byUid.values()].sort((a, b) => (a.email || '').localeCompare(b.email || ''));
 };
 
+function eventDateMillis(ev: Event): number {
+  const ed = ev.event_date as unknown;
+  if (ed && typeof ed === 'object' && ed !== null && 'toMillis' in ed) {
+    const fn = (ed as { toMillis?: () => number }).toMillis;
+    if (typeof fn === 'function') return fn.call(ed);
+  }
+  if (ed instanceof Date) return ed.getTime();
+  return 0;
+}
+
+function sortEventsNewestFirst(list: Event[]): Event[] {
+  return [...list].sort((a, b) => eventDateMillis(b) - eventDateMillis(a));
+}
+
+/** Eventos normales y recurrentes agrupados por `organizer_id` (super admin / configuración). */
+export type OrganizerEventsIndex = {
+  standalone: Record<string, Event[]>;
+  recurring: Record<string, Event[]>;
+};
+
+const MAX_EVENTS_ORGANIZER_INDEX = 1200;
+const MAX_RECURRING_ORGANIZER_INDEX = 400;
+
+export const fetchOrganizerEventsIndex = async (): Promise<OrganizerEventsIndex> => {
+  const evRef = collection(db, 'events');
+  const recRef = collection(db, 'recurring_events');
+  const [evSnap, recSnap] = await Promise.all([
+    getDocs(query(evRef, limit(MAX_EVENTS_ORGANIZER_INDEX))),
+    getDocs(query(recRef, limit(MAX_RECURRING_ORGANIZER_INDEX))),
+  ]);
+  const standalone: Record<string, Event[]> = {};
+  const recurring: Record<string, Event[]> = {};
+  evSnap.forEach((d) => {
+    const e = { id: d.id, ...d.data() } as Event;
+    const oid = String(e.organizer_id || '').trim() || '_sin_organizador';
+    if (!standalone[oid]) standalone[oid] = [];
+    standalone[oid].push(e);
+  });
+  recSnap.forEach((d) => {
+    const e = { id: d.id, ...d.data() } as Event;
+    const oid = String(e.organizer_id || '').trim() || '_sin_organizador';
+    if (!recurring[oid]) recurring[oid] = [];
+    recurring[oid].push(e);
+  });
+  Object.keys(standalone).forEach((k) => {
+    standalone[k] = sortEventsNewestFirst(standalone[k]);
+  });
+  Object.keys(recurring).forEach((k) => {
+    recurring[k] = sortEventsNewestFirst(recurring[k]);
+  });
+  return { standalone, recurring };
+};
+
+/** Reasigna un evento o plantilla recurrente a otro admin (`organizer_id`). */
+export const setEventOrganizerId = async (
+  coll: 'events' | 'recurring_events',
+  eventId: string,
+  newOrganizerId: string
+): Promise<void> => {
+  const id = String(eventId || '').trim();
+  const oid = String(newOrganizerId || '').trim();
+  if (!id || !oid) throw new Error('Evento u organizador inválido');
+  await updateDoc(doc(db, coll, id), { organizer_id: oid });
+};
+
 // Get event data from Firestore (events collection only)
 export const getEventById = async (eventId: string): Promise<Event | null> => {
   try {

@@ -16,6 +16,8 @@ interface TopNavBarProps {
   logoOnly?: boolean;
   onLogout?: () => void;
   showLogout?: boolean;
+  /** En barra admin: ocultar enlaces según rol partner */
+  adminNavOptions?: { showScan?: boolean; showConfig?: boolean };
 }
 
 const TopNavBar: React.FC<TopNavBarProps> = ({ 
@@ -23,8 +25,11 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
   isAuthenticated = false,
   logoOnly = false,
   onLogout,
-  showLogout = false
+  showLogout = false,
+  adminNavOptions,
 }) => {
+  const showScan = adminNavOptions?.showScan !== false;
+  const showConfig = adminNavOptions?.showConfig !== false;
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -67,21 +72,25 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
             <img src={logo} alt="Ticket Colombia" className="logo" />
           </div>
           <div className="admin-nav-actions">
-            <button
-              type="button"
-              className="admin-nav-link admin-nav-scan"
-              onClick={() => handleNavigation('/scan-tickets')}
-            >
-              <IconScanTickets size={18} />
-              Leer Boletos
-            </button>
-            <button
-              type="button"
-              className="admin-nav-link"
-              onClick={() => handleNavigation('/config')}
-            >
-              Configuración
-            </button>
+            {showScan && (
+              <button
+                type="button"
+                className="admin-nav-link admin-nav-scan"
+                onClick={() => handleNavigation('/scan-tickets')}
+              >
+                <IconScanTickets size={18} />
+                Leer Boletos
+              </button>
+            )}
+            {showConfig && (
+              <button
+                type="button"
+                className="admin-nav-link"
+                onClick={() => handleNavigation('/config')}
+              >
+                Configuración
+              </button>
+            )}
             {showLogout && onLogout && (
               <SecondaryButton className="admin-logout-btn" onClick={onLogout} size="small">
                 Cerrar sesión
@@ -96,21 +105,25 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
             <img src={logo} alt="Ticket Colombia" className="logo" />
           </div>
           <div className="admin-nav-actions">
-            <button
-              type="button"
-              className="admin-nav-link admin-nav-scan"
-              onClick={() => handleNavigation('/scan-tickets')}
-            >
-              <IconScanTickets size={18} />
-              Leer Boletos
-            </button>
-            <button
-              type="button"
-              className="admin-nav-link"
-              onClick={() => handleNavigation('/config')}
-            >
-              Configuración
-            </button>
+            {showScan && (
+              <button
+                type="button"
+                className="admin-nav-link admin-nav-scan"
+                onClick={() => handleNavigation('/scan-tickets')}
+              >
+                <IconScanTickets size={18} />
+                Leer Boletos
+              </button>
+            )}
+            {showConfig && (
+              <button
+                type="button"
+                className="admin-nav-link"
+                onClick={() => handleNavigation('/config')}
+              >
+                Configuración
+              </button>
+            )}
             {showLogout && onLogout && (
               <SecondaryButton onClick={onLogout} size="medium">
                 Cerrar sesión

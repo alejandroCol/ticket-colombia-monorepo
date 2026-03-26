@@ -12,6 +12,29 @@ const senderEmail = defineSecret("SENDER_EMAIL");
 const senderName = defineSecret("SENDER_NAME");
 const adminUrlSecret = defineSecret("ADMIN_URL");
 
+/** Admin de panel o partner con permiso create_tickets en el evento. */
+async function canCreateManualTicket(uid: string, eventId: string): Promise<boolean> {
+  const adminUserDoc = await admin.firestore().collection("users").doc(uid).get();
+  if (!adminUserDoc.exists) return false;
+  const role = adminUserDoc.data()?.role as string | undefined;
+  if (role === "ADMIN" || role === "admin" || role === "SUPER_ADMIN") return true;
+  if (role !== "PARTNER") return false;
+  for (const kind of ["evt", "rec"] as const) {
+    const path = `event_partner_grants/${uid}_${kind}_${eventId}`;
+    const g = await admin.firestore().doc(path).get();
+    if (g.exists && g.data()?.permissions?.create_tickets === true) return true;
+  }
+  return false;
+}
+
+async function loadEventDocForManualTicket(eventId: string) {
+  const eventDoc = await admin.firestore().collection("events").doc(eventId).get();
+  if (eventDoc.exists) return eventDoc;
+  const recDoc = await admin.firestore().collection("recurring_events").doc(eventId).get();
+  if (recDoc.exists) return recDoc;
+  return null;
+}
+
 interface CreateManualTicketRequest {
   eventId: string;
   buyerName: string;
@@ -57,14 +80,6 @@ export const createManualTicket = functions
       }
 
       const adminUid = context.auth.uid;
-      const adminUserDoc = await admin.firestore().collection("users").doc(adminUid).get();
-      if (!adminUserDoc.exists || adminUserDoc.data()?.role !== "ADMIN") {
-        throw new functions.https.HttpsError(
-          "permission-denied",
-          "Solo los administradores pueden crear tickets manuales."
-        );
-      }
-      console.log("[createManualTicket] Auth OK, admin:", context.auth.uid);
 
       // 2. Validación de Datos de Entrada
       const {eventId, buyerName, buyerEmail, buyerPhone, buyerIdNumber, quantity, sectionId, sectionName, isCourtesy, isGeneralCourtesy, giftedBy} = data;
@@ -77,10 +92,19 @@ export const createManualTicket = functions
       }
       console.log("[createManualTicket] Validación OK");
 
+      const allowed = await canCreateManualTicket(adminUid, eventId);
+      if (!allowed) {
+        throw new functions.https.HttpsError(
+          "permission-denied",
+          "No tienes permiso para crear boletos manuales en este evento."
+        );
+      }
+      console.log("[createManualTicket] Auth OK, uid:", context.auth.uid);
+
       // 3. Obtener Información del Evento
       console.log("[createManualTicket] Leyendo evento:", eventId);
-      const eventDoc = await admin.firestore().collection("events").doc(eventId).get();
-      if (!eventDoc.exists) {
+      const eventDoc = await loadEventDocForManualTicket(eventId);
+      if (!eventDoc?.exists) {
         throw new functions.https.HttpsError("not-found", "Evento no encontrado.");
       }
       const eventData = eventDoc.data() as admin.firestore.DocumentData;

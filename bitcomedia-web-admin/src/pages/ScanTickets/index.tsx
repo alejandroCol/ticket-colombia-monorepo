@@ -4,7 +4,13 @@ import { Html5Qrcode } from 'html5-qrcode';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@services/firebase';
 import { getTicketById, validateTicket } from '@services/ticketService';
-import { logoutUser, getCurrentUser, hasAdminAccess, isSuperAdmin } from '@services';
+import {
+  logoutUser,
+  getCurrentUser,
+  hasPanelAccess,
+  isSuperAdmin,
+  partnerCanValidateTicket,
+} from '@services';
 import { IconCamera, IconPause } from '@components/ScanIcons';
 import {
   readValidationQueue,
@@ -86,8 +92,8 @@ const ScanTicketsScreen: React.FC = () => {
     if (pending.length === 0) return;
     const user = getCurrentUser();
     if (!user) return;
-    const admin = await hasAdminAccess(user.uid);
-    if (!admin) return;
+    const panel = await hasPanelAccess(user.uid);
+    if (!panel) return;
     for (const { ticketId } of pending) {
       try {
         await validateTicket(ticketId);
@@ -111,8 +117,8 @@ const ScanTicketsScreen: React.FC = () => {
         setAuthChecking(false);
         return;
       }
-      const admin = await hasAdminAccess(user.uid);
-      if (!admin) {
+      const panel = await hasPanelAccess(user.uid);
+      if (!panel) {
         await logoutUser();
         navigate('/login');
         setAuthChecking(false);
@@ -181,10 +187,19 @@ const ScanTicketsScreen: React.FC = () => {
         return;
       }
       const ownerId = event?.organizer_id;
-      setCanValidateEvent(!ownerId || ownerId === user.uid);
+      if (ownerId && ownerId === user.uid) {
+        setCanValidateEvent(true);
+        return;
+      }
+      const eid = ticket?.eventId;
+      if (eid && (await partnerCanValidateTicket(user.uid, eid))) {
+        setCanValidateEvent(true);
+        return;
+      }
+      setCanValidateEvent(false);
     };
     void check();
-  }, [ticket, event, loading]);
+  }, [ticket, event, loading, ticket?.eventId]);
 
   const stopScanner = useCallback(async () => {
     if (scannerRef.current) {
@@ -283,7 +298,12 @@ const ScanTicketsScreen: React.FC = () => {
     if (!user) return;
     const superA = await isSuperAdmin(user.uid);
     const eventOwnerId = event?.organizer_id;
-    if (!superA && eventOwnerId && eventOwnerId !== user.uid) {
+    const eid = ticket?.eventId;
+    let mayValidate =
+      superA ||
+      (eventOwnerId && eventOwnerId === user.uid) ||
+      (!!eid && (await partnerCanValidateTicket(user.uid, eid)));
+    if (!mayValidate) {
       setError('No tienes permiso para validar boletos de este evento.');
       return;
     }

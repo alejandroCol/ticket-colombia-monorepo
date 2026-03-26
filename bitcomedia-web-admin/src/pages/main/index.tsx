@@ -5,7 +5,8 @@ import LoginScreen from '@pages/login';
 import { 
   onAuthStateChange, 
   logoutUser, 
-  hasAdminAccess 
+  hasAdminAccess,
+  hasPanelAccess,
 } from '@services';
 import DashboardScreen from '@pages/dashboard';
 import EventFormScreen from '@pages/EventForm';
@@ -17,13 +18,15 @@ import EventTicketsScreen from '@pages/EventTickets';
 import BalanceScreen from '@pages/Balance';
 import ScanTicketsScreen from '@pages/ScanTickets';
 import SuperAdminEarningsScreen from '@pages/SuperAdminEarnings';
+import SuperAdminPartnersScreen from '@pages/SuperAdminPartners';
 
 // Dashboard and other pages would be imported here
 // import Dashboard from '../dashboard';
 
 const MainLayout: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
-  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [fullAdmin, setFullAdmin] = useState<boolean>(false);
+  const [panelOk, setPanelOk] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
   
   useEffect(() => {
@@ -32,17 +35,22 @@ const MainLayout: React.FC = () => {
       setUser(authUser);
       
       if (authUser) {
-        // Check if user has admin access
-        const adminAccess = await hasAdminAccess(authUser.uid);
-        setIsAdmin(adminAccess);
+        const [adminAccess, panelAccess] = await Promise.all([
+          hasAdminAccess(authUser.uid),
+          hasPanelAccess(authUser.uid),
+        ]);
+        setFullAdmin(adminAccess);
+        setPanelOk(panelAccess);
         
-        if (!adminAccess) {
-          // If not admin, log them out immediately
+        if (!panelAccess) {
           await logoutUser();
           setUser(null);
+          setFullAdmin(false);
+          setPanelOk(false);
         }
       } else {
-        setIsAdmin(false);
+        setFullAdmin(false);
+        setPanelOk(false);
       }
       
       setIsLoading(false);
@@ -63,7 +71,7 @@ const MainLayout: React.FC = () => {
         <Route 
           path="/login" 
           element={
-            (user && isAdmin) ? <Navigate to="/dashboard" /> : <LoginScreen />
+            (user && panelOk) ? <Navigate to="/dashboard" /> : <LoginScreen />
           } 
         />
         
@@ -71,7 +79,7 @@ const MainLayout: React.FC = () => {
         <Route 
           path="/dashboard" 
           element={
-            (user && isAdmin) ? (
+            (user && panelOk) ? (
               <DashboardScreen />
             ) : (
               <Navigate to="/login" />
@@ -83,10 +91,10 @@ const MainLayout: React.FC = () => {
         <Route 
           path="/events/new" 
           element={
-            (user && isAdmin) ? (
+            (user && fullAdmin) ? (
               <EventFormScreen />
             ) : (
-              <Navigate to="/login" />
+              <Navigate to={user && panelOk ? '/dashboard' : '/login'} />
             )
           } 
         />
@@ -95,7 +103,7 @@ const MainLayout: React.FC = () => {
         <Route 
           path="/events/:eventId" 
           element={
-            (user && isAdmin) ? (
+            (user && panelOk) ? (
               <EventFormScreen />
             ) : (
               <Navigate to="/login" />
@@ -107,10 +115,10 @@ const MainLayout: React.FC = () => {
         <Route 
           path="/recurring-events/new" 
           element={
-            (user && isAdmin) ? (
+            (user && fullAdmin) ? (
               <EventFormScreen isRecurring={true} />
             ) : (
-              <Navigate to="/login" />
+              <Navigate to={user && panelOk ? '/dashboard' : '/login'} />
             )
           } 
         />
@@ -119,7 +127,7 @@ const MainLayout: React.FC = () => {
         <Route 
           path="/recurring-events/:eventId" 
           element={
-            (user && isAdmin) ? (
+            (user && panelOk) ? (
               <EventFormScreen isRecurring={true} />
             ) : (
               <Navigate to="/login" />
@@ -131,7 +139,7 @@ const MainLayout: React.FC = () => {
         <Route 
           path="/scan-tickets" 
           element={
-            (user && isAdmin) ? (
+            (user && panelOk) ? (
               <ScanTicketsScreen />
             ) : (
               <Navigate to="/login" />
@@ -143,7 +151,7 @@ const MainLayout: React.FC = () => {
         <Route 
           path="/validate-ticket/:ticketId" 
           element={
-            (user && isAdmin) ? (
+            (user && panelOk) ? (
               <TicketValidationScreen />
             ) : (
               <Navigate to="/login" />
@@ -155,10 +163,10 @@ const MainLayout: React.FC = () => {
         <Route 
           path="/config" 
           element={
-            (user && isAdmin) ? (
+            (user && fullAdmin) ? (
               <ConfigScreen />
             ) : (
-              <Navigate to="/login" />
+              <Navigate to={user && panelOk ? '/dashboard' : '/login'} />
             )
           } 
         />
@@ -167,7 +175,7 @@ const MainLayout: React.FC = () => {
         <Route 
           path="/events/:eventId/stats" 
           element={
-            (user && isAdmin) ? (
+            (user && panelOk) ? (
               <EventStatsScreen />
             ) : (
               <Navigate to="/login" />
@@ -179,7 +187,7 @@ const MainLayout: React.FC = () => {
         <Route 
           path="/events/:eventId/tickets" 
           element={
-            (user && isAdmin) ? (
+            (user && panelOk) ? (
               <EventTicketsScreen />
             ) : (
               <Navigate to="/login" />
@@ -191,10 +199,10 @@ const MainLayout: React.FC = () => {
         <Route 
           path="/balance" 
           element={
-            (user && isAdmin) ? (
+            (user && fullAdmin) ? (
               <BalanceScreen />
             ) : (
-              <Navigate to="/login" />
+              <Navigate to={user && panelOk ? '/dashboard' : '/login'} />
             )
           } 
         />
@@ -203,10 +211,10 @@ const MainLayout: React.FC = () => {
         <Route 
           path="/banners" 
           element={
-            (user && isAdmin) ? (
+            (user && fullAdmin) ? (
               <BannersScreen />
             ) : (
-              <Navigate to="/login" />
+              <Navigate to={user && panelOk ? '/dashboard' : '/login'} />
             )
           } 
         />
@@ -214,10 +222,21 @@ const MainLayout: React.FC = () => {
         <Route
           path="/super-admin/earnings"
           element={
-            user && isAdmin ? (
+            user && fullAdmin ? (
               <SuperAdminEarningsScreen />
             ) : (
-              <Navigate to="/login" />
+              <Navigate to={user && panelOk ? '/dashboard' : '/login'} />
+            )
+          }
+        />
+
+        <Route
+          path="/super-admin/partners"
+          element={
+            user && fullAdmin ? (
+              <SuperAdminPartnersScreen />
+            ) : (
+              <Navigate to={user && panelOk ? '/dashboard' : '/login'} />
             )
           }
         />
@@ -226,7 +245,7 @@ const MainLayout: React.FC = () => {
         <Route 
           path="*" 
           element={
-            <Navigate to={(user && isAdmin) ? "/dashboard" : "/login"} />
+            <Navigate to={(user && panelOk) ? "/dashboard" : "/login"} />
           } 
         />
       </Routes>

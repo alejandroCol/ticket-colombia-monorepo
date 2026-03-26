@@ -1,4 +1,4 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps } from 'firebase/app';
 import { 
   getAuth, 
   signInWithEmailAndPassword, 
@@ -18,6 +18,12 @@ import { firebaseConfig } from './firebase-confi';
 
 // Initialize Firebase
 export const app = initializeApp(firebaseConfig);
+
+/** App secundaria: crear usuarios sin cerrar la sesión del admin (Auth + Firestore con JWT del nuevo usuario). */
+const SECONDARY_APP_NAME = 'TcPartnerUserCreate';
+export const secondaryApp =
+  getApps().find((a) => a.name === SECONDARY_APP_NAME) ?? initializeApp(firebaseConfig, SECONDARY_APP_NAME);
+
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);

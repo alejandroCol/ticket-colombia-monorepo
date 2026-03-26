@@ -491,4 +491,28 @@
     color: #666;
     font-style: italic;
   }
-} 
+
+  .super-admin-organizer-block,
+  .super-admin-commission-block {
+    margin-top: 1.5rem;
+    padding: 1.2rem 1.25rem 1.35rem;
+    border-radius: 12px;
+    border: 1px solid rgba($color-accent, 0.35);
+    background: linear-gradient(
+      160deg,
+      rgba($color-accent, 0.1) 0%,
+      rgba($color-surface, 0.45) 100%
+    );
+
+    h2 {
+      margin: 0 0 0.4rem;
+      font-size: 1.05rem;
+      color: $color-text-primary;
+    }
+
+    .helper-text {
+      margin-bottom: 0.85rem;
+      color: $color-text-secondary;
+    }
+  }
+}

@@ -1,14 +1,28 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, query, where, Timestamp, doc, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import PrimaryButton from '@components/PrimaryButton';
 import SecondaryButton from '@components/SecondaryButton';
 import EventCard from '@containers/EventCard';
+import type { EventCardActionMask } from '@containers/EventCard';
 import TopNavBar from '@TopNavBar';
 import CreateTicketModal, { type TicketFormData } from '@components/CreateTicketModal';
 import { IconScanTickets } from '@components/ScanIcons';
-import { logoutUser, db, functions, getCurrentUser, isSuperAdmin, getTicketsSince, isTicketValidForSalesStats, ticketCreatedAtMs } from '@services';
+import {
+  logoutUser,
+  db,
+  functions,
+  getCurrentUser,
+  isSuperAdmin,
+  getTicketsSince,
+  isTicketValidForSalesStats,
+  ticketCreatedAtMs,
+  getUserData,
+  listPartnerGrantsForUser,
+  DEFAULT_PARTNER_PERMISSIONS,
+} from '@services';
+import type { PartnerEventPermissions } from '@services';
 import './index.scss';
 
 import type { EventSection } from '@services/types';
@@ -90,6 +104,32 @@ const DashboardScreen: React.FC = () => {
   const navigate = useNavigate();
   const [dashTickets, setDashTickets] = useState<Ticket[]>([]);
   const [dashTicketsLoading, setDashTicketsLoading] = useState(false);
+  const [isPartnerUser, setIsPartnerUser] = useState(false);
+  const [partnerGrantMap, setPartnerGrantMap] = useState<Record<string, PartnerEventPermissions>>({});
+
+  const partnerScanAny = useMemo(
+    () => isPartnerUser && Object.values(partnerGrantMap).some((p) => p.scan_validate),
+    [isPartnerUser, partnerGrantMap]
+  );
+
+  function eventCardMaskFor(eventId: string | undefined): EventCardActionMask | undefined {
+    if (!isPartnerUser || !eventId) return undefined;
+    const p = partnerGrantMap[eventId];
+    if (!p) {
+      return {
+        canEdit: false,
+        canCreateTickets: false,
+        canViewTickets: false,
+        canViewStats: false,
+      };
+    }
+    return {
+      canEdit: p.edit_event,
+      canCreateTickets: p.create_tickets,
+      canViewTickets: p.read_tickets,
+      canViewStats: p.view_stats,
+    };
+  }
 
   const filteredEvents = useMemo(() => {
     const q = eventNameQuery.trim().toLowerCase();
@@ -142,6 +182,58 @@ const DashboardScreen: React.FC = () => {
         setLoadingRecurring(true);
         const user = getCurrentUser();
         const superAdmin = user ? await isSuperAdmin(user.uid) : false;
+        const ud = user ? await getUserData(user.uid) : null;
+        const isPartner = ud?.role === 'PARTNER';
+
+        if (user && isPartner && !superAdmin) {
+          const grants = await listPartnerGrantsForUser(user.uid);
+          const grantMap: Record<string, PartnerEventPermissions> = {};
+          for (const g of grants) {
+            const cur = grantMap[g.event_id] || { ...DEFAULT_PARTNER_PERMISSIONS };
+            grantMap[g.event_id] = {
+              read_tickets: cur.read_tickets || g.permissions.read_tickets,
+              create_tickets: cur.create_tickets || g.permissions.create_tickets,
+              edit_event: cur.edit_event || g.permissions.edit_event,
+              view_stats: cur.view_stats || g.permissions.view_stats,
+              scan_validate: cur.scan_validate || g.permissions.scan_validate,
+            };
+          }
+          setPartnerGrantMap(grantMap);
+          setIsPartnerUser(true);
+          const recurringEventsData: RecurringEventData[] = [];
+          for (const g of grants) {
+            if (g.event_path !== 'recurring_events') continue;
+            const snap = await getDoc(doc(db, 'recurring_events', g.event_id));
+            if (!snap.exists()) continue;
+            const data = snap.data();
+            recurringEventsData.push({
+              id: snap.id,
+              name: data.name,
+              description: data.description,
+              city: data.city,
+              venue: data.venue,
+              cover_image_url: data.cover_image_url,
+              date: data.date || '',
+              time: data.time,
+              event_date: data.event_date || Timestamp.now(),
+              ticket_price: data.ticket_price || 0,
+              sections: data.sections || [],
+              capacity_per_occurrence: data.capacity_per_occurrence || 0,
+              event_type: data.event_type || 'bitcomedia_direct',
+              creation_date: data.creation_date,
+              organizer_id: data.organizer_id || '',
+              status: data.status,
+              recurrence_pattern: data.recurrence_pattern,
+              is_recurring: true,
+            });
+          }
+          recurringEventsData.sort((a, b) => a.name.localeCompare(b.name));
+          setRecurringEvents(recurringEventsData);
+          setLoadingRecurring(false);
+          return;
+        }
+        setIsPartnerUser(false);
+        setPartnerGrantMap({});
 
         // Super admin: all. Regular admin: only their recurring events
         const recRef = collection(db, 'recurring_events');
@@ -202,6 +294,64 @@ const DashboardScreen: React.FC = () => {
         setLoading(true);
         const user = getCurrentUser();
         const superAdmin = user ? await isSuperAdmin(user.uid) : false;
+        const ud = user ? await getUserData(user.uid) : null;
+        const isPartner = ud?.role === 'PARTNER';
+
+        if (user && isPartner && !superAdmin) {
+          const grants = await listPartnerGrantsForUser(user.uid);
+          const grantMap: Record<string, PartnerEventPermissions> = {};
+          for (const g of grants) {
+            const cur = grantMap[g.event_id] || { ...DEFAULT_PARTNER_PERMISSIONS };
+            grantMap[g.event_id] = {
+              read_tickets: cur.read_tickets || g.permissions.read_tickets,
+              create_tickets: cur.create_tickets || g.permissions.create_tickets,
+              edit_event: cur.edit_event || g.permissions.edit_event,
+              view_stats: cur.view_stats || g.permissions.view_stats,
+              scan_validate: cur.scan_validate || g.permissions.scan_validate,
+            };
+          }
+          setPartnerGrantMap(grantMap);
+          setIsPartnerUser(true);
+          const eventsData: EventData[] = [];
+          for (const g of grants) {
+            if (g.event_path !== 'events') continue;
+            const snap = await getDoc(doc(db, 'events', g.event_id));
+            if (!snap.exists()) continue;
+            const data = snap.data();
+            eventsData.push({
+              id: snap.id,
+              name: data.name,
+              description: data.description,
+              city: data.city,
+              venue: data.venue,
+              cover_image_url: data.cover_image_url,
+              date: data.date,
+              time: data.time,
+              event_date: data.event_date,
+              ticket_price: data.ticket_price || 0,
+              sections: data.sections || [],
+              capacity_per_occurrence: data.capacity_per_occurrence || 0,
+              event_type: data.event_type || 'bitcomedia_direct',
+              creation_date: data.creation_date,
+              organizer_id: data.organizer_id || '',
+              status: data.status,
+              is_recurring: false,
+            });
+          }
+          const now = Date.now();
+          eventsData.sort((a, b) => {
+            const ma = a.event_date.toMillis();
+            const mb = b.event_date.toMillis();
+            const aFuture = ma >= now;
+            const bFuture = mb >= now;
+            if (aFuture && bFuture) return ma - mb;
+            if (!aFuture && !bFuture) return mb - ma;
+            return aFuture ? -1 : 1;
+          });
+          setEvents(eventsData);
+          setLoading(false);
+          return;
+        }
 
         // Super admin: all events. Regular admin: only their events. Include past events for stats.
         const eventsRef = collection(db, 'events');
@@ -469,9 +619,14 @@ const DashboardScreen: React.FC = () => {
         logoOnly={true} 
         showLogout={true} 
         onLogout={handleLogout}
+        adminNavOptions={{
+          showConfig: !isPartnerUser,
+          showScan: !isPartnerUser || partnerScanAny,
+        }}
       />
 
       <div className="dashboard-content">
+        {(!isPartnerUser || partnerScanAny) && (
         <div className="dashboard-scan-card" onClick={() => navigate('/scan-tickets')}>
           <span className="scan-card-icon"><IconScanTickets size={32} /></span>
           <div className="scan-card-text">
@@ -480,7 +635,9 @@ const DashboardScreen: React.FC = () => {
           </div>
           <span className="scan-card-arrow">→</span>
         </div>
+        )}
 
+        {!isPartnerUser && (
         <section className="dashboard-sales-summary" aria-label="Resumen de ventas">
           <div className="dashboard-sales-summary__head">
             <h2 className="dashboard-sales-summary__title">Resumen rápido</h2>
@@ -542,6 +699,7 @@ const DashboardScreen: React.FC = () => {
             </>
           )}
         </section>
+        )}
 
         <div className="dashboard-event-filters" aria-label="Filtros de eventos">
           <input
@@ -590,11 +748,13 @@ const DashboardScreen: React.FC = () => {
               {isRecurringCollapsed ? '▼' : '▲'}
             </button>
           </div>
+          {!isPartnerUser && (
           <div className="header-actions desktop-only">
             <PrimaryButton onClick={handleAddRecurringEvent}>
               + Recurrente
             </PrimaryButton>
           </div>
+          )}
         </div>
         
         {!isRecurringCollapsed && (
@@ -617,6 +777,7 @@ const DashboardScreen: React.FC = () => {
                     onCreateTicket={handleCreateTicket}
                     onViewTickets={(eventId) => handleViewTickets(eventId)}
                     onViewStats={handleViewStats}
+                    actionMask={eventCardMaskFor(event.id)}
                   />
                 ))}
               </div>
@@ -634,11 +795,13 @@ const DashboardScreen: React.FC = () => {
 
         <div className="dashboard-header">
           <h1>Eventos</h1>
+          {!isPartnerUser && (
           <div className="header-actions desktop-only">
             <PrimaryButton onClick={handleAddEvent}>
               + Evento
             </PrimaryButton>
           </div>
+          )}
         </div>
         
         <div className="events-container">
@@ -660,6 +823,7 @@ const DashboardScreen: React.FC = () => {
                   onCreateTicket={handleCreateTicket}
                   onViewTickets={(eventId) => handleViewTickets(eventId)}
                   onViewStats={handleViewStats}
+                  actionMask={eventCardMaskFor(event.id)}
                 />
               ))}
             </div>
@@ -676,6 +840,7 @@ const DashboardScreen: React.FC = () => {
       </div>
       
       {/* Mobile fixed button */}
+      {!isPartnerUser && (
       <div className="mobile-fixed-button">
         <div className="mobile-button-group">
           <PrimaryButton onClick={handleAddEvent} fullWidth>
@@ -686,6 +851,7 @@ const DashboardScreen: React.FC = () => {
           </SecondaryButton>
         </div>
       </div>
+      )}
 
       {/* Create Ticket Modal */}
       {selectedEvent && (

@@ -4,7 +4,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import TopNavBar from '@TopNavBar';
 import TicketCard from '@containers/TicketCard';
 import Loader from '@components/Loader';
-import { logoutUser, db, getCurrentUser, hasAdminAccess } from '@services';
+import { logoutUser, db, getCurrentUser, hasPanelAccess } from '@services';
 import { getTicketById, validateTicket } from '@services/ticketService';
 import type { Ticket, Event } from '@services/types';
 import type { Timestamp } from 'firebase/firestore';
@@ -33,7 +33,7 @@ const TicketValidationScreen: React.FC = () => {
           return;
         }
 
-        const adminAccess = await hasAdminAccess(currentUser.uid);
+        const adminAccess = await hasPanelAccess(currentUser.uid);
         if (!adminAccess) {
           setError('No tienes permisos para acceder a esta página');
           setAuthChecking(false);

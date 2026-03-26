@@ -3,6 +3,55 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function userRole() {
+      return userDoc().data.role;
+    }
+
+    function isAdminRole() {
+      return request.auth != null && exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        (userRole() == 'ADMIN' || userRole() == 'admin' || userRole() == 'SUPER_ADMIN');
+    }
+
+    function isPartnerUser() {
+      return request.auth != null && exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        userRole() == 'PARTNER';
+    }
+
+    function partnerGrantDoc(kind, eventId) {
+      return /databases/$(database)/documents/event_partner_grants/$(request.auth.uid + '_' + kind + '_' + eventId);
+    }
+
+    function partnerPerm(kind, eventId, perm) {
+      return exists(partnerGrantDoc(kind, eventId)) && get(partnerGrantDoc(kind, eventId)).data.permissions[perm] == true;
+    }
+
+    function partnerCanReadTicketsEvent(eventId) {
+      return isPartnerUser() && (
+        partnerPerm('evt', eventId, 'read_tickets') ||
+        partnerPerm('rec', eventId, 'read_tickets') ||
+        partnerPerm('evt', eventId, 'scan_validate') ||
+        partnerPerm('rec', eventId, 'scan_validate')
+      );
+    }
+
+    function partnerCanValidateScan(eventId) {
+      return isPartnerUser() && (
+        partnerPerm('evt', eventId, 'scan_validate') ||
+        partnerPerm('rec', eventId, 'scan_validate')
+      );
+    }
+
+    function partnerCanViewStatsEvent(eventId) {
+      return isPartnerUser() && (
+        partnerPerm('evt', eventId, 'view_stats') ||
+        partnerPerm('rec', eventId, 'view_stats')
+      );
+    }
+
     function isPanelAdmin() {
       return request.auth != null &&
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
@@ -56,43 +105,49 @@ service cloud.firestore {
       allow delete: if false;
     }
     
+    // Permisos de partner por evento (solo super admin escribe; el partner lee lo suyo)
+    match /event_partner_grants/{grantId} {
+      allow read: if request.auth != null && (
+        resource.data.user_id == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN'
+      );
+      allow create, update, delete: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN';
+    }
+
     // Tickets collection - users can read their own tickets, admins can read/update all
     match /tickets/{ticketId} {
-      // Users can read their own tickets, admins can read any ticket
       allow read: if request.auth != null && (
         resource.data.userId == request.auth.uid ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN' ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN'
+        isAdminRole() ||
+        partnerCanReadTicketsEvent(resource.data.eventId)
       );
-      
-      // Only admin users can update ticket status (for validation)
+
       allow update: if request.auth != null && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN' ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN'
+        isAdminRole() ||
+        partnerCanValidateScan(resource.data.eventId)
       );
-      
-      // No one can create or delete tickets through Firestore directly
+
       allow create, delete: if false;
     }
     
-    // Expenses collection - only admin users can read/write
+    // Expenses collection - admin full; partner solo lectura con view_stats en ese evento
     match /expenses/{expenseId} {
-      allow read, write: if request.auth != null && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN' ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN'
+      allow read: if request.auth != null && (
+        isAdminRole() ||
+        partnerCanViewStatsEvent(resource.data.eventId)
       );
+      allow write: if request.auth != null && isAdminRole();
     }
     
     // Venues collection - only admin users can read/write
     match /venues/{venueId} {
-      // Only authenticated admin users can read venues
+      // Admin y partner (edición de eventos puede usar venues)
       allow read: if request.auth != null && (
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN' ||
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN'
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'PARTNER'
       );
       
       // Only authenticated admin users can create, update, delete venues

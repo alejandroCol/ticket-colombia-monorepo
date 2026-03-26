@@ -8,10 +8,12 @@ import {
   getEventOrRecurringById,
   getCurrentUser,
   isSuperAdmin,
+  hasAdminAccess,
   logoutUser,
   getExpensesByEventId,
   addExpense,
-  deleteExpense
+  deleteExpense,
+  getAnyPartnerGrantForTicketEvent,
 } from '@services';
 import { getTicketsByEventId } from '@services/ticketService';
 import {
@@ -58,6 +60,13 @@ const EventStatsScreen: React.FC = () => {
   const [newAmount, setNewAmount] = useState('');
   const [newCategory, setNewCategory] = useState('');
   const [saving, setSaving] = useState(false);
+  const [canEditExpenses, setCanEditExpenses] = useState(false);
+
+  useEffect(() => {
+    const u = getCurrentUser();
+    if (!u) return;
+    void hasAdminAccess(u.uid).then(setCanEditExpenses);
+  }, []);
 
   const loadData = async () => {
     if (!eventId) return;
@@ -82,7 +91,7 @@ const EventStatsScreen: React.FC = () => {
     loadData();
   }, [eventId]);
 
-  // Ownership guard: only super admin or event owner can access
+  // Ownership / partner view_stats
   useEffect(() => {
     if (loading || !event || !eventId) return;
     const check = async () => {
@@ -91,9 +100,15 @@ const EventStatsScreen: React.FC = () => {
       const superA = await isSuperAdmin(user.uid);
       if (superA) return;
       const ownerId = event.organizer_id;
-      if (ownerId !== user.uid) {
+      if (ownerId === user.uid) return;
+      const admin = await hasAdminAccess(user.uid);
+      if (admin) {
         navigate('/dashboard', { replace: true });
+        return;
       }
+      const pair = await getAnyPartnerGrantForTicketEvent(user.uid, eventId);
+      if (pair?.grant.permissions.view_stats) return;
+      navigate('/dashboard', { replace: true });
     };
     check();
   }, [event, eventId, loading, navigate]);
@@ -296,7 +311,7 @@ const EventStatsScreen: React.FC = () => {
               <IconProfit className="balance-title-icon" />
               <h3>Balance y utilidad</h3>
             </div>
-            {!showAddExpense ? (
+            {canEditExpenses && (!showAddExpense ? (
               <PrimaryButton onClick={() => setShowAddExpense(true)} size="small">
                 + Agregar egreso
               </PrimaryButton>
@@ -304,10 +319,10 @@ const EventStatsScreen: React.FC = () => {
               <SecondaryButton onClick={() => setShowAddExpense(false)} size="small">
                 Cancelar
               </SecondaryButton>
-            )}
+            ))}
           </div>
 
-          {showAddExpense && (
+          {canEditExpenses && showAddExpense && (
             <form onSubmit={handleAddExpense} className="balance-expense-form">
               <CustomInput
                 label="Descripción"
@@ -353,13 +368,15 @@ const EventStatsScreen: React.FC = () => {
                   <div key={exp.id} className="balance-expense-item">
                     <span>{exp.description}</span>
                     <span className="balance-expense-amount">{formatCOP(exp.amount)}</span>
-                    <button
-                      type="button"
-                      className="balance-expense-delete"
-                      onClick={() => handleDeleteExpense(exp.id)}
-                    >
-                      Eliminar
-                    </button>
+                    {canEditExpenses && (
+                      <button
+                        type="button"
+                        className="balance-expense-delete"
+                        onClick={() => handleDeleteExpense(exp.id)}
+                      >
+                        Eliminar
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

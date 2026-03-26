@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import CustomInput from '@components/CustomInput';
 import PrimaryButton from '@components/PrimaryButton';
 import TopNavBar from '@TopNavBar';
-import { loginWithEmailAndPassword, hasAdminAccess, logoutUser } from '@services';
+import { loginWithEmailAndPassword, hasPanelAccess, logoutUser } from '@services';
 import './index.scss';
 
 const LoginScreen: React.FC = () => {
@@ -54,11 +54,9 @@ const LoginScreen: React.FC = () => {
       // Authenticate user
       const userCredential = await loginWithEmailAndPassword(email, password);
       
-      // Check if user has admin role
-      const isAdmin = await hasAdminAccess(userCredential.user.uid);
+      const canEnter = await hasPanelAccess(userCredential.user.uid);
       
-      if (!isAdmin) {
-        // User doesn't have admin role - log them out and show error
+      if (!canEnter) {
         await logoutUser();
         setErrors({ 
           auth: 'No tienes los permisos necesarios para acceder al panel de administración.' 

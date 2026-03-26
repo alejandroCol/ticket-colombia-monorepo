@@ -11,6 +11,8 @@ export {
   onAuthStateChange,
   getCurrentUser,
   hasAdminAccess,
+  hasPanelAccess,
+  isPartnerUserAuth,
   isSuperAdmin,
   sendPasswordResetEmail,
   auth
@@ -37,6 +39,8 @@ export {
   getExpensesByEventId,
   getTotalRevenue,
   getAdminUsersList,
+  fetchOrganizerEventsIndex,
+  setEventOrganizerId,
   db
 } from './firestore';
 
@@ -58,8 +62,11 @@ export {
 export {
   uploadFile,
   storage,
-  functions
+  functions,
+  secondaryApp,
 } from './firebase';
+
+export { createPartnerUserAccount } from './createPartnerUserAccount';
 
 // Ticket service exports
 export {
@@ -80,5 +87,20 @@ export type {
   VenueMapTemplateDocument,
   VenueMapTemplateZoneLayout,
 } from './types';
-export type { BannerItem, OrganizerBuyerFeeDoc } from './firestore';
-export type { TicketData, CreateReservationResult } from './ticketService'; 
+export type { BannerItem, OrganizerBuyerFeeDoc, OrganizerEventsIndex } from './firestore';
+export type { TicketData, CreateReservationResult } from './ticketService';
+
+export {
+  partnerGrantDocId,
+  DEFAULT_PARTNER_PERMISSIONS,
+  getPartnerGrantForEvent,
+  getAnyPartnerGrantForTicketEvent,
+  partnerCanReadTicket,
+  partnerCanValidateTicket,
+  listPartnerGrantsForUser,
+  listAllPartnerGrants,
+  upsertPartnerGrant,
+  deletePartnerGrant,
+  getPartnerCandidateUsers,
+} from './partnerGrants';
+export type { PartnerEventPermissions, PartnerEventGrant } from './partnerGrants';

@@ -7,7 +7,15 @@ import Loader from '@components/Loader';
 import PrimaryButton from '@components/PrimaryButton';
 import SecondaryButton from '@components/SecondaryButton';
 import BulkUploadCortesiasModal from '@components/BulkUploadCortesiasModal';
-import { getEventOrRecurringById, getCurrentUser, isSuperAdmin } from '@services';
+import {
+  getEventOrRecurringById,
+  getCurrentUser,
+  isSuperAdmin,
+  hasAdminAccess,
+  getUserData,
+  listPartnerGrantsForUser,
+  getAnyPartnerGrantForTicketEvent,
+} from '@services';
 import { validateTicket } from '@services/ticketService';
 import './index.scss';
 
@@ -46,6 +54,14 @@ const EventTicketsScreen: React.FC = () => {
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
   const [editFormData, setEditFormData] = useState({ buyerName: '', buyerEmail: '', buyerPhone: '' });
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
+  const [canEditRows, setCanEditRows] = useState(true);
+  const [canBulkCourtesies, setCanBulkCourtesies] = useState(true);
+  const [canValidateRow, setCanValidateRow] = useState(true);
+  const [canDisableRow, setCanDisableRow] = useState(true);
+  const [navPartner, setNavPartner] = useState<{ showScan: boolean; showConfig: boolean }>({
+    showScan: true,
+    showConfig: true,
+  });
 
   const loadEvent = async () => {
     if (!eventId) return;
@@ -88,17 +104,58 @@ const EventTicketsScreen: React.FC = () => {
     if (eventId) loadTickets();
   }, [eventId]);
 
-  // Ownership guard: only super admin or event owner can access
+  useEffect(() => {
+    const u = getCurrentUser();
+    if (!u) return;
+    void (async () => {
+      const data = await getUserData(u.uid);
+      if (data?.role !== 'PARTNER') {
+        setNavPartner({ showConfig: true, showScan: true });
+        return;
+      }
+      const grants = await listPartnerGrantsForUser(u.uid);
+      const scanAny = grants.some((g) => g.permissions.scan_validate);
+      setNavPartner({ showConfig: false, showScan: scanAny });
+    })();
+  }, []);
+
   useEffect(() => {
     if (loading || !event || !eventId) return;
     const check = async () => {
       const user = getCurrentUser();
       if (!user) return;
       const superA = await isSuperAdmin(user.uid);
-      if (superA) return;
-      if (event.organizer_id !== user.uid) {
-        navigate('/dashboard', { replace: true });
+      if (superA) {
+        setCanEditRows(true);
+        setCanBulkCourtesies(true);
+        setCanValidateRow(true);
+        setCanDisableRow(true);
+        return;
       }
+      if (event.organizer_id === user.uid) {
+        setCanEditRows(true);
+        setCanBulkCourtesies(true);
+        setCanValidateRow(true);
+        setCanDisableRow(true);
+        return;
+      }
+      const admin = await hasAdminAccess(user.uid);
+      if (admin) {
+        navigate('/dashboard', { replace: true });
+        return;
+      }
+      const pair = await getAnyPartnerGrantForTicketEvent(user.uid, eventId);
+      if (
+        !pair ||
+        (!pair.grant.permissions.read_tickets && !pair.grant.permissions.scan_validate)
+      ) {
+        navigate('/dashboard', { replace: true });
+        return;
+      }
+      setCanEditRows(false);
+      setCanBulkCourtesies(!!pair.grant.permissions.create_tickets);
+      setCanValidateRow(!!pair.grant.permissions.scan_validate);
+      setCanDisableRow(false);
     };
     check();
   }, [event, eventId, loading, navigate]);
@@ -222,7 +279,11 @@ const EventTicketsScreen: React.FC = () => {
 
   return (
     <div className="event-tickets-screen">
-      <TopNavBar logoOnly={true} showLogout={true} />
+      <TopNavBar
+        logoOnly={true}
+        showLogout={true}
+        adminNavOptions={{ showConfig: navPartner.showConfig, showScan: navPartner.showScan }}
+      />
       <div className="event-tickets-content">
         <header className="event-tickets-header">
           <SecondaryButton onClick={() => navigate('/dashboard')}>← Volver</SecondaryButton>
@@ -230,9 +291,11 @@ const EventTicketsScreen: React.FC = () => {
             <h1>🎫 Boletos</h1>
             <p>{event?.name || 'Cargando...'}</p>
           </div>
-          <PrimaryButton onClick={() => setIsBulkUploadOpen(true)}>
-            📤 Cargar cortesías Excel
-          </PrimaryButton>
+          {canBulkCourtesies && (
+            <PrimaryButton onClick={() => setIsBulkUploadOpen(true)}>
+              📤 Cargar cortesías Excel
+            </PrimaryButton>
+          )}
         </header>
 
         <BulkUploadCortesiasModal
@@ -339,11 +402,15 @@ const EventTicketsScreen: React.FC = () => {
                           <>
                             <td>{ticket.validatedAt ? <span className="badge ok">✓ Validado</span> : <span className="badge pending">Pendiente</span>}</td>
                             <td>
-                              {canValidate(ticket) && (
+                              {canValidateRow && canValidate(ticket) && (
                                 <button className="btn-icon validate" onClick={() => handleValidate(ticket)} title="Validar" disabled={loading}>✓</button>
                               )}
-                              <button className="btn-icon edit" onClick={() => handleEdit(ticket)} title="Editar" disabled={loading}>✏️</button>
-                              <button className={`btn-icon ${(ticket.ticketStatus === 'cancelled' || ticket.ticketStatus === 'disabled') ? 'enable' : 'disable'}`} onClick={() => handleDisable(ticket)} title={(ticket.ticketStatus === 'cancelled' || ticket.ticketStatus === 'disabled') ? 'Habilitar' : 'Deshabilitar'} disabled={loading}>{(ticket.ticketStatus === 'cancelled' || ticket.ticketStatus === 'disabled') ? '✓' : '✕'}</button>
+                              {canEditRows && (
+                                <button className="btn-icon edit" onClick={() => handleEdit(ticket)} title="Editar" disabled={loading}>✏️</button>
+                              )}
+                              {canDisableRow && (
+                                <button className={`btn-icon ${(ticket.ticketStatus === 'cancelled' || ticket.ticketStatus === 'disabled') ? 'enable' : 'disable'}`} onClick={() => handleDisable(ticket)} title={(ticket.ticketStatus === 'cancelled' || ticket.ticketStatus === 'disabled') ? 'Habilitar' : 'Deshabilitar'} disabled={loading}>{(ticket.ticketStatus === 'cancelled' || ticket.ticketStatus === 'disabled') ? '✓' : '✕'}</button>
+                              )}
                             </td>
                             <td>{ticket.sectionName || 'General'}</td>
                             <td>{ticket.buyerIdNumber || '—'}</td>

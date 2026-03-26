@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import type { ChangeEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Timestamp, collection, addDoc, doc, getDoc, updateDoc, deleteField } from 'firebase/firestore';
@@ -19,9 +19,18 @@ import {
   getVenues,
   getCurrentUser,
   isSuperAdmin,
+  getAdminUsersList,
+  getPartnerGrantForEvent,
 } from '@services';
 import { compressImageForBoleto } from '../../utils/imageCompression';
-import type { Venue, EventSection, VenueMapConfig, VenueMapVisualConfig, VenueMapZone } from '@services/types';
+import type {
+  Venue,
+  EventSection,
+  VenueMapConfig,
+  VenueMapVisualConfig,
+  VenueMapZone,
+  UserData,
+} from '@services/types';
 import './index.scss';
 
 interface RecurrenceData {
@@ -95,6 +104,9 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDuplicating, setIsDuplicating] = useState(false);
   const [isSuperAdminUser, setIsSuperAdminUser] = useState(false);
+  /** Dueño del evento (Firestore). En edición lo controla el super admin en el selector. */
+  const [organizerIdDraft, setOrganizerIdDraft] = useState('');
+  const [adminListForOrganizer, setAdminListForOrganizer] = useState<UserData[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [isLoadingVenues, setIsLoadingVenues] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -127,6 +139,43 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
     const u = getCurrentUser();
     if (u) void isSuperAdmin(u.uid).then(setIsSuperAdminUser);
   }, []);
+
+  useEffect(() => {
+    if (!isSuperAdminUser || !isEditMode) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const list = await getAdminUsersList();
+        if (!cancelled) setAdminListForOrganizer(list);
+      } catch {
+        if (!cancelled) setAdminListForOrganizer([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isSuperAdminUser, isEditMode]);
+
+  const organizerSelectorOptions = useMemo(() => {
+    const opts = adminListForOrganizer.map((a) => ({
+      value: a.uid,
+      label: `${a.name || a.email} (${a.email})${a.active === false ? ' — inactivo' : ''}`,
+    }));
+    const ids = new Set(opts.map((o) => o.value));
+    if (organizerIdDraft && !ids.has(organizerIdDraft)) {
+      opts.unshift({
+        value: organizerIdDraft,
+        label: `Organizador actual (${organizerIdDraft.slice(0, 12)}…)`,
+      });
+    }
+    return opts;
+  }, [adminListForOrganizer, organizerIdDraft]);
+
+  useEffect(() => {
+    if (!eventId || eventId === 'new') {
+      setOrganizerIdDraft('');
+    }
+  }, [eventId]);
 
   // Handle venue selection from autocomplete
   const handleVenueSelect = (venue: Venue) => {
@@ -194,8 +243,11 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
         if (user) {
           const superA = await isSuperAdmin(user.uid);
           if (!superA && data.organizer_id !== user.uid) {
-            navigate('/dashboard', { replace: true });
-            return;
+            const partnerGrant = await getPartnerGrantForEvent(user.uid, id, isRecurring);
+            if (!partnerGrant?.permissions.edit_event) {
+              navigate('/dashboard', { replace: true });
+              return;
+            }
           }
         }
         
@@ -272,6 +324,7 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
           platform_commission_value:
             data.platform_commission_value != null ? String(data.platform_commission_value) : ''
         });
+        setOrganizerIdDraft(String(data.organizer_id || ''));
       } else {
         alert("No se encontró el evento que intentas editar");
         navigate('/dashboard');
@@ -470,6 +523,10 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
     
     // Get current user from session
     const userSession = getUserSession();
+    if (isEditMode && isSuperAdminUser && !organizerIdDraft.trim()) {
+      alert('Selecciona el administrador organizador del evento.');
+      return;
+    }
     setIsUploading(true);
     
     try {
@@ -524,7 +581,11 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
         ticket_price: Number(formData.ticket_price) || 0, // Precio por defecto (compatibilidad)
         sections: formData.sections.length > 0 ? formData.sections : undefined, // Solo incluir si hay secciones
         status: formData.status,
-        organizer_id: userSession?.uid || '',
+        organizer_id: !isEditMode
+          ? userSession?.uid || ''
+          : isSuperAdminUser
+            ? organizerIdDraft.trim() || userSession?.uid || ''
+            : userSession?.uid || '',
         slug: eventSlug, // Add the generated slug
         event_labels: eventLabels.length > 0 ? eventLabels : [],
         venue_map: buildVenueMapForSave(
@@ -1433,6 +1494,27 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
                     </SecondaryButton>
                   </div>
                 </div>
+
+                {isSuperAdminUser && isEditMode && (
+                  <div className="form-group super-admin-organizer-block">
+                    <h2>Organizador del evento</h2>
+                    <p className="helper-text">
+                      Administrador dueño del evento en el panel (taquilla, edición, escaneo). El cambio se guarda al
+                      pulsar «Actualizar Evento».
+                    </p>
+                    {organizerSelectorOptions.length === 0 ? (
+                      <p className="helper-text">Cargando administradores…</p>
+                    ) : (
+                      <CustomSelector
+                        label="Administrador"
+                        name="event_organizer_id_select"
+                        value={organizerIdDraft}
+                        onChange={(e) => setOrganizerIdDraft(e.target.value)}
+                        options={organizerSelectorOptions}
+                      />
+                    )}
+                  </div>
+                )}
 
                 {isSuperAdminUser && (
                   <div className="form-group super-admin-commission-block">

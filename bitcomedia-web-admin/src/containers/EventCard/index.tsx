@@ -24,15 +24,29 @@ interface EventData {
   is_recurring?: boolean;
 }
 
+/** Si se pasa, solo se muestran acciones permitidas (usuarios partner). Omitir = todas. */
+export type EventCardActionMask = {
+  canEdit: boolean;
+  canCreateTickets: boolean;
+  canViewTickets: boolean;
+  canViewStats: boolean;
+};
+
 interface EventCardProps {
   event: EventData;
   onReserve?: (eventId: string, isRecurring?: boolean) => void;
   onCreateTicket?: (eventId: string, eventName: string, eventPrice: number) => void;
   onViewTickets?: (eventId: string, eventName: string) => void;
   onViewStats?: (eventId: string) => void;
+  actionMask?: EventCardActionMask;
 }
 
-const EventCard: React.FC<EventCardProps> = ({ event, onReserve, onCreateTicket, onViewTickets, onViewStats }) => {
+const EventCard: React.FC<EventCardProps> = ({ event, onReserve, onCreateTicket, onViewTickets, onViewStats, actionMask }) => {
+  const canEdit = actionMask?.canEdit !== false;
+  const canCreateTickets = actionMask?.canCreateTickets !== false;
+  const canViewTickets = actionMask?.canViewTickets !== false;
+  const canViewStats = actionMask?.canViewStats !== false;
+  const showTapStats = canViewStats && !!onViewStats;
   // Format date to a readable format
   const formatDate = (dateString: string) => {
     if (!dateString) return '';
@@ -103,7 +117,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, onReserve, onCreateTicket,
   };
 
   const goToStats = () => {
-    if (onViewStats && event.id) {
+    if (canViewStats && onViewStats && event.id) {
       onViewStats(event.id);
     }
   };
@@ -117,13 +131,13 @@ const EventCard: React.FC<EventCardProps> = ({ event, onReserve, onCreateTicket,
   return (
     <div className={`event-card ${event.status === 'inactive' ? 'inactive' : ''}`}>
       <div
-        className={`event-card__tap-target ${onViewStats && event.id ? "event-card__tap-target--active" : ""}`}
-        onClick={onViewStats && event.id ? goToStats : undefined}
-        onKeyDown={onViewStats && event.id ? handleTapTargetKeyDown : undefined}
-        role={onViewStats && event.id ? "button" : undefined}
-        tabIndex={onViewStats && event.id ? 0 : undefined}
+        className={`event-card__tap-target ${showTapStats && event.id ? "event-card__tap-target--active" : ""}`}
+        onClick={showTapStats && event.id ? goToStats : undefined}
+        onKeyDown={showTapStats && event.id ? handleTapTargetKeyDown : undefined}
+        role={showTapStats && event.id ? "button" : undefined}
+        tabIndex={showTapStats && event.id ? 0 : undefined}
         aria-label={
-          onViewStats && event.id
+          showTapStats && event.id
             ? `Ver estadísticas de ${event.name}`
             : undefined
         }
@@ -160,34 +174,42 @@ const EventCard: React.FC<EventCardProps> = ({ event, onReserve, onCreateTicket,
       <div className="event-card-footer">
         <div className="event-card-price">{formatPrice(event.ticket_price)}</div>
         <div className="event-card-actions">
-          <SecondaryButton
-            onClick={handleCreateTicketClick}
-            size="small"
-            icon={<IconCreate size={16} />}
-          >
-            Crear
-          </SecondaryButton>
-          <SecondaryButton
-            onClick={handleViewTicketsClick}
-            size="small"
-            icon={<IconViewTickets size={16} />}
-          >
-            Ver Boletos
-          </SecondaryButton>
-          <SecondaryButton
-            onClick={handleViewStatsClick}
-            size="small"
-            icon={<IconStats size={16} />}
-          >
-            Estadísticas
-          </SecondaryButton>
-          <PrimaryButton
-            onClick={handleReserveClick}
-            size="small"
-            icon={<IconEdit size={16} />}
-          >
-            Editar
-          </PrimaryButton>
+          {canCreateTickets && (
+            <SecondaryButton
+              onClick={handleCreateTicketClick}
+              size="small"
+              icon={<IconCreate size={16} />}
+            >
+              Crear
+            </SecondaryButton>
+          )}
+          {canViewTickets && (
+            <SecondaryButton
+              onClick={handleViewTicketsClick}
+              size="small"
+              icon={<IconViewTickets size={16} />}
+            >
+              Ver Boletos
+            </SecondaryButton>
+          )}
+          {canViewStats && (
+            <SecondaryButton
+              onClick={handleViewStatsClick}
+              size="small"
+              icon={<IconStats size={16} />}
+            >
+              Estadísticas
+            </SecondaryButton>
+          )}
+          {canEdit && (
+            <PrimaryButton
+              onClick={handleReserveClick}
+              size="small"
+              icon={<IconEdit size={16} />}
+            >
+              Editar
+            </PrimaryButton>
+          )}
         </div>
       </div>
     </div>

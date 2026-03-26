@@ -4,6 +4,7 @@ import { collection, query, where, getDocs, orderBy, doc, getDoc, updateDoc, Tim
 import { app } from './firebase';
 import { db } from './firestore';
 import { hasAdminAccess } from './auth';
+import { partnerCanReadTicket, partnerCanValidateTicket } from './partnerGrants';
 import type { Ticket } from './types';
 
 // Initialize Firebase Functions
@@ -199,11 +200,13 @@ export async function getTicketById(ticketId: string): Promise<Ticket | null> {
     
     const ticketData = ticketSnap.data() as Ticket;
     
-    // Check if user owns the ticket or is admin
     const isAdmin = await hasAdminAccess(user.uid);
     const isOwner = ticketData.userId === user.uid;
-    
-    if (!isOwner && !isAdmin) {
+    const eventId = ticketData.eventId as string | undefined;
+    const partnerRead =
+      eventId && (await partnerCanReadTicket(user.uid, eventId));
+
+    if (!isOwner && !isAdmin && !partnerRead) {
       throw new Error('No tienes permisos para acceder a este ticket');
     }
     
@@ -228,21 +231,20 @@ export async function validateTicket(ticketId: string): Promise<void> {
       throw new Error('Usuario debe estar autenticado');
     }
     
-    const isAdmin = await hasAdminAccess(user.uid);
-    if (!isAdmin) {
-      throw new Error('Solo los administradores pueden validar tickets');
-    }
-    
     const ticketRef = doc(db, 'tickets', ticketId);
-    
-    // First, get the current ticket to verify it can be validated
     const ticketSnap = await getDoc(ticketRef);
-    
+
     if (!ticketSnap.exists()) {
       throw new Error('Ticket no encontrado');
     }
-    
+
     const ticketData = ticketSnap.data() as Ticket;
+    const eventId = ticketData.eventId as string | undefined;
+    const isAdmin = await hasAdminAccess(user.uid);
+    const partnerScan = eventId && (await partnerCanValidateTicket(user.uid, eventId));
+    if (!isAdmin && !partnerScan) {
+      throw new Error('No tienes permiso para validar este boleto');
+    }
     
     // Verificar si ya está validado
     if (ticketData.validatedAt) {
