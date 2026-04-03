@@ -9,6 +9,13 @@ import {
   resolveMercadoPagoReturnUiState,
 } from './mercadopagoReturn';
 import { clearMercadoPagoReturnIntent } from '../../utils/mpCheckoutReturnIntent';
+import {
+  EMBED_MSG_SOURCE,
+  EMBED_MSG_VERSION,
+  isEmbeddedCheckout,
+  postToEmbedParent,
+  type EmbedPurchaseStatus,
+} from '../../utils/embedBridge';
 import './index.scss';
 
 const PurchaseFinished: React.FC = () => {
@@ -52,6 +59,26 @@ const PurchaseFinished: React.FC = () => {
       }
     }
   }, [eventSlug, value, mpUiState]);
+
+  useEffect(() => {
+    if (!isEmbeddedCheckout()) return;
+    const status: EmbedPurchaseStatus =
+      mpUiState === 'approved' ||
+      mpUiState === 'pending' ||
+      mpUiState === 'rejected'
+        ? mpUiState
+        : 'unknown';
+    const amountParsed = value && !isNaN(parseFloat(value)) ? parseFloat(value) : null;
+    postToEmbedParent({
+      source: EMBED_MSG_SOURCE,
+      version: EMBED_MSG_VERSION,
+      kind: 'purchase_finished',
+      status,
+      eventSlug,
+      amount: amountParsed,
+      qty,
+    });
+  }, [mpUiState, eventSlug, value, qty]);
 
   const handleGoToTickets = () => {
     navigate('/tickets');

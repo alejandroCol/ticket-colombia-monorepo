@@ -4,6 +4,7 @@ import TopNavBar from '@containers/TopNavBar';
 import PrimaryButton from '@components/PrimaryButton';
 import SecondaryButton from '@components/SecondaryButton';
 import CustomInput from '@components/CustomInput';
+import EventSubNav from '@components/EventSubNav';
 import {
   getEventOrRecurringById,
   getCurrentUser,
@@ -14,6 +15,7 @@ import {
   addExpense,
   deleteExpense,
   getAnyPartnerGrantForTicketEvent,
+  resolveEventCollection,
 } from '@services';
 import { getTicketsByEventId } from '@services/ticketService';
 import {
@@ -61,6 +63,8 @@ const EventStatsScreen: React.FC = () => {
   const [newCategory, setNewCategory] = useState('');
   const [saving, setSaving] = useState(false);
   const [canEditExpenses, setCanEditExpenses] = useState(false);
+  const [eventCollection, setEventCollection] = useState<'events' | 'recurring_events' | null>(null);
+  const [showOrganizerExtras, setShowOrganizerExtras] = useState(false);
 
   useEffect(() => {
     const u = getCurrentUser();
@@ -72,14 +76,16 @@ const EventStatsScreen: React.FC = () => {
     if (!eventId) return;
     try {
       setLoading(true);
-      const [eventData, ticketsData, expensesData] = await Promise.all([
+      const [eventData, ticketsData, expensesData, coll] = await Promise.all([
         getEventOrRecurringById(eventId),
         getTicketsByEventId(eventId),
-        getExpensesByEventId(eventId)
+        getExpensesByEventId(eventId),
+        resolveEventCollection(eventId),
       ]);
       setEvent(eventData || null);
       setTickets(ticketsData || []);
       setExpenses(expensesData || []);
+      setEventCollection(coll);
     } catch (e) {
       setError('No se pudieron cargar los datos.');
     } finally {
@@ -97,10 +103,17 @@ const EventStatsScreen: React.FC = () => {
     const check = async () => {
       const user = getCurrentUser();
       if (!user) return;
+      setShowOrganizerExtras(false);
       const superA = await isSuperAdmin(user.uid);
-      if (superA) return;
+      if (superA) {
+        setShowOrganizerExtras(true);
+        return;
+      }
       const ownerId = event.organizer_id;
-      if (ownerId === user.uid) return;
+      if (ownerId === user.uid) {
+        setShowOrganizerExtras(true);
+        return;
+      }
       const admin = await hasAdminAccess(user.uid);
       if (admin) {
         navigate('/dashboard', { replace: true });
@@ -120,6 +133,7 @@ const EventStatsScreen: React.FC = () => {
     const status = t.ticketStatus as string;
     const invalid = ['cancelled', 'disabled'].includes(status) || (t as { transferredTo?: string }).transferredTo;
     const valid = ['paid', 'reserved', 'used', 'redeemed'].includes(status);
+    if ((t as { ticketKind?: string }).ticketKind === 'purchase_pass') return false;
     return valid && !invalid;
   });
 
@@ -256,6 +270,15 @@ const EventStatsScreen: React.FC = () => {
   return (
     <div className="event-stats-screen">
       <TopNavBar logoOnly showLogout onLogout={() => logoutUser()} />
+      {eventId && eventCollection && (
+        <EventSubNav
+          eventId={eventId}
+          eventTitle={event.name}
+          isRecurring={eventCollection === 'recurring_events'}
+          active="stats"
+          showOrganizerExtras={showOrganizerExtras}
+        />
+      )}
       <div className="event-stats-content">
         <div className="event-stats-hero">
           <h1 className="event-stats-hero__title">{event.name}</h1>
@@ -268,9 +291,6 @@ const EventStatsScreen: React.FC = () => {
               disabled={tickets.length === 0}
             >
               Exportar Excel
-            </SecondaryButton>
-            <SecondaryButton onClick={() => navigate('/dashboard')} className="event-stats-back">
-              ← Volver al dashboard
             </SecondaryButton>
           </div>
         </div>

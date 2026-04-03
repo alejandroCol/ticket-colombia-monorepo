@@ -6,8 +6,12 @@ import {
   setPersistence,
   browserLocalPersistence,
   createUserWithEmailAndPassword as firebaseCreateUser,
-  sendPasswordResetEmail as firebaseSendPasswordResetEmail
+  sendPasswordResetEmail as firebaseSendPasswordResetEmail,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
 } from 'firebase/auth';
+import type { AuthError } from 'firebase/auth';
 import type { UserCredential, User } from 'firebase/auth';
 import { app } from './firebase';
 import { getUserData, createUserDocument } from './firestore';
@@ -71,6 +75,61 @@ export const createUserWithEmailAndPassword = async (
 // Send password reset email function
 export const sendPasswordResetEmail = async (email: string): Promise<void> => {
   return firebaseSendPasswordResetEmail(auth, email);
+};
+
+function messageForAuthError(err: unknown): string {
+  const code = (err as AuthError)?.code;
+  switch (code) {
+    case 'auth/wrong-password':
+    case 'auth/invalid-credential':
+      return 'La contraseña actual no es correcta.';
+    case 'auth/weak-password':
+      return 'La nueva contraseña es demasiado débil. Usa al menos 6 caracteres y combina letras y números.';
+    case 'auth/requires-recent-login':
+      return 'Por seguridad debes volver a iniciar sesión e intentar de nuevo.';
+    case 'auth/too-many-requests':
+      return 'Demasiados intentos. Espera unos minutos e intenta de nuevo.';
+    case 'auth/network-request-failed':
+      return 'Error de red. Comprueba tu conexión.';
+    default:
+      if (err instanceof Error && err.message) return err.message;
+      return 'No se pudo cambiar la contraseña. Intenta de nuevo.';
+  }
+}
+
+/**
+ * Cambia la contraseña del usuario en sesión (solo cuentas email/contraseña).
+ * Reautentica con la clave actual antes de aplicar la nueva.
+ */
+export const changePasswordWithCurrent = async (
+  currentPassword: string,
+  newPassword: string
+): Promise<void> => {
+  const user = auth.currentUser;
+  const email = user?.email?.trim();
+  if (!user || !email) {
+    throw new Error(
+      'No hay sesión válida o tu cuenta no usa correo y contraseña. Cierra sesión y usa recuperación de clave si aplica.'
+    );
+  }
+  const cur = String(currentPassword ?? '');
+  const next = String(newPassword ?? '');
+  if (cur.length < 1) {
+    throw new Error('Ingresa tu contraseña actual.');
+  }
+  if (next.length < 6) {
+    throw new Error('La nueva contraseña debe tener al menos 6 caracteres.');
+  }
+  if (next === cur) {
+    throw new Error('La nueva contraseña debe ser distinta a la actual.');
+  }
+  try {
+    const credential = EmailAuthProvider.credential(email, cur);
+    await reauthenticateWithCredential(user, credential);
+    await updatePassword(user, next);
+  } catch (e) {
+    throw new Error(messageForAuthError(e));
+  }
 };
 
 // Logout function

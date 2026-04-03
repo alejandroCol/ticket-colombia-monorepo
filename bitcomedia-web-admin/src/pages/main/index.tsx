@@ -15,10 +15,15 @@ import ConfigScreen from '@pages/Config';
 import BannersScreen from '@pages/Banners';
 import EventStatsScreen from '@pages/EventStats';
 import EventTicketsScreen from '@pages/EventTickets';
+import EventPromotersScreen from '@pages/EventPromoters';
+import EventWidgetEmbedScreen from '@pages/EventWidgetEmbed';
 import BalanceScreen from '@pages/Balance';
 import ScanTicketsScreen from '@pages/ScanTickets';
+import TaquillaSaleScreen from '@pages/TaquillaSale';
+import AccountChangePasswordScreen from '@pages/AccountChangePassword';
 import SuperAdminEarningsScreen from '@pages/SuperAdminEarnings';
 import SuperAdminPartnersScreen from '@pages/SuperAdminPartners';
+import SuperAdminAuditLogScreen from '@pages/SuperAdminAuditLog';
 
 // Dashboard and other pages would be imported here
 // import Dashboard from '../dashboard';
@@ -98,6 +103,34 @@ const MainLayout: React.FC = () => {
             )
           } 
         />
+
+        {/* Por evento: rutas más específicas antes de /events/:eventId */}
+        <Route
+          path="/events/:eventId/promoters"
+          element={
+            user && panelOk ? <EventPromotersScreen /> : <Navigate to="/login" />
+          }
+        />
+        <Route
+          path="/events/:eventId/widget"
+          element={
+            user && panelOk ? <EventWidgetEmbedScreen /> : <Navigate to="/login" />
+          }
+        />
+
+        {/* Recurring: promotores y widget embebible */}
+        <Route
+          path="/recurring-events/:eventId/promoters"
+          element={
+            user && panelOk ? <EventPromotersScreen /> : <Navigate to="/login" />
+          }
+        />
+        <Route
+          path="/recurring-events/:eventId/widget"
+          element={
+            user && panelOk ? <EventWidgetEmbedScreen /> : <Navigate to="/login" />
+          }
+        />
         
         {/* Event Form Route - For editing existing events */}
         <Route 
@@ -145,6 +178,16 @@ const MainLayout: React.FC = () => {
               <Navigate to="/login" />
             )
           } 
+        />
+
+        <Route
+          path="/taquilla"
+          element={user && panelOk ? <TaquillaSaleScreen /> : <Navigate to="/login" />}
+        />
+
+        <Route
+          path="/account/password"
+          element={user && panelOk ? <AccountChangePasswordScreen /> : <Navigate to="/login" />}
         />
 
         {/* Ticket Validation Route */}
@@ -235,6 +278,17 @@ const MainLayout: React.FC = () => {
           element={
             user && fullAdmin ? (
               <SuperAdminPartnersScreen />
+            ) : (
+              <Navigate to={user && panelOk ? '/dashboard' : '/login'} />
+            )
+          }
+        />
+
+        <Route
+          path="/super-admin/audit-log"
+          element={
+            user && fullAdmin ? (
+              <SuperAdminAuditLogScreen />
             ) : (
               <Navigate to={user && panelOk ? '/dashboard' : '/login'} />
             )

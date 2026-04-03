@@ -1,6 +1,7 @@
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import {defineSecret} from "firebase-functions/params";
+import {capacityBucketAndCount} from "../reservations/availability";
 import {generateMultipleTicketsPdf} from "./pdf-generator-multiple";
 import {sendTicketEmail} from "./email-sender";
 import {randomUUID} from "crypto";
@@ -12,19 +13,29 @@ const senderEmail = defineSecret("SENDER_EMAIL");
 const senderName = defineSecret("SENDER_NAME");
 const adminUrlSecret = defineSecret("ADMIN_URL");
 
-/** Admin de panel o partner con permiso create_tickets en el evento. */
-async function canCreateManualTicket(uid: string, eventId: string): Promise<boolean> {
+/**
+ * Admin de panel o partner:
+ * - Cortesías (isCourtesy): solo create_tickets
+ * - Venta a precio público: create_tickets o taquilla_sale
+ */
+async function canCreateManualTicket(uid: string, eventId: string, isCourtesy: boolean): Promise<boolean> {
   const adminUserDoc = await admin.firestore().collection("users").doc(uid).get();
   if (!adminUserDoc.exists) return false;
   const role = adminUserDoc.data()?.role as string | undefined;
   if (role === "ADMIN" || role === "admin" || role === "SUPER_ADMIN") return true;
   if (role !== "PARTNER") return false;
+  let hasCreate = false;
+  let hasTaquilla = false;
   for (const kind of ["evt", "rec"] as const) {
     const path = `event_partner_grants/${uid}_${kind}_${eventId}`;
     const g = await admin.firestore().doc(path).get();
-    if (g.exists && g.data()?.permissions?.create_tickets === true) return true;
+    if (!g.exists) continue;
+    const p = g.data()?.permissions as { create_tickets?: boolean; taquilla_sale?: boolean } | undefined;
+    if (p?.create_tickets === true) hasCreate = true;
+    if (p?.taquilla_sale === true) hasTaquilla = true;
   }
-  return false;
+  if (isCourtesy) return hasCreate;
+  return hasCreate || hasTaquilla;
 }
 
 async function loadEventDocForManualTicket(eventId: string) {
@@ -92,7 +103,7 @@ export const createManualTicket = functions
       }
       console.log("[createManualTicket] Validación OK");
 
-      const allowed = await canCreateManualTicket(adminUid, eventId);
+      const allowed = await canCreateManualTicket(adminUid, eventId, !!isCourtesy);
       if (!allowed) {
         throw new functions.https.HttpsError(
           "permission-denied",
@@ -121,11 +132,30 @@ export const createManualTicket = functions
         }
       }
 
+      let seatsPerUnit = 1;
+      if (sectionId && eventData.sections && Array.isArray(eventData.sections)) {
+        const sel = eventData.sections.find((s: any) => s.id === sectionId);
+        if (sel) {
+          seatsPerUnit = Math.max(1, Number(sel.seats_per_unit) || 1);
+        }
+      }
+      const totalPasses = quantity * seatsPerUnit;
+      const revenueTotal =
+        Number(ticketPrice) * quantity * (isCourtesy ? 0 : 1);
+      const isBundle = seatsPerUnit > 1;
+      const bundleLeaderId = isBundle ? randomUUID() : "";
+
       const ticketsToCreate = [];
-      for (let i = 0; i < quantity; i++) {
-        const ticketId = randomUUID(); // Generar un ID único para cada ticket
-        const adminUrl = adminUrlSecret.value().trim(); // Limpiar espacios y saltos de línea
-        const qrCodeData = `${adminUrl}/validate-ticket/${ticketId}`; // URL para validar el ticket en el admin panel
+      for (let i = 0; i < totalPasses; i++) {
+        const ticketId = isBundle && i === 0 ? bundleLeaderId : randomUUID();
+        const adminUrl = adminUrlSecret.value().trim();
+        const qrCodeData = `${adminUrl}/validate-ticket/${ticketId}`;
+
+        const lineAmount = isCourtesy ?
+          0 :
+          isBundle ?
+            (i === 0 ? revenueTotal : 0) :
+            ticketPrice;
 
         const ticketData = {
           ticketId: ticketId,
@@ -139,18 +169,38 @@ export const createManualTicket = functions
           buyerEmail: buyerEmail,
           buyerPhone: buyerPhone || null,
           buyerIdNumber: buyerIdNumber || null,
-          price: ticketPrice,
+          price: isBundle ? (i === 0 ? ticketPrice : 0) : ticketPrice,
           currency: "COP",
           status: "approved",
           paymentMethod: "manual",
           sectionId: sectionId || null,
           sectionName: sectionName || null,
+          mapZoneId: "",
+          transferredTo: null,
           ticketStatus: "paid",
-          amount: ticketPrice,
-          purchaseAmount: ticketPrice, // Para reportes de ingresos (cortesía = 0)
-          isCourtesy: !!isCourtesy, // No suma en ingresos cuando es true
-          isGeneralCourtesy: !!isGeneralCourtesy, // Cortesía del evento general
-          giftedBy: giftedBy?.trim() || null, // Quien regala la cortesía
+          quantity: isBundle ? (i === 0 ? quantity : 1) : 1,
+          amount: lineAmount,
+          purchaseAmount: lineAmount,
+          ...(isBundle && i > 0 ? {bundleParentTicketId: bundleLeaderId} : {}),
+          ...(isBundle ?
+            {
+              ticketKind: i === 0 ? "purchase_bundle_parent" : "purchase_pass",
+              passIndex: i + 1,
+              passCount: totalPasses,
+            } :
+            {ticketKind: "standard"}),
+          ...capacityBucketAndCount({
+            mapZoneId: "",
+            sectionId: sectionId || null,
+            sectionName: sectionName || null,
+            quantity: isBundle ? (i === 0 ? quantity : 1) : 1,
+            ticketKind: isBundle ?
+              (i === 0 ? "purchase_bundle_parent" : "purchase_pass") :
+              "standard",
+          }),
+          isCourtesy: !!isCourtesy,
+          isGeneralCourtesy: !!isGeneralCourtesy,
+          giftedBy: giftedBy?.trim() || null,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           validatedAt: null,
           validatedBy: null,
@@ -170,6 +220,24 @@ export const createManualTicket = functions
       });
       await batch.commit();
       console.log("[createManualTicket] Batch Firestore OK");
+
+      try {
+        const authEmail = (context.auth?.token?.email as string | undefined) || "";
+        await admin.firestore().collection("audit_logs").add({
+          actorUid: adminUid,
+          actorEmail: (authEmail || "").slice(0, 320),
+          kind: "manual_ticket_batch",
+          action: "create",
+          entityType: "ticket",
+          entityId: ticketsToCreate.map((t) => t.ticketId).join(",").slice(0, 200),
+          summary:
+            `Manuales x${quantity} evento ${data.eventId} · ${isCourtesy ? "cortesía" : "venta"} · ` +
+            `${(data.buyerEmail || "").slice(0, 80)}`,
+          at: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (auditErr) {
+        console.warn("[createManualTicket] audit_logs:", (auditErr as Error).message);
+      }
 
       // 6. Generar QRs para todos los tickets
       console.log("[createManualTicket] Generando QRs...");
@@ -221,7 +289,7 @@ export const createManualTicket = functions
         console.log("[createManualTicket] Enviando email a:", ticketsToCreate[0].buyerEmail);
         await sendTicketEmail(
           ticketsToCreate[0].buyerEmail, // Usar el email del primer ticket (todos tienen el mismo)
-          `Tus ${quantity} Ticket(s) para ${ticketsToCreate[0].eventName}`,
+          `Tus ${ticketsToCreate.length} Ticket(s) para ${ticketsToCreate[0].eventName}`,
           ticketsToCreate[0].eventName,
           ticketsToCreate[0].buyerName,
           pdfBuffer,
@@ -236,12 +304,12 @@ export const createManualTicket = functions
         throw new functions.https.HttpsError("internal", `Error enviando el correo: ${e.message}`);
       }
 
-      const emailResults = [{success: true, ticketsCount: quantity}];
+      const emailResults = [{success: true, ticketsCount: ticketsToCreate.length}];
 
-      console.log("[createManualTicket] Éxito total, tickets:", quantity);
+      console.log("[createManualTicket] Éxito total, tickets:", ticketsToCreate.length);
       return {
         success: true,
-        message: `Se crearon ${quantity} tickets y se enviaron los correos.`,
+        message: `Se crearon ${ticketsToCreate.length} tickets y se enviaron los correos.`,
         ticketIds: ticketsToCreate.map((t) => t.ticketId),
         emailResults: emailResults,
       };

@@ -1,4 +1,5 @@
 import PDFDocument from "pdfkit";
+import {ticketFlyerAccentColorFromEvent} from "./ticket-flyer-pdf-theme";
 
 interface TicketData {
   ticketId?: string;
@@ -27,6 +28,7 @@ export async function generateTicketPdf(
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     try {
+      const accentColor = ticketFlyerAccentColorFromEvent(eventData);
       const doc = new PDFDocument({
         size: "A4",
         margins: {top: 50, bottom: 50, left: 50, right: 50},
@@ -42,7 +44,7 @@ export async function generateTicketPdf(
       doc
         .fontSize(28)
         .font("Helvetica-Bold")
-        .fillColor("#00d4ff")
+        .fillColor(accentColor)
         .text("TICKET COLOMBIA", {align: "center"});
 
       doc.moveDown(0.5);
@@ -114,7 +116,7 @@ export async function generateTicketPdf(
       // --- QR CODE SECTION ---
       doc
         .fontSize(16)
-        .fillColor("#00d4ff")
+        .fillColor(accentColor)
         .text("Tu Ticket:", {align: "left"});
 
       doc.moveDown(1);
@@ -124,7 +126,7 @@ export async function generateTicketPdf(
       // Box para el ticket
       doc
         .rect(40, yPosition - 10, 520, 200)
-        .strokeColor("#00d4ff")
+        .strokeColor(accentColor)
         .lineWidth(2)
         .stroke();
 
@@ -151,7 +153,7 @@ export async function generateTicketPdf(
 
       doc
         .fontSize(18)
-        .fillColor("#00d4ff")
+        .fillColor(accentColor)
         .text("Ticket de Cortesía", infoX, infoY);
 
       const ticketId = ticket.ticketId || ticket.id || "N/A";
@@ -166,7 +168,7 @@ export async function generateTicketPdf(
 
       doc
         .fontSize(12)
-        .fillColor("#00d4ff")
+        .fillColor(accentColor)
         .font("Helvetica-Bold")
         .text(`Valor: $${ticket.price.toLocaleString("es-CO")}`, infoX, infoY + 100);
 

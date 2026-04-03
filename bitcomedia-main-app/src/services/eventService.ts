@@ -21,13 +21,23 @@ export function getOrCreateGuestHolderSessionKey(): string {
 
 export interface AvailabilityResponse {
   bySection: Record<string, number>;
+  byMapZone: Record<string, number>;
   totalSold: number;
   generalSold: number;
 }
 
-export async function getEventAvailability(eventId: string): Promise<AvailabilityResponse> {
-  const fn = httpsCallable<{ eventId: string }, AvailabilityResponse>(functions, 'getEventAvailability');
-  const result = await fn({ eventId });
+export async function getEventAvailability(
+  eventIdOrSlug: string | { slug: string }
+): Promise<AvailabilityResponse> {
+  const fn = httpsCallable<
+    { eventId?: string; slug?: string },
+    AvailabilityResponse
+  >(functions, 'getEventAvailability');
+  const payload =
+    typeof eventIdOrSlug === 'string'
+      ? { eventId: eventIdOrSlug }
+      : { slug: eventIdOrSlug.slug };
+  const result = await fn(payload);
   return result.data;
 }
 
@@ -43,6 +53,7 @@ export async function createTicketReservation(params: {
   quantity: number;
   sectionId?: string;
   sectionName?: string;
+  mapZoneId?: string;
 }): Promise<CreateReservationResult> {
   const auth = getAuth();
   const user = auth.currentUser;
@@ -52,6 +63,7 @@ export async function createTicketReservation(params: {
     quantity: number;
     sectionId?: string;
     sectionName?: string;
+    mapZoneId?: string;
     holderSessionKey?: string;
   } = {
     eventId: params.eventId,
@@ -59,6 +71,7 @@ export async function createTicketReservation(params: {
   };
   if (params.sectionId) payload.sectionId = params.sectionId;
   if (params.sectionName) payload.sectionName = params.sectionName;
+  if (params.mapZoneId?.trim()) payload.mapZoneId = params.mapZoneId.trim();
   if (!user) {
     payload.holderSessionKey = getOrCreateGuestHolderSessionKey();
   }

@@ -1,0 +1,153 @@
+@import '../../main.scss';
+
+.event-promoters-screen {
+  min-height: 100vh;
+  background: $color-primary;
+}
+
+.event-promoters-content {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 1rem 3rem;
+}
+
+.event-promoters-panel {
+  background: rgba($color-surface, 0.92);
+  border-radius: 16px;
+  padding: 1.25rem 1.35rem;
+  margin-bottom: 1.25rem;
+  border: 1px solid rgba($color-text-secondary, 0.1);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.06);
+}
+
+.event-promoters-h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+  font-weight: $font-weight-bold;
+}
+
+.event-promoters-lead {
+  margin: 0 0 1rem;
+  color: $color-text-secondary;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.event-promoters-muted {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: $color-text-primary;
+}
+
+.event-promoters-error {
+  background: rgba(#c62828, 0.08);
+  color: #b71c1c;
+  padding: 0.65rem 0.85rem;
+  border-radius: 10px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.event-promoters-form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.event-promoters-perms-label {
+  display: block;
+  font-weight: $font-weight-semi-bold;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.event-promoters-perm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.event-promoters-checkbox {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  cursor: pointer;
+  font-size: 0.88rem;
+
+  input {
+    margin-top: 0.2rem;
+    flex-shrink: 0;
+  }
+
+  strong {
+    display: block;
+    font-weight: $font-weight-semi-bold;
+  }
+
+  small {
+    display: block;
+    color: $color-text-secondary;
+    margin-top: 0.15rem;
+    line-height: 1.35;
+  }
+}
+
+.event-promoters-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 1.25rem;
+}
+
+.event-promoters-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.event-promoters-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid rgba($color-text-secondary, 0.12);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.event-promoters-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.event-promoters-row-meta {
+  font-size: 0.78rem;
+  color: $color-text-secondary;
+  word-break: break-all;
+}
+
+.event-promoters-row-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.event-promoters-tag {
+  font-size: 0.72rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  background: rgba($color-accent, 0.12);
+  color: $color-text-primary;
+}
+
+.event-promoters-row-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}

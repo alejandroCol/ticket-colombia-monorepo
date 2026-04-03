@@ -137,30 +137,48 @@ export class MercadoPagoProvider implements PaymentProvider {
     secret: string
   ): boolean {
     try {
-      // Crear el string para validar según documentación de MercadoPago
-      const manifest = `id:${dataId};request-id:${requestId};`;
+      let ts = "";
+      let v1 = "";
+      for (const part of String(signature).split(",")) {
+        const p = part.trim();
+        const eq = p.indexOf("=");
+        if (eq < 0) continue;
+        const key = p.slice(0, eq).trim();
+        const value = p.slice(eq + 1).trim();
+        if (key === "ts") ts = value;
+        if (key === "v1") v1 = value;
+      }
 
-      // Generar HMAC SHA256
-      const hmac = crypto.createHmac("sha256", secret);
-      hmac.update(manifest);
-      const sha = hmac.digest("hex");
+      if (!v1 || !secret) return false;
 
-      // Extraer la firma del header (formato: ts=timestamp,v1=signature)
-      const signatureParts = signature.split(",");
-      let extractedSignature = "";
+      /**
+       * MP (2024+): manifest con `ts` en el manifiesto. Si falla, se intenta formato previo sin `ts`.
+       * @see https://www.mercadopago.com/developers/en/docs/your-integrations/notifications/webhooks
+       */
+      const manifests: string[] = [];
+      if (ts) {
+        manifests.push(`id:${dataId};request-id:${requestId};ts:${ts};`);
+      }
+      manifests.push(`id:${dataId};request-id:${requestId};`);
 
-      for (const part of signatureParts) {
-        const [key, value] = part.split("=");
-        if (key === "v1") {
-          extractedSignature = value;
-          break;
+      console.log(`Validating webhook signature for dataId=${dataId}, ts=${ts || "(omitido)"}`);
+
+      for (const manifest of manifests) {
+        const hmac = crypto.createHmac("sha256", secret);
+        hmac.update(manifest);
+        const expectedHex = hmac.digest("hex");
+        if (expectedHex.length !== v1.length) continue;
+        try {
+          if (crypto.timingSafeEqual(Buffer.from(expectedHex), Buffer.from(v1))) {
+            return true;
+          }
+        } catch {
+          continue;
         }
       }
 
-      console.log(`Validating signature for dataId: ${dataId}`);
-      console.log(`Expected: ${sha}, Received: ${extractedSignature}`);
-
-      return extractedSignature === sha;
+      console.warn("[x-signature] Firma inválida tras probar manifiestos con/sin ts");
+      return false;
     } catch (error) {
       console.error("Error validating webhook signature:", error);
       return false;

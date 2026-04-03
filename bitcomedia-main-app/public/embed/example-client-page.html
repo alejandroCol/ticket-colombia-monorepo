@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ejemplo – Widget Ticket Colombia</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+        background: #0a1218;
+        color: #e8f4f8;
+      }
+      code {
+        background: #152028;
+        padding: 0.15rem 0.4rem;
+        border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Sitio del organizador (demo)</h1>
+    <p>Reemplaza <code>data-tc-base</code> y <code>data-tc-slug</code> por tu producción.</p>
+
+    <!-- Copiar desde aquí ↓ -->
+    <script
+      src="/embed/tc-embed-widget.js"
+      data-tc-base="http://localhost:5174"
+      data-tc-slug="TU_SLUG_EVENTO"
+      data-tc-label="Comprar entradas"
+      defer
+    ></script>
+    <!-- Hasta aquí ↑ (ajusta src al dominio público del build) -->
+
+    <script>
+      window.addEventListener('message', function (ev) {
+        var base = 'http://localhost:5174';
+        if (ev.origin !== new URL(base).origin) return;
+        var d = ev.data;
+        if (!d || d.source !== 'ticket-colombia-embed') return;
+        if (d.kind === 'purchase_finished') {
+          console.log('Compra (embed):', d.status, d);
+        }
+      });
+    </script>
+  </body>
+</html>

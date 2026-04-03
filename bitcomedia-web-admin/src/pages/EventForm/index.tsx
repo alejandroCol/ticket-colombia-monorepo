@@ -11,6 +11,7 @@ import CustomDateTimePicker from '@components/CustomDateTimePicker';
 import VenueAutocomplete from '@components/VenueAutocomplete';
 import VenueMapBuilder, { DEFAULT_VENUE_MAP_BACKGROUND } from '@components/VenueMapBuilder';
 import TopNavBar from '@TopNavBar';
+import EventSubNav from '@components/EventSubNav';
 import {
   logoutUser,
   getUserSession,
@@ -21,8 +22,13 @@ import {
   isSuperAdmin,
   getAdminUsersList,
   getPartnerGrantForEvent,
+  appendAuditLog,
+  allocateUniqueEventSlug,
 } from '@services';
 import { compressImageForBoleto } from '../../utils/imageCompression';
+import { isLegacyDateSuffixSlug, slugifyEventName } from '@utils/eventSlug';
+import { buildEventPublicPageUrl } from '@utils/eventPublicUrl';
+import { formatCopThousandsDisplay } from '@utils/formatCopInput';
 import type {
   Venue,
   EventSection,
@@ -61,6 +67,62 @@ function buildVenueMapForSave(
   };
 }
 
+function abonoFieldsFromFormInputs(fd: {
+  abono_min_percent: string;
+  abono_min_amount_cop: string;
+  abono_max_days_before_event: string;
+}) {
+  const pct = Math.min(100, Math.max(0, parseFloat(String(fd.abono_min_percent).replace(',', '.')) || 30));
+  const minCop = Math.max(0, parseInt(String(fd.abono_min_amount_cop).replace(/\D/g, ''), 10) || 0);
+  const days = Math.max(1, parseInt(String(fd.abono_max_days_before_event).replace(/\D/g, ''), 10) || 7);
+  return {
+    abono_min_percent: pct,
+    abono_min_amount_cop: minCop,
+    abono_max_days_before_event: days,
+  };
+}
+
+const TICKET_FLYER_ACCENT_DEFAULT = '#00d4ff';
+const TICKET_FLYER_MINIMAL_NAME_DEFAULT = '#ffffff';
+const TICKET_FLYER_MINIMAL_EMAIL_DEFAULT = '#e0e0e0';
+
+/** Normaliza #RGB / #RRGGBB para guardar y para el selector nativo. */
+function parseTicketFlyerHex(input: unknown, fallback: string): string {
+  const raw = String(input ?? '').trim();
+  if (!raw) return fallback;
+  const h = raw.startsWith('#') ? raw : `#${raw}`;
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(h);
+  if (!m) return fallback;
+  const body = m[1];
+  if (body.length === 3) {
+    const [a, b, c] = body.split('');
+    return `#${a}${a}${b}${b}${c}${c}`.toLowerCase();
+  }
+  return h.toLowerCase();
+}
+
+function parseTicketFlyerAccentHex(input: unknown): string {
+  return parseTicketFlyerHex(input, TICKET_FLYER_ACCENT_DEFAULT);
+}
+
+/** Ajusta palco_multipersona y seats_per_unit según zonas del mapa por localidad. */
+function normalizeSectionsForSave(sections: EventSection[], zones: VenueMapZone[]): EventSection[] {
+  return sections.map((s) => {
+    const palcoCells = zones.filter((z) => z.sectionId === s.id).length;
+    if (palcoCells <= 1) {
+      return {...s, palco_multipersona: false};
+    }
+    if (s.palco_multipersona === true) {
+      return {
+        ...s,
+        seats_per_unit: Math.max(2, Number(s.seats_per_unit) || 2),
+        palco_multipersona: true,
+      };
+    }
+    return {...s, seats_per_unit: 1, palco_multipersona: false};
+  });
+}
+
 interface FormDataType {
   name: string;
   description: string;
@@ -75,6 +137,14 @@ interface FormDataType {
   cover_image_preview: string;
   ticket_boleto_image: File | null;
   ticket_boleto_image_preview: string;
+  /** PDF del boleto por correo: clásico o QR centrado sin titular. */
+  ticket_flyer_pdf_layout: 'standard' | 'minimal_center';
+  /** Color hexadecimal (#RRGGBB) para textos destacados del PDF (localidad, precio, etc.). */
+  ticket_flyer_accent_color: string;
+  /** Opción 2: color del nombre del comprador en el recuadro. */
+  ticket_flyer_minimal_name_color: string;
+  /** Opción 2: color del correo e indicaciones (“Presenta…”, “Entrada X de Y”). */
+  ticket_flyer_minimal_email_color: string;
   capacity_per_occurrence: number | string;
   ticket_price: number | string;
   sections: EventSection[];
@@ -88,6 +158,14 @@ interface FormDataType {
   /** Comisión tiquetera — solo edita super admin */
   platform_commission_type: string;
   platform_commission_value: string;
+  /** % mínimo del total (primer pago) */
+  abono_min_percent: string;
+  /** Piso opcional en COP */
+  abono_min_amount_cop: string;
+  /** Días antes del evento: límite para saldo */
+  abono_max_days_before_event: string;
+  /** WhatsApp soporte en ficha pública (solo dígitos, obligatorio). */
+  support_whatsapp: string;
 }
 
 interface EventFormScreenProps {
@@ -103,6 +181,7 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
   const [isEditMode, setIsEditMode] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isDuplicating, setIsDuplicating] = useState(false);
+  const [isRefreshingSlug, setIsRefreshingSlug] = useState(false);
   const [isSuperAdminUser, setIsSuperAdminUser] = useState(false);
   /** Dueño del evento (Firestore). En edición lo controla el super admin en el selector. */
   const [organizerIdDraft, setOrganizerIdDraft] = useState('');
@@ -111,7 +190,9 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
   const [isLoadingVenues, setIsLoadingVenues] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const boletoFileInputRef = useRef<HTMLInputElement>(null);
-  
+  /** Slug persistido en Firestore (edición). */
+  const [documentSlug, setDocumentSlug] = useState('');
+
   // Update isRecurring if prop changes
   useEffect(() => {
     setIsRecurring(initialIsRecurring);
@@ -174,6 +255,7 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
   useEffect(() => {
     if (!eventId || eventId === 'new') {
       setOrganizerIdDraft('');
+      setDocumentSlug('');
     }
   }, [eventId]);
 
@@ -211,6 +293,10 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
     cover_image_preview: '',
     ticket_boleto_image: null,
     ticket_boleto_image_preview: '',
+    ticket_flyer_pdf_layout: 'standard',
+    ticket_flyer_accent_color: TICKET_FLYER_ACCENT_DEFAULT,
+    ticket_flyer_minimal_name_color: TICKET_FLYER_MINIMAL_NAME_DEFAULT,
+    ticket_flyer_minimal_email_color: TICKET_FLYER_MINIMAL_EMAIL_DEFAULT,
     capacity_per_occurrence: '',
     ticket_price: '',
     sections: [],
@@ -222,9 +308,15 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
       decorations: [],
       backgroundImageUrl: '',
       flatRenderUrl: '',
+      frame_aspect: 'landscape',
+      hide_public_zone_labels: false,
     },
     platform_commission_type: '',
-    platform_commission_value: ''
+    platform_commission_value: '',
+    abono_min_percent: '30',
+    abono_min_amount_cop: '0',
+    abono_max_days_before_event: '7',
+    support_whatsapp: '',
   });
 
   // Fetch event data from Firestore
@@ -284,6 +376,22 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
           cover_image_preview: data.cover_image_url || '',
           ticket_boleto_image: null,
           ticket_boleto_image_preview: data.ticket_background_image_url || '',
+          ticket_flyer_pdf_layout:
+            String(data.ticket_flyer_pdf_layout || '').toLowerCase().trim() ===
+            'minimal_center'
+              ? 'minimal_center'
+              : 'standard',
+          ticket_flyer_accent_color: parseTicketFlyerAccentHex(
+            (data as { ticket_flyer_accent_color?: string }).ticket_flyer_accent_color
+          ),
+          ticket_flyer_minimal_name_color: parseTicketFlyerHex(
+            (data as { ticket_flyer_minimal_name_color?: string }).ticket_flyer_minimal_name_color,
+            TICKET_FLYER_MINIMAL_NAME_DEFAULT
+          ),
+          ticket_flyer_minimal_email_color: parseTicketFlyerHex(
+            (data as { ticket_flyer_minimal_email_color?: string }).ticket_flyer_minimal_email_color,
+            TICKET_FLYER_MINIMAL_EMAIL_DEFAULT
+          ),
           capacity_per_occurrence: data.capacity_per_occurrence || 0,
           ticket_price: data.ticket_price || 0,
           sections: data.sections || [],
@@ -303,12 +411,17 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
                   backgroundImageUrl:
                     typeof rawVis.backgroundImageUrl === 'string' ? rawVis.backgroundImageUrl : '',
                   flatRenderUrl: typeof rawVis.flatRenderUrl === 'string' ? rawVis.flatRenderUrl : '',
+                  frame_aspect:
+                    rawVis.frame_aspect === 'portrait' ? 'portrait' : 'landscape',
+                  hide_public_zone_labels: rawVis.hide_public_zone_labels === true,
                 }
               : {
                   background: DEFAULT_VENUE_MAP_BACKGROUND,
                   decorations: [],
                   backgroundImageUrl: '',
                   flatRenderUrl: '',
+                  frame_aspect: 'landscape',
+                  hide_public_zone_labels: false,
                 };
             if (
               legacyMapUrl &&
@@ -322,9 +435,24 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
           })(),
           platform_commission_type: (data.platform_commission_type as string) || '',
           platform_commission_value:
-            data.platform_commission_value != null ? String(data.platform_commission_value) : ''
+            data.platform_commission_value != null ? String(data.platform_commission_value) : '',
+          abono_min_percent:
+            data.abono_min_percent != null && Number.isFinite(Number(data.abono_min_percent))
+              ? String(data.abono_min_percent)
+              : '30',
+          abono_min_amount_cop:
+            data.abono_min_amount_cop != null && Number.isFinite(Number(data.abono_min_amount_cop))
+              ? String(Math.max(0, Math.round(Number(data.abono_min_amount_cop))))
+              : '0',
+          abono_max_days_before_event:
+            data.abono_max_days_before_event != null &&
+            Number.isFinite(Number(data.abono_max_days_before_event))
+              ? String(Math.max(1, Math.round(Number(data.abono_max_days_before_event))))
+              : '7',
+          support_whatsapp: String(data.support_whatsapp ?? '').replace(/\D/g, ''),
         });
         setOrganizerIdDraft(String(data.organizer_id || ''));
+        setDocumentSlug(String(data.slug || '').trim());
       } else {
         alert("No se encontró el evento que intentas editar");
         navigate('/dashboard');
@@ -336,6 +464,64 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
       setIsLoading(false);
     }
   }, [navigate, isRecurring]);
+
+  const previewShareSlug = useMemo(() => {
+    const name = formData.name?.trim();
+    if (!name) return '';
+    const base = slugifyEventName(name);
+    return base || '';
+  }, [formData.name]);
+
+  const slugForPublicLink = useMemo(() => {
+    if (isEditMode && documentSlug.trim()) return documentSlug.trim();
+    return previewShareSlug;
+  }, [isEditMode, documentSlug, previewShareSlug]);
+
+  const publicEventUrl = useMemo(
+    () => (slugForPublicLink ? buildEventPublicPageUrl(slugForPublicLink) : ''),
+    [slugForPublicLink]
+  );
+
+  const copyPublicEventUrl = async () => {
+    if (!publicEventUrl) return;
+    try {
+      await navigator.clipboard.writeText(publicEventUrl);
+      alert('Enlace copiado al portapapeles.');
+    } catch {
+      alert('No se pudo copiar automáticamente. Selecciona el texto y cópialo a mano.');
+    }
+  };
+
+  const showLegacySlugRefresh =
+    isEditMode &&
+    Boolean(eventId && eventId !== 'new') &&
+    isLegacyDateSuffixSlug(documentSlug) &&
+    Boolean(formData.name?.trim());
+
+  const handleRefreshSlugToNewFormat = async () => {
+    if (!showLegacySlugRefresh || !eventId) return;
+    const collectionName = isRecurring ? 'recurring_events' : 'events';
+    const slugRoot = slugifyEventName(formData.name) || 'evento';
+    setIsRefreshingSlug(true);
+    try {
+      const newSlug = await allocateUniqueEventSlug(collectionName, slugRoot, eventId);
+      await updateDoc(doc(db, collectionName, eventId), { slug: newSlug });
+      setDocumentSlug(newSlug);
+      void appendAuditLog({
+        kind: isRecurring ? 'recurring_event_update' : 'event_update',
+        entityType: collectionName,
+        entityId: eventId,
+        summary: `Slug renovado (formato sin fecha) «${newSlug}» (${collectionName}/${eventId})`,
+      }).catch(() => undefined);
+      alert(
+        `Enlace actualizado.\n\nAntes: ${documentSlug}\nAhora: ${newSlug}\n\nComparte el nuevo enlace; el anterior dejará de abrir este evento.`
+      );
+    } catch (e) {
+      alert(`No se pudo actualizar el slug: ${(e as Error).message}`);
+    } finally {
+      setIsRefreshingSlug(false);
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -424,23 +610,6 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
     });
   };
 
-  // Function to generate slug from event name and date
-  const generateSlug = (name: string, date: string) => {
-    // Remove special characters and replace spaces with underscores
-    const nameSlug = name
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '') // Remove accents
-      .replace(/[^a-z0-9\s]/g, '') // Remove special characters
-      .trim()
-      .replace(/\s+/g, '_'); // Replace spaces with underscores
-    
-    // Format date to YYYY-MM-DD
-    const formattedDate = date.replace(/\//g, '-');
-    
-    return `${nameSlug}_${formattedDate}`;
-  };
-
   const handleLogout = async () => {
     try {
       await logoutUser();
@@ -527,6 +696,13 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
       alert('Selecciona el administrador organizador del evento.');
       return;
     }
+    const supportWhatsappDigitsPre = formData.support_whatsapp.trim().replace(/\D/g, '');
+    if (!supportWhatsappDigitsPre || supportWhatsappDigitsPre.length < 8) {
+      alert(
+        'Indica un número de WhatsApp de soporte válido (solo dígitos, con código de país, mínimo 8 dígitos).'
+      );
+      return;
+    }
     setIsUploading(true);
     
     try {
@@ -551,21 +727,21 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
         ticketBackgroundImageUrl = await uploadFile(compressedFile, path);
       }
       
-      // Generate slug based on event type
-      let eventSlug = '';
-      if (isRecurring) {
-        // For recurring events, use current date as base
-        const currentDate = new Date().toISOString().split('T')[0];
-        eventSlug = generateSlug(formData.name, currentDate);
-      } else {
-        // For standalone events, use the event date
-        eventSlug = generateSlug(formData.name, formData.single_date);
-      }
+      const collectionName = isRecurring ? 'recurring_events' : 'events';
+      const slugRoot = slugifyEventName(formData.name) || 'evento';
+      const excludeSlugId = isEditMode && eventId && eventId !== 'new' ? eventId : undefined;
+      const eventSlug = await allocateUniqueEventSlug(collectionName, slugRoot, excludeSlugId);
 
       const eventLabels = formData.event_labels_text
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean);
+
+      const supportWhatsappDigits = supportWhatsappDigitsPre;
+      const sectionsForSave = normalizeSectionsForSave(
+        formData.sections,
+        formData.venue_map_zones
+      );
 
       // Prepare the data for submission
       const eventData = {
@@ -577,9 +753,20 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
         external_url: formData.event_type === 'external_url' ? formData.external_url : '',
         cover_image_url: coverImageUrl,
         ticket_background_image_url: ticketBackgroundImageUrl || null,
+        ticket_flyer_pdf_layout: formData.ticket_flyer_pdf_layout,
+        ticket_flyer_accent_color: parseTicketFlyerAccentHex(formData.ticket_flyer_accent_color),
+        ticket_flyer_minimal_name_color: parseTicketFlyerHex(
+          formData.ticket_flyer_minimal_name_color,
+          TICKET_FLYER_MINIMAL_NAME_DEFAULT
+        ),
+        ticket_flyer_minimal_email_color: parseTicketFlyerHex(
+          formData.ticket_flyer_minimal_email_color,
+          TICKET_FLYER_MINIMAL_EMAIL_DEFAULT
+        ),
         capacity_per_occurrence: Number(formData.capacity_per_occurrence) || 0,
-        ticket_price: Number(formData.ticket_price) || 0, // Precio por defecto (compatibilidad)
-        sections: formData.sections.length > 0 ? formData.sections : undefined, // Solo incluir si hay secciones
+        ticket_price:
+          sectionsForSave.length > 0 ? 0 : Number(formData.ticket_price) || 0,
+        sections: sectionsForSave.length > 0 ? sectionsForSave : undefined,
         status: formData.status,
         organizer_id: !isEditMode
           ? userSession?.uid || ''
@@ -592,6 +779,8 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
           formData.venue_map_zones,
           formData.venue_map_visual
         ),
+        ...abonoFieldsFromFormInputs(formData),
+        support_whatsapp: supportWhatsappDigits,
       };
 
       if (isSuperAdminUser) {
@@ -640,11 +829,8 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
         });
       }
 
-      // Determine the collection to use
-      const collectionName = isRecurring ? 'recurring_events' : 'events';
-      
       // Save to Firebase Firestore in the appropriate collection
-      if (isEditMode && eventId) {
+      if (isEditMode && eventId && eventId !== 'new') {
         // Update existing document
         const eventRef = doc(db, collectionName, eventId);
         await updateDoc(eventRef, {
@@ -652,15 +838,25 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
           venue_map_url: deleteField(),
         });
         console.log(`${isRecurring ? 'Evento recurrente' : 'Evento'} actualizado correctamente`);
-        
+        void appendAuditLog({
+          kind: isRecurring ? 'recurring_event_update' : 'event_update',
+          entityType: collectionName,
+          entityId: eventId,
+          summary: `Editado «${formData.name}» (${collectionName}/${eventId})`,
+        }).catch(() => undefined);
         // Show success alert and redirect
         alert(`${isRecurring ? 'Evento recurrente' : 'Evento'} actualizado correctamente`);
       } else {
         // Create new document
         const collectionRef = collection(db, collectionName);
-        await addDoc(collectionRef, eventData);
+        const newRef = await addDoc(collectionRef, eventData);
         console.log(`${isRecurring ? 'Evento recurrente' : 'Evento'} creado correctamente`);
-        
+        void appendAuditLog({
+          kind: isRecurring ? 'recurring_event_create' : 'event_create',
+          entityType: collectionName,
+          entityId: newRef.id,
+          summary: `Creado «${formData.name}» (${collectionName}/${newRef.id})`,
+        }).catch(() => undefined);
         // Show success alert and redirect
         alert(`${isRecurring ? 'Evento recurrente' : 'Evento'} creado correctamente`);
       }
@@ -690,7 +886,10 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
       id: `section-${Date.now()}`,
       name: '',
       available: 0,
-      price: 0
+      price: 0,
+      seats_per_unit: 1,
+      abono_allowed: false,
+      palco_multipersona: false,
     };
     setFormData({
       ...formData,
@@ -698,7 +897,7 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
     });
   };
 
-  const updateSection = (index: number, field: keyof EventSection, value: string | number) => {
+  const updateSection = (index: number, field: keyof EventSection, value: string | number | boolean) => {
     const updatedSections = [...formData.sections];
     updatedSections[index] = {
       ...updatedSections[index],
@@ -879,13 +1078,15 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
 
       const coverImageUrl = formData.cover_image_preview;
 
-      // Generate slug based on event type
-      let eventSlug = '';
-      if (isRecurring) {
-        const currentDate = new Date().toISOString().split('T')[0];
-        eventSlug = generateSlug(formData.name, currentDate);
-      } else {
-        eventSlug = generateSlug(formData.name, formData.single_date);
+      const collectionName = isRecurring ? 'recurring_events' : 'events';
+      const slugRoot = slugifyEventName(formData.name) || 'evento';
+      const eventSlug = await allocateUniqueEventSlug(collectionName, slugRoot);
+      const dupSupportWhatsapp = formData.support_whatsapp.trim().replace(/\D/g, '');
+      if (!dupSupportWhatsapp || dupSupportWhatsapp.length < 8) {
+        alert(
+          'Completa el WhatsApp de soporte (mínimo 8 dígitos, con código de país) antes de duplicar.'
+        );
+        return;
       }
 
       const dupLabels = formData.event_labels_text
@@ -893,6 +1094,7 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
         .map((s) => s.trim())
         .filter(Boolean);
 
+      const dupZones = formData.venue_map_zones.map((z) => ({ ...z }));
       const duplicatedEventData = {
         name: formData.name,
         description: formData.description,
@@ -904,21 +1106,34 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
         ticket_background_image_url: formData.ticket_boleto_image_preview && /^https?:\/\//i.test(formData.ticket_boleto_image_preview)
           ? formData.ticket_boleto_image_preview
           : undefined,
-        capacity_per_occurrence: Number(formData.capacity_per_occurrence) || 0,
-        ticket_price: Number(formData.ticket_price) || 0,
-        sections: formData.sections.length > 0 ? formData.sections : undefined,
-        event_labels: dupLabels.length > 0 ? dupLabels : [],
-        venue_map: buildVenueMapForSave(
-          formData.venue_map_zones.map((z) => ({ ...z })),
-          {
-            ...formData.venue_map_visual,
-            decorations: formData.venue_map_visual.decorations.map((d) => ({ ...d })),
-          }
+        ticket_flyer_pdf_layout: formData.ticket_flyer_pdf_layout,
+        ticket_flyer_accent_color: parseTicketFlyerAccentHex(formData.ticket_flyer_accent_color),
+        ticket_flyer_minimal_name_color: parseTicketFlyerHex(
+          formData.ticket_flyer_minimal_name_color,
+          TICKET_FLYER_MINIMAL_NAME_DEFAULT
         ),
+        ticket_flyer_minimal_email_color: parseTicketFlyerHex(
+          formData.ticket_flyer_minimal_email_color,
+          TICKET_FLYER_MINIMAL_EMAIL_DEFAULT
+        ),
+        capacity_per_occurrence: Number(formData.capacity_per_occurrence) || 0,
+        ticket_price:
+          formData.sections.length > 0 ? 0 : Number(formData.ticket_price) || 0,
+        sections:
+          formData.sections.length > 0
+            ? normalizeSectionsForSave(formData.sections, dupZones)
+            : undefined,
+        event_labels: dupLabels.length > 0 ? dupLabels : [],
+        venue_map: buildVenueMapForSave(dupZones, {
+          ...formData.venue_map_visual,
+          decorations: formData.venue_map_visual.decorations.map((d) => ({ ...d })),
+        }),
         status: formData.status,
         organizer_id: userSession?.uid || '',
         slug: eventSlug,
         creation_date: Timestamp.now(),
+        ...abonoFieldsFromFormInputs(formData),
+        support_whatsapp: dupSupportWhatsapp,
       };
 
       if (isRecurring) {
@@ -941,9 +1156,14 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
         });
       }
 
-      const collectionName = isRecurring ? 'recurring_events' : 'events';
       const collectionRef = collection(db, collectionName);
       const newDocRef = await addDoc(collectionRef, duplicatedEventData);
+      void appendAuditLog({
+        kind: 'event_duplicate',
+        entityType: collectionName,
+        entityId: newDocRef.id,
+        summary: `Duplicado «${formData.name}» → ${collectionName}/${newDocRef.id}`,
+      }).catch(() => undefined);
 
       alert(`${isRecurring ? 'Evento recurrente' : 'Evento'} duplicado correctamente`);
       // Navigate to the newly created event for immediate edits
@@ -956,6 +1176,11 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
     }
   };
 
+  const showEventSubNav = Boolean(isEditMode && eventId && eventId !== 'new');
+  const currentUid = getCurrentUser()?.uid ?? '';
+  const showOrganizerExtras =
+    isSuperAdminUser || (!!organizerIdDraft && organizerIdDraft === currentUid);
+
   return (
     <div className="event-form-screen">
       {/* Admin Navigation Bar */}
@@ -964,6 +1189,16 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
         showLogout={true} 
         onLogout={handleLogout}
       />
+
+      {showEventSubNav && (
+        <EventSubNav
+          eventId={eventId!}
+          eventTitle={formData.name || 'Evento'}
+          isRecurring={isRecurring}
+          active="edit"
+          showOrganizerExtras={showOrganizerExtras}
+        />
+      )}
 
       <div className="event-form-content">
         <div className="event-form-header">
@@ -1040,6 +1275,71 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
             <form onSubmit={handleSubmit}>
               <div className="form-section">
                 <h2>Información Básica</h2>
+
+                <div className="event-public-link-card">
+                  <h3 className="event-public-link-card__title">Enlace para compartir</h3>
+                  <p className="helper-text event-public-link-card__lede">
+                    URL corta derivada del <strong>nombre del evento</strong>; abre la ficha en la tienda pública.
+                    Ideal para WhatsApp, Instagram o correo.
+                  </p>
+                  {publicEventUrl ? (
+                    <>
+                      <div className="event-public-link-card__row">
+                        <input
+                          type="text"
+                          readOnly
+                          className="event-public-link-card__input"
+                          value={publicEventUrl}
+                          aria-label="URL pública del evento"
+                          onFocus={(e) => e.target.select()}
+                        />
+                        <SecondaryButton type="button" size="small" onClick={() => void copyPublicEventUrl()}>
+                          Copiar
+                        </SecondaryButton>
+                        <SecondaryButton
+                          type="button"
+                          size="small"
+                          onClick={() => window.open(publicEventUrl, '_blank', 'noopener,noreferrer')}
+                        >
+                          Abrir
+                        </SecondaryButton>
+                      </div>
+                      <p className="helper-text event-public-link-card__slug">
+                        Slug: <code>{slugForPublicLink}</code>
+                      </p>
+                      {!isEditMode ? (
+                        <p className="helper-text">
+                          Vista previa: al guardar se asigna el slug; si otro evento ya usa el mismo nombre compacto,
+                          se añade <code>_2</code>, <code>_3</code>, etc.
+                        </p>
+                      ) : null}
+                      {isEditMode && !documentSlug.trim() && previewShareSlug ? (
+                        <p className="helper-text">
+                          Este documento aún no tenía slug en la base de datos; el enlace mostrado es el que se usará al
+                          guardar con los datos actuales.
+                        </p>
+                      ) : null}
+                      {showLegacySlugRefresh ? (
+                        <div className="event-public-link-card__legacy-slug">
+                          <p className="helper-text" style={{ marginBottom: '0.5rem' }}>
+                            Este evento usa el <strong>formato antiguo</strong> del enlace (incluye la fecha). Puedes
+                            generar el <strong>enlace corto</strong> ahora sin guardar el resto del formulario.
+                          </p>
+                          <SecondaryButton
+                            type="button"
+                            size="small"
+                            disabled={isRefreshingSlug}
+                            onClick={() => void handleRefreshSlugToNewFormat()}
+                          >
+                            {isRefreshingSlug ? 'Actualizando…' : 'Renovar enlace (quitar fecha del slug)'}
+                          </SecondaryButton>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : (
+                    <p className="helper-text">Escribe el nombre del evento para generar el enlace.</p>
+                  )}
+                </div>
                 
                 <div className="form-group">
                   <CustomInput
@@ -1073,6 +1373,21 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
                     placeholder="Ej: Cali"
                     required
                   />
+                </div>
+
+                <div className="form-group">
+                  <CustomInput
+                    label="WhatsApp de soporte"
+                    name="support_whatsapp"
+                    value={formData.support_whatsapp}
+                    onChange={handleInputChange}
+                    placeholder="Ej: 573001234567"
+                    required
+                  />
+                  <p className="helper-text" style={{ marginTop: '0.35rem' }}>
+                    Obligatorio. Código de país sin + (Colombia suele ser 57…). En la ficha pública del evento aparece el
+                    botón de soporte por WhatsApp.
+                  </p>
                 </div>
               </div>
               
@@ -1332,6 +1647,269 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
                     )}
                   </div>
                 </div>
+
+                <div className="form-group">
+                  <span className="custom-input-label">Diseño del flyer (PDF por correo)</span>
+                  <span className="input-helper-text">
+                    Afecta el PDF adjunto al correo (Resend) tras pagar con OnePay, Mercado Pago, etc. La
+                    imagen de fondo del boleto (arriba) se usa en ambas opciones.
+                  </span>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.75rem',
+                      marginTop: '0.5rem',
+                    }}
+                  >
+                    <label
+                      style={{
+                        display: 'flex',
+                        gap: '0.5rem',
+                        alignItems: 'flex-start',
+                        cursor: 'pointer',
+                        fontWeight: 400,
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="ticket_flyer_pdf_layout"
+                        checked={formData.ticket_flyer_pdf_layout === 'standard'}
+                        onChange={() =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            ticket_flyer_pdf_layout: 'standard',
+                          }))
+                        }
+                      />
+                      <span>
+                        <strong>Opción 1 — Clásico (actual).</strong> Título Ticket Colombia, nombre del
+                        evento, fecha, lugar, datos del comprador y QR.
+                      </span>
+                    </label>
+                    <label
+                      style={{
+                        display: 'flex',
+                        gap: '0.5rem',
+                        alignItems: 'flex-start',
+                        cursor: 'pointer',
+                        fontWeight: 400,
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="ticket_flyer_pdf_layout"
+                        checked={formData.ticket_flyer_pdf_layout === 'minimal_center'}
+                        onChange={() =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            ticket_flyer_pdf_layout: 'minimal_center',
+                          }))
+                        }
+                      />
+                      <span>
+                        <strong>Opción 2 — Boleto compacto.</strong> Sin titular ni datos del evento: un
+                        recuadro a todo el ancho (con márgenes), centrado en la página, QR a la
+                        izquierda y texto (localidad, comprador, indicaciones) a la derecha. Mismo PDF
+                        tras pagar con OnePay, Mercado Pago u otra pasarela.
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <span className="custom-input-label">Color de acento en el PDF del boleto</span>
+                  <span className="input-helper-text">
+                    Localidad en la opción 2 compacta; en el diseño clásico también precio y titulares del bloque QR.
+                    Usa <code>#RRGGBB</code> o el selector.
+                  </span>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      alignItems: 'flex-end',
+                      gap: '12px',
+                      marginTop: '0.5rem',
+                    }}
+                  >
+                    <input
+                      type="color"
+                      aria-label="Elegir color de acento del PDF"
+                      value={parseTicketFlyerAccentHex(formData.ticket_flyer_accent_color)}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          ticket_flyer_accent_color: e.target.value.toLowerCase(),
+                        }))
+                      }
+                      style={{
+                        width: 48,
+                        height: 36,
+                        padding: 0,
+                        border: '1px solid rgba(255,255,255,0.25)',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        background: 'transparent',
+                      }}
+                    />
+                    <div style={{ flex: '1', minWidth: 140, maxWidth: 220 }}>
+                      <CustomInput
+                        label="Hexadecimal"
+                        type="text"
+                        name="ticket_flyer_accent_color"
+                        value={formData.ticket_flyer_accent_color}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            ticket_flyer_accent_color: e.target.value,
+                          }))
+                        }
+                        onBlur={() =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            ticket_flyer_accent_color: parseTicketFlyerAccentHex(
+                              prev.ticket_flyer_accent_color
+                            ),
+                          }))
+                        }
+                        placeholder="#00d4ff"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <span className="custom-input-label">Opción 2 — colores del texto en el recuadro</span>
+                  <span className="input-helper-text">
+                    Tres tonos en el boleto compacto: la <strong>localidad</strong> usa el color de acento arriba; aquí
+                    defines el <strong>nombre</strong> del comprador y el color del <strong>correo</strong> (mismo tono
+                    para “Presenta este QR…” y “Entrada X de Y”).
+                  </span>
+                  <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    <div>
+                      <span className="input-helper-text" style={{ display: 'block', marginBottom: 6 }}>
+                        Nombre del comprador
+                      </span>
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          alignItems: 'flex-end',
+                          gap: '12px',
+                        }}
+                      >
+                        <input
+                          type="color"
+                          aria-label="Color nombre comprador (opción 2)"
+                          value={parseTicketFlyerHex(
+                            formData.ticket_flyer_minimal_name_color,
+                            TICKET_FLYER_MINIMAL_NAME_DEFAULT
+                          )}
+                          onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              ticket_flyer_minimal_name_color: e.target.value.toLowerCase(),
+                            }))
+                          }
+                          style={{
+                            width: 48,
+                            height: 36,
+                            padding: 0,
+                            border: '1px solid rgba(255,255,255,0.25)',
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                            background: 'transparent',
+                          }}
+                        />
+                        <div style={{ flex: '1', minWidth: 140, maxWidth: 220 }}>
+                          <CustomInput
+                            label="Hexadecimal"
+                            type="text"
+                            name="ticket_flyer_minimal_name_color"
+                            value={formData.ticket_flyer_minimal_name_color}
+                            onChange={(e) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                ticket_flyer_minimal_name_color: e.target.value,
+                              }))
+                            }
+                            onBlur={() =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                ticket_flyer_minimal_name_color: parseTicketFlyerHex(
+                                  prev.ticket_flyer_minimal_name_color,
+                                  TICKET_FLYER_MINIMAL_NAME_DEFAULT
+                                ),
+                              }))
+                            }
+                            placeholder="#ffffff"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="input-helper-text" style={{ display: 'block', marginBottom: 6 }}>
+                        Correo e indicaciones al pie del recuadro
+                      </span>
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          alignItems: 'flex-end',
+                          gap: '12px',
+                        }}
+                      >
+                        <input
+                          type="color"
+                          aria-label="Color correo e indicaciones (opción 2)"
+                          value={parseTicketFlyerHex(
+                            formData.ticket_flyer_minimal_email_color,
+                            TICKET_FLYER_MINIMAL_EMAIL_DEFAULT
+                          )}
+                          onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              ticket_flyer_minimal_email_color: e.target.value.toLowerCase(),
+                            }))
+                          }
+                          style={{
+                            width: 48,
+                            height: 36,
+                            padding: 0,
+                            border: '1px solid rgba(255,255,255,0.25)',
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                            background: 'transparent',
+                          }}
+                        />
+                        <div style={{ flex: '1', minWidth: 140, maxWidth: 220 }}>
+                          <CustomInput
+                            label="Hexadecimal"
+                            type="text"
+                            name="ticket_flyer_minimal_email_color"
+                            value={formData.ticket_flyer_minimal_email_color}
+                            onChange={(e) =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                ticket_flyer_minimal_email_color: e.target.value,
+                              }))
+                            }
+                            onBlur={() =>
+                              setFormData((prev) => ({
+                                ...prev,
+                                ticket_flyer_minimal_email_color: parseTicketFlyerHex(
+                                  prev.ticket_flyer_minimal_email_color,
+                                  TICKET_FLYER_MINIMAL_EMAIL_DEFAULT
+                                ),
+                              }))
+                            }
+                            placeholder="#e0e0e0"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 
                 <div className="form-group">
                   <CustomInput
@@ -1349,22 +1927,29 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
                   />
                 </div>
                 
-                <div className="form-group">
-                  <CustomInput
-                    label="Precio de la boleta (por defecto)"
-                    type="text"
-                    name="ticket_price"
-                    value={formData.ticket_price === '' || formData.ticket_price === undefined ? '' : String(formData.ticket_price)}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/\D/g, '');
-                      setFormData((prev) => ({ ...prev, ticket_price: val }));
-                    }}
-                    placeholder="25000"
-                    pattern="[0-9]*"
-                    required
-                  />
-                  <small className="helper-text">Este precio se usará si no defines localidades específicas</small>
-                </div>
+                {formData.sections.length === 0 && (
+                  <div className="form-group">
+                    <CustomInput
+                      label="Precio de la boleta (sin localidades)"
+                      type="text"
+                      name="ticket_price"
+                      value={
+                        formData.ticket_price === '' || formData.ticket_price === undefined
+                          ? ''
+                          : formatCopThousandsDisplay(Number(formData.ticket_price))
+                      }
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '');
+                        setFormData((prev) => ({ ...prev, ticket_price: val === '' ? '' : val }));
+                      }}
+                      placeholder="25.000"
+                      pattern="[0-9]*"
+                    />
+                    <small className="helper-text">
+                      Solo aplica si el evento no tiene localidades; con mapa y localidades el precio va en cada una.
+                    </small>
+                  </div>
+                )}
 
                 <div className="form-group">
                   <CustomInput
@@ -1397,7 +1982,11 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
                     onVisualChange={(venue_map_visual) =>
                       setFormData((prev) => ({ ...prev, venue_map_visual }))
                     }
-                    defaultNewSectionPrice={Number(formData.ticket_price) || 0}
+                    defaultNewSectionPrice={
+                      formData.sections.length > 0
+                        ? Number(formData.sections[formData.sections.length - 1]?.price) || 0
+                        : Number(formData.ticket_price) || 0
+                    }
                     defaultNewSectionAvailable={
                       Math.max(1, Number(formData.capacity_per_occurrence) || 0) || 100
                     }
@@ -1427,10 +2016,62 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
                 </div>
 
                 <div className="form-section">
+                  <h2>Reglas de abono (este evento)</h2>
+                  <p className="helper-text">
+                    Aplican al checkout cuando una localidad tiene activado «Permitir compra con abono». El primer pago debe
+                    cumplir al menos el porcentaje del <strong>total</strong> (entradas + tarifa) y, si indicas un piso en
+                    pesos, el mayor de ambos. El saldo debe pagarse antes del día del evento contando hacia atrás los días que
+                    indiques.
+                  </p>
+                  <div className="form-group-inline" style={{ flexWrap: 'wrap', gap: '1rem' }}>
+                    <CustomInput
+                      label="% mínimo del total (primer pago)"
+                      type="text"
+                      value={formData.abono_min_percent}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          abono_min_percent: e.target.value.replace(/[^\d.,]/g, ''),
+                        }))
+                      }
+                      placeholder="30"
+                    />
+                    <CustomInput
+                      label="Monto mínimo del abono (COP, opcional)"
+                      type="text"
+                      value={formData.abono_min_amount_cop}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          abono_min_amount_cop: e.target.value.replace(/\D/g, ''),
+                        }))
+                      }
+                      placeholder="0"
+                    />
+                    <CustomInput
+                      label="Días antes del evento: límite para pagar saldo"
+                      type="text"
+                      value={formData.abono_max_days_before_event}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          abono_max_days_before_event: e.target.value.replace(/\D/g, ''),
+                        }))
+                      }
+                      placeholder="7"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-section">
                   <h2>Localidades (Secciones)</h2>
                   <p className="helper-text">Define diferentes localidades con precios y disponibilidad. Si no defines localidades, se usará el precio por defecto.</p>
                   
-                  {formData.sections.map((section, index) => (
+                  {formData.sections.map((section, index) => {
+                    const palcoZones = formData.venue_map_zones.filter((z) => z.sectionId === section.id);
+                    const palcoCount = palcoZones.length;
+                    const isDividedPalcoLocality = palcoCount > 1;
+                    return (
                     <div key={section.id} className="section-item">
                       <div className="section-row">
                         <div className="form-group-inline">
@@ -1461,15 +2102,114 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
                           <CustomInput
                             label="Precio (COP)"
                             type="text"
-                            value={section.price.toString()}
+                            value={formatCopThousandsDisplay(Number(section.price))}
                             onChange={(e) => {
                               const val = e.target.value.replace(/\D/g, '');
-                              updateSection(index, 'price', val === '' ? 0 : parseInt(val));
+                              updateSection(index, 'price', val === '' ? 0 : parseInt(val, 10) || 0);
                             }}
-                            placeholder="100000"
-                            pattern="[0-9]+"
+                            placeholder="100.000"
+                            pattern="[0-9.]*"
                             required
                           />
+                        </div>
+                        {isDividedPalcoLocality ? (
+                          <div className="form-group-inline section-palco-multi-block">
+                            <div className="section-palco-multi-lede">
+                              <span className="section-palco-multi-lede__title">Palco multipersona</span>
+                              <p className="section-palco-multi-lede__text">
+                                Usa el mismo <strong>precio en COP</strong> para el palco completo: incluye a todas las
+                                personas de la celda. Cada venta genera tantos <strong>códigos QR</strong> como personas
+                                fijas abajo.
+                              </p>
+                            </div>
+                            <label className="section-abono-check__label" style={{ marginBottom: '0.35rem' }}>
+                              <input
+                                type="checkbox"
+                                checked={section.palco_multipersona === true}
+                                onChange={(e) => {
+                                  const on = e.target.checked;
+                                  const updated = [...formData.sections];
+                                  updated[index] = {
+                                    ...updated[index],
+                                    palco_multipersona: on,
+                                    seats_per_unit: on
+                                      ? Math.max(2, Number(updated[index].seats_per_unit) || 2)
+                                      : 1,
+                                  };
+                                  setFormData({ ...formData, sections: updated });
+                                }}
+                              />
+                              <span>Activar multipersona (varias personas por palco)</span>
+                            </label>
+                            {section.palco_multipersona === true ? (
+                              <>
+                                <CustomInput
+                                  label="¿Cuántas personas por palco?"
+                                  type="text"
+                                  value={String(section.seats_per_unit ?? 2)}
+                                  onChange={(e) => {
+                                    const val = e.target.value.replace(/\D/g, '');
+                                    updateSection(
+                                      index,
+                                      'seats_per_unit',
+                                      val === '' ? 2 : Math.max(2, parseInt(val, 10) || 2)
+                                    );
+                                  }}
+                                  placeholder="Ej: 10"
+                                />
+                                <small className="helper-text">
+                                  Inventario: <strong>un palco = una venta</strong>. Al comprarlo se emiten los QR de todas
+                                  las personas; el comprador paga el total de «Precio (COP)» una sola vez.
+                                </small>
+                              </>
+                            ) : (
+                              <small className="helper-text">
+                                Sin multipersona: cada palco es 1 entrada y 1 QR. Activa la opción de arriba si el palco
+                                admite varias personas con un solo cobro.
+                              </small>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="form-group-inline">
+                            <CustomInput
+                              label="Puestos por unidad (grupo)"
+                              type="text"
+                              value={String(section.seats_per_unit ?? 1)}
+                              onChange={(e) => {
+                                const val = e.target.value.replace(/\D/g, '');
+                                updateSection(
+                                  index,
+                                  'seats_per_unit',
+                                  val === '' ? 1 : Math.max(1, parseInt(val, 10) || 1)
+                                );
+                              }}
+                              placeholder="1"
+                            />
+                            <small className="helper-text">
+                              Cada compra de una unidad genera esta cantidad de QR (localidades sin mapa en palcos).
+                            </small>
+                          </div>
+                        )}
+                        <div className="form-group-inline section-abono-check">
+                          <label className="section-abono-check__label">
+                            <input
+                              type="checkbox"
+                              checked={section.abono_allowed === true}
+                              onChange={(e) => updateSection(index, 'abono_allowed', e.target.checked)}
+                            />
+                            <span>
+                              Permitir compra con abono (solo usuarios con sesión)
+                              {isDividedPalcoLocality ? (
+                                <>
+                                  <br />
+                                  <span className="section-abono-scope-note">
+                                    Aplica a toda esta localidad: los <strong>{palcoCount} palcos</strong> del mapa usan
+                                    esta misma regla de abono.
+                                  </span>
+                                </>
+                              ) : null}
+                            </span>
+                          </label>
                         </div>
                         <div className="section-actions">
                           <SecondaryButton
@@ -1482,7 +2222,8 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                   
                   <div className="section-actions">
                     <SecondaryButton

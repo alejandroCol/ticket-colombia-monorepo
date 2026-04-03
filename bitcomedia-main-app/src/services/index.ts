@@ -29,7 +29,7 @@ export {
   getHomeBanners,
   db
 } from './firestore';
-export type { OrganizerBuyerFeeDoc } from './firestore';
+export type { OrganizerBuyerFeeDoc, PaymentConfigDoc } from './firestore';
 
 // Storage service exports
 export {

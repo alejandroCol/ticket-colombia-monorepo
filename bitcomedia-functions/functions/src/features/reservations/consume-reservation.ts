@@ -40,6 +40,12 @@ export async function consumeReservation(
       throw new Error("La localidad no coincide con tu reserva.");
     }
 
+    const reqZ = String(request.metadata?.mapZoneId || "").trim();
+    const rZ = String(r.mapZoneId || "").trim();
+    if (reqZ !== rZ) {
+      throw new Error("El palco seleccionado no coincide con tu reserva.");
+    }
+
     tx.update(ref, {
       status: "consumed",
       consumedAt: admin.firestore.FieldValue.serverTimestamp(),

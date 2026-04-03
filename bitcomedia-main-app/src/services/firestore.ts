@@ -97,7 +97,14 @@ export const getEventBySlug = async (slug: string): Promise<Event | null> => {
 };
 
 // Get payment configuration from Firestore
-export const getPaymentConfig = async (): Promise<{ fees: number; taxes: number } | null> => {
+export type PaymentConfigDoc = {
+  fees: number;
+  taxes: number;
+  /** `mercadopago` (default) | `onepay` — backend Cloud Functions */
+  payment_provider?: string;
+};
+
+export const getPaymentConfig = async (): Promise<PaymentConfigDoc | null> => {
   try {
     const configDocRef = doc(db, 'configurations', 'payments_config');
     const configDoc = await getDoc(configDocRef);
@@ -106,22 +113,23 @@ export const getPaymentConfig = async (): Promise<{ fees: number; taxes: number 
       const data = configDoc.data();
       return {
         fees: data.fees || 0,
-        taxes: data.taxes || 0
+        taxes: data.taxes || 0,
+        payment_provider: data.payment_provider,
       };
     }
     
-    // If no config document exists, return default values
     return {
-      fees: 9, // 9% de comisión sobre el subtotal
-      taxes: 19
+      fees: 9,
+      taxes: 19,
+      payment_provider: undefined,
     };
     
   } catch (error) {
     console.error('Error fetching payment config:', error);
-    // Return default values on error
     return {
-      fees: 9, // 9% de comisión sobre el subtotal
-      taxes: 19
+      fees: 9,
+      taxes: 19,
+      payment_provider: undefined,
     };
   }
 };

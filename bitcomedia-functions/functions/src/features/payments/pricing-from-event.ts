@@ -3,6 +3,68 @@ import type { DocumentData } from "firebase-admin/firestore";
 /**
  * Precio unitario del evento según localidad (misma lógica que checkout público).
  */
+/**
+ * Subtotal de la línea de compra (COP).
+ * Con mapZoneId y localidad multipersona (palcos divididos), `sections[].price` es el
+ * precio total del palco (incluye las N personas); no se multiplica por `quantity`.
+ */
+export function ticketLineSubtotalCOP(
+  eventData: DocumentData,
+  sectionId: string | undefined,
+  mapZoneId: string | undefined,
+  unitPriceCOP: number,
+  quantity: number
+): number {
+  const mz = String(mapZoneId || "").trim();
+  const sid = String(sectionId || "").trim();
+  const qty = Math.max(1, Math.floor(Number(quantity) || 1));
+  const base = Math.max(0, Math.round(Number(unitPriceCOP) || 0));
+  if (!mz || !sid) {
+    return Math.round(base * qty);
+  }
+  const sections = eventData.sections as
+    | Array<{
+        id: string;
+        palco_multipersona?: boolean;
+        seats_per_unit?: number;
+      }>
+    | undefined;
+  const sec = sections?.find((s) => String(s.id || "").trim() === sid);
+  const spu = Math.max(1, Number(sec?.seats_per_unit) || 1);
+  if (sec?.palco_multipersona === true && spu > 1) {
+    return base;
+  }
+  return Math.round(base * qty);
+}
+
+/**
+ * Unidades para tarifa fija por entrada (palco multipersona sin mapa: `quantity` × N personas).
+ * Con `mapZoneId`, `quantity` de la reserva ya cuenta N personas de un palco.
+ */
+export function buyerFeeFixedUnitCountFromRequest(
+  quantity: number,
+  eventData: DocumentData,
+  sectionId?: string,
+  mapZoneId?: string
+): number {
+  const q = Math.max(1, Math.floor(Number(quantity) || 1));
+  const sid = String(sectionId || "").trim();
+  const mz = String(mapZoneId || "").trim();
+  const sections = eventData.sections as
+    | Array<{
+        id: string;
+        palco_multipersona?: boolean;
+        seats_per_unit?: number;
+      }>
+    | undefined;
+  const sec = sections?.find((s) => String(s.id || "").trim() === sid);
+  const n = Math.max(1, Number(sec?.seats_per_unit) || 1);
+  const palcoMulti = sec?.palco_multipersona === true && n > 1;
+  if (!palcoMulti) return q;
+  if (mz) return q;
+  return q * n;
+}
+
 export function unitPriceFromEventData(
   eventData: DocumentData,
   sectionId?: string
@@ -41,9 +103,11 @@ export function computeServiceFeeCOP(
   quantity: number,
   eventData: DocumentData,
   globalFeesPercent: number,
-  organizerFee: OrganizerBuyerFeeInput = null
+  organizerFee: OrganizerBuyerFeeInput = null,
+  fixedFeeUnitCount?: number
 ): { feeCOP: number; source: ServiceFeeSource; effectivePercent?: number; fixedPerTicket?: number } {
   const qty = Math.max(1, quantity);
+  const qFixed = Math.max(1, fixedFeeUnitCount ?? qty);
   const type = String(eventData.platform_commission_type || "").trim();
   const value = Number(eventData.platform_commission_value) || 0;
 
@@ -56,7 +120,7 @@ export function computeServiceFeeCOP(
   }
   if (type === "fixed_per_ticket" && value > 0) {
     return {
-      feeCOP: Math.round(value * qty),
+      feeCOP: Math.round(value * qFixed),
       source: "event_fixed",
       fixedPerTicket: value,
     };
@@ -73,7 +137,7 @@ export function computeServiceFeeCOP(
   }
   if (oType === "fixed_per_ticket" && oVal > 0) {
     return {
-      feeCOP: Math.round(oVal * qty),
+      feeCOP: Math.round(oVal * qFixed),
       source: "organizer_fixed",
       fixedPerTicket: oVal,
     };
@@ -92,7 +156,8 @@ export function expectedTotalCOP(
   quantity: number,
   eventData: DocumentData,
   globalFeesPercent: number,
-  organizerFee: OrganizerBuyerFeeInput = null
+  organizerFee: OrganizerBuyerFeeInput = null,
+  fixedFeeUnitCount?: number
 ): { subtotal: number; feeCOP: number; total: number; feeSource: ServiceFeeSource } {
   const sub = Math.max(0, Math.round(subtotalCOP));
   const { feeCOP, source } = computeServiceFeeCOP(
@@ -100,7 +165,8 @@ export function expectedTotalCOP(
     quantity,
     eventData,
     globalFeesPercent,
-    organizerFee
+    organizerFee,
+    fixedFeeUnitCount
   );
   return {
     subtotal: sub,

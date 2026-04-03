@@ -1,12 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
   getEventBySlug,
   getEventAvailability,
+  getPaymentConfig,
+  getOrganizerBuyerFee,
   metaPixel,
   type AvailabilityResponse,
+  type PaymentConfigDoc,
+  type OrganizerBuyerFeeDoc,
 } from '../../services';
-import type { Event, EventSection } from '../../services/types';
+import { estimatedBuyerFeeForOneLocalityUnit } from '../../utils/buyerServiceFee';
+import type { Event, EventSection, VenueMapZone } from '../../services/types';
 import Chip from '../../components/Chip';
 import CustomInput from '../../components/CustomInput';
 import PrimaryButton from '../../components/PrimaryButton';
@@ -14,6 +19,7 @@ import SecondaryButton from '../../components/SecondaryButton';
 import TopNavBar from '../../containers/TopNavBar';
 import Loader from '../../components/Loader';
 import VenueMapInteractive from '../../components/VenueMapInteractive';
+import WhatsAppButton from '../../components/WhatsAppButton';
 import './index.scss';
 
 function displayAvailable(remaining: number, capacity: number): number {
@@ -30,6 +36,41 @@ function sectionRemaining(
   return Math.max(0, sec.available - sold);
 }
 
+function zonesForSectionEvent(event: Event, sectionId: string): VenueMapZone[] {
+  return (event.venue_map?.zones ?? []).filter((z) => z.sectionId === sectionId);
+}
+
+function isPalcoSectionEvent(event: Event, sectionId: string): boolean {
+  return zonesForSectionEvent(event, sectionId).length > 1;
+}
+
+function palcoSlotsRemaining(
+  sec: EventSection,
+  event: Event,
+  mapZoneSold: Record<string, number>
+): number {
+  const zs = zonesForSectionEvent(event, sec.id);
+  if (zs.length <= 1) return -1;
+  let free = 0;
+  for (const z of zs) {
+    const u = mapZoneSold[z.id] ?? 0;
+    if (u < 1) free += 1;
+  }
+  return free;
+}
+
+function sectionEffectiveRemaining(
+  sec: EventSection,
+  availability: Record<string, number>,
+  mapZoneSold: Record<string, number>,
+  event: Event | null
+): number {
+  if (!event) return sectionRemaining(sec, availability);
+  const p = palcoSlotsRemaining(sec, event, mapZoneSold);
+  if (p >= 0) return p;
+  return sectionRemaining(sec, availability);
+}
+
 type EventLocationState = { eventFromList?: Event };
 
 const EventDetailScreen: React.FC = () => {
@@ -38,19 +79,49 @@ const EventDetailScreen: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [ticketQuantity, setTicketQuantity] = useState<number>(1);
   const [selectedSection, setSelectedSection] = useState<EventSection | null>(null);
+  const [selectedMapZoneId, setSelectedMapZoneId] = useState<string | null>(null);
   const [availability, setAvailability] = useState<Record<string, number>>({});
+  const [mapZoneSold, setMapZoneSold] = useState<Record<string, number>>({});
   const [totalSold, setTotalSold] = useState(0);
   const [availabilityReady, setAvailabilityReady] = useState(false);
+  const [paymentConfigForFees, setPaymentConfigForFees] = useState<PaymentConfigDoc | null>(null);
+  const [organizerFeeForFees, setOrganizerFeeForFees] = useState<OrganizerBuyerFeeDoc | null>(null);
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const location = useLocation();
 
   const sections = event?.sections && event.sections.length > 0 ? event.sections : null;
+  /** En palco multipersona dividido, `price` en Firestore es el total del palco (incluye las N personas). */
   const price = selectedSection ? selectedSection.price : (event?.ticket_price ?? 0);
+  const priceLabelForBooking = (() => {
+    if (!selectedSection || !event) return 'Precio por entrada';
+    if (!isPalcoSectionEvent(event, selectedSection.id)) return 'Precio por entrada';
+    const n = Math.max(1, selectedSection.seats_per_unit ?? 1);
+    if (selectedSection.palco_multipersona === true && n > 1) {
+      return `Precio para ${n} personas`;
+    }
+    return 'Precio por palco';
+  })();
   const capacity = selectedSection ? selectedSection.available : (event?.capacity_per_occurrence ?? 0);
-  const sold = selectedSection ? (availability[selectedSection.name] || availability[selectedSection.id] || 0) : (availability['General'] ?? totalSold);
-  const remaining = Math.max(0, capacity - sold);
-  const showAvailable = displayAvailable(remaining, capacity);
+  const remaining = (() => {
+    if (!selectedSection || !event) {
+      const g = availability['General'] ?? totalSold;
+      return Math.max(0, capacity - g);
+    }
+    const pf = palcoSlotsRemaining(selectedSection, event, mapZoneSold);
+    if (pf >= 0) return pf;
+    return sectionRemaining(selectedSection, availability);
+  })();
+  const selectedIsPalcoGrid = Boolean(
+    event && selectedSection && isPalcoSectionEvent(event, selectedSection.id)
+  );
+  /** Palcos divididos: número exacto de celdas libres; resto de localidades: umbral ~70% como antes. */
+  const showAvailable = selectedIsPalcoGrid
+    ? remaining
+    : displayAvailable(remaining, capacity);
+  const palcoPickRequired = Boolean(
+    event && selectedSection && isPalcoSectionEvent(event, selectedSection.id)
+  );
   
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -70,6 +141,7 @@ const EventDetailScreen: React.FC = () => {
       });
       if (avail.generalSold !== undefined) bySec['General'] = avail.generalSold;
       setAvailability(bySec);
+      setMapZoneSold(avail.byMapZone || {});
       setTotalSold(avail.totalSold ?? 0);
       setAvailabilityReady(true);
     };
@@ -101,11 +173,18 @@ const EventDetailScreen: React.FC = () => {
 
         const eventPromise = getEventBySlug(slug);
         const availPromise =
-          seedMatches && seedEvent ? getEventAvailability(seedEvent.id) : null;
+          seedMatches && seedEvent
+            ? getEventAvailability(seedEvent.id)
+            : getEventAvailability({ slug });
 
-        const eventData = await eventPromise;
+        const [eventSettled, availSettled] = await Promise.allSettled([
+          eventPromise,
+          availPromise,
+        ]);
         if (cancelled) return;
 
+        const eventData =
+          eventSettled.status === 'fulfilled' ? eventSettled.value : null;
         if (!eventData) {
           setError('Evento no encontrado');
           setEvent(null);
@@ -115,6 +194,24 @@ const EventDetailScreen: React.FC = () => {
         }
 
         setEvent(eventData);
+        void (async () => {
+          try {
+            const cfg = await getPaymentConfig();
+            const org =
+              eventData.organizer_id ?
+                await getOrganizerBuyerFee(eventData.organizer_id).catch(() => null) :
+                null;
+            if (!cancelled) {
+              setPaymentConfigForFees(cfg);
+              setOrganizerFeeForFees(org);
+            }
+          } catch {
+            if (!cancelled) {
+              setPaymentConfigForFees(null);
+              setOrganizerFeeForFees(null);
+            }
+          }
+        })();
         const secs = eventData.sections;
         if (secs?.length) setSelectedSection(secs[0]);
         else setSelectedSection(null);
@@ -124,18 +221,26 @@ const EventDetailScreen: React.FC = () => {
         }
 
         let avail: AvailabilityResponse;
-        if (availPromise && seedEvent) {
-          const parallelAvail = await availPromise;
-          if (cancelled) return;
-          if (eventData.id === seedEvent.id) {
-            avail = parallelAvail;
-          } else {
-            avail = await getEventAvailability(eventData.id);
-          }
+        if (availSettled.status === 'fulfilled') {
+          avail = availSettled.value;
         } else {
-          avail = await getEventAvailability(eventData.id);
+          try {
+            avail = await getEventAvailability(eventData.id);
+          } catch {
+            if (cancelled) return;
+            console.error('Error al cargar disponibilidad:', availSettled.reason);
+            setError('Error al cargar la disponibilidad del evento');
+            setIsLoading(false);
+            setAvailabilityReady(true);
+            return;
+          }
         }
         if (cancelled) return;
+
+        if (seedMatches && seedEvent && eventData.id !== seedEvent.id) {
+          avail = await getEventAvailability(eventData.id);
+          if (cancelled) return;
+        }
 
         applyAvailability(avail);
         metaPixel.trackViewContent(eventData.name, eventData.ticket_price);
@@ -157,12 +262,24 @@ const EventDetailScreen: React.FC = () => {
 
   /** Si la localidad por defecto quedó sin cupo, pasar a la primera con cupo */
   useEffect(() => {
-    if (!sections?.length || !Object.keys(availability).length) return;
+    if (!sections?.length || !event) return;
     if (!selectedSection) return;
-    if (sectionRemaining(selectedSection, availability) > 0) return;
-    const next = sections.find((s) => sectionRemaining(s, availability) > 0);
-    if (next) setSelectedSection(next);
-  }, [sections, availability, selectedSection]);
+    if (sectionEffectiveRemaining(selectedSection, availability, mapZoneSold, event) > 0) return;
+    const next = sections.find((s) =>
+      sectionEffectiveRemaining(s, availability, mapZoneSold, event) > 0
+    );
+    if (next) {
+      setSelectedSection(next);
+      setSelectedMapZoneId(null);
+    }
+  }, [sections, availability, mapZoneSold, event, selectedSection]);
+
+  /** Palcos divididos: una sola compra; la cantidad visible es siempre 1. */
+  useEffect(() => {
+    if (!event || !selectedSection) return;
+    if (!isPalcoSectionEvent(event, selectedSection.id)) return;
+    setTicketQuantity(1);
+  }, [event, selectedSection?.id, selectedSection?.seats_per_unit]);
 
   const handleTicketQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -189,14 +306,30 @@ const EventDetailScreen: React.FC = () => {
       return;
     }
 
-    if (ticketQuantity > remaining) return;
+    if (!palcoPickRequired && ticketQuantity > remaining) return;
 
-    const quantityToPass = Math.max(1, ticketQuantity);
+    if (selectedSection && isPalcoSectionEvent(event, selectedSection.id) && !selectedMapZoneId) {
+      alert('Elige un palco en el mapa antes de continuar.');
+      return;
+    }
+
+    const palco = selectedSection && isPalcoSectionEvent(event, selectedSection.id);
+    const spu = selectedSection
+      ? Math.max(1, selectedSection.seats_per_unit ?? 1)
+      : 1;
+    const quantityToPass = palco ? spu : Math.max(1, ticketQuantity);
     const eventSlug = event.slug || event.id;
     const params = new URLSearchParams({ quantity: String(quantityToPass) });
     if (selectedSection) {
       params.set('sectionId', selectedSection.id);
       params.set('sectionName', selectedSection.name);
+      if (selectedMapZoneId) {
+        const z = zonesForSectionEvent(event, selectedSection.id).find((x) => x.id === selectedMapZoneId);
+        if (z) {
+          params.set('mapZoneId', z.id);
+          params.set('mapZoneLabel', z.label || String(z.palco_index ?? ''));
+        }
+      }
     }
     navigate(`/compra/${eventSlug}?${params.toString()}`);
   };
@@ -232,6 +365,26 @@ const EventDetailScreen: React.FC = () => {
     }).format(price);
   };
 
+  const formatCopPlain = (n: number) =>
+    new Intl.NumberFormat("es-CO", {
+      style: "currency",
+      currency: "COP",
+      minimumFractionDigits: 0,
+    }).format(n);
+
+  const selectedSectionServiceFee = useMemo(() => {
+    if (!selectedSection || !event || !paymentConfigForFees || selectedSection.price <= 0) {
+      return null;
+    }
+    const fee = estimatedBuyerFeeForOneLocalityUnit(
+      selectedSection,
+      event,
+      paymentConfigForFees.fees ?? 9,
+      organizerFeeForFees
+    );
+    return fee > 0 ? fee : null;
+  }, [selectedSection, event, paymentConfigForFees, organizerFeeForFees]);
+
   // En el botón de compra, ajustar el texto
   const buyButtonText = () => {
     if (!event) return 'Cargando...';
@@ -250,18 +403,24 @@ const EventDetailScreen: React.FC = () => {
     if (!event) return true;
     if (!isExternalEvent && !availabilityReady) return true;
     if (ticketQuantity < 1) return true;
-    if (ticketQuantity > remaining) return true;
-    if (
-      sections &&
-      selectedSection &&
-      sectionRemaining(selectedSection, availability) <= 0
-    ) {
+    if (palcoPickRequired) {
+      if (remaining < 1) return true;
+    } else if (ticketQuantity > remaining) {
       return true;
     }
+    if (sections && selectedSection && event) {
+      if (sectionEffectiveRemaining(selectedSection, availability, mapZoneSold, event) <= 0) {
+        return true;
+      }
+    }
+    if (palcoPickRequired && !selectedMapZoneId) return true;
     return false;
   };
 
   const displayLabels = (event?.event_labels || []).slice(0, 5);
+
+  const eventSupportWhatsapp = String(event?.support_whatsapp ?? '').replace(/\D/g, '');
+  const showEventWhatsappSupport = Boolean(event) && eventSupportWhatsapp.length > 0;
 
   if (isLoading) {
     return (
@@ -339,6 +498,23 @@ const EventDetailScreen: React.FC = () => {
               </div>
             )}
 
+            {showEventWhatsappSupport && (
+              <div className="event-hero-panel__support">
+                <WhatsAppButton
+                  phoneOverride={eventSupportWhatsapp}
+                  message={`Hola, tengo una consulta sobre el evento «${event.name}».`}
+                  eventName={event.name}
+                  trackingLabel="event-support-whatsapp"
+                  className="button-style"
+                >
+                  Soporte WhatsApp
+                </WhatsAppButton>
+                <p className="event-hero-panel__support-hint">
+                  ¿Dudas sobre entradas o el evento? Abre WhatsApp y envíanos un mensaje.
+                </p>
+              </div>
+            )}
+
             <section className="event-hero-panel__section" aria-labelledby="hero-about-heading">
               <h2 id="hero-about-heading" className="event-hero-panel__section-title">
                 Acerca del evento
@@ -392,10 +568,20 @@ const EventDetailScreen: React.FC = () => {
                     zones={mapZones}
                     sections={sections}
                     selectedSectionId={selectedSection?.id}
-                    onSelectSection={(sec) => setSelectedSection(sec)}
+                    selectedMapZoneId={selectedMapZoneId}
+                    mapZoneSold={mapZoneSold}
+                    onSelectZoneOnMap={(sec, z) => {
+                      setSelectedSection(sec);
+                      setSelectedMapZoneId(z.id);
+                    }}
                   />
                 );
               })()}
+              {palcoPickRequired && !selectedMapZoneId && (
+                <p className="availability-pill availability-pill--warn" style={{ marginTop: '0.5rem' }}>
+                  Elige el <strong>número de palco</strong> tocando el mapa.
+                </p>
+              )}
               {sections && (
                 <div className="event-section-picker" role="radiogroup" aria-label="Localidad">
                   <span className="event-section-picker__label" id="section-picker-label">
@@ -403,8 +589,9 @@ const EventDetailScreen: React.FC = () => {
                   </span>
                   <div className="event-section-picker__grid" aria-labelledby="section-picker-label">
                     {sections.map((sec) => {
-                      const rem = sectionRemaining(sec, availability);
-                      const shown = displayAvailable(rem, sec.available);
+                      const rem = sectionEffectiveRemaining(sec, availability, mapZoneSold, event);
+                      const palcoGrid = isPalcoSectionEvent(event, sec.id);
+                      const shown = palcoGrid ? rem : displayAvailable(rem, sec.available);
                       const selected = selectedSection?.id === sec.id;
                       const soldOut = rem <= 0;
                       const low = rem > 0 && rem <= Math.max(1, Math.floor(sec.available * 0.15));
@@ -421,10 +608,15 @@ const EventDetailScreen: React.FC = () => {
                             (soldOut ? ' event-section-card--soldout' : '') +
                             (low && !soldOut ? ' event-section-card--low' : '')
                           }
-                          onClick={() => setSelectedSection(sec)}
+                          onClick={() => {
+                            setSelectedSection(sec);
+                            setSelectedMapZoneId(null);
+                          }}
                         >
                           <span className="event-section-card__name">{sec.name}</span>
-                          <span className="event-section-card__price">{formatPrice(sec.price)}</span>
+                          <div className="event-section-card__price-stack">
+                            <span className="event-section-card__price">{formatPrice(sec.price)}</span>
+                          </div>
                           {soldOut ? (
                             <span className="event-section-card__badge event-section-card__badge--soldout">
                               Agotada
@@ -435,7 +627,7 @@ const EventDetailScreen: React.FC = () => {
                             </span>
                           ) : (
                             <span className="event-section-card__badge">
-                              ~{shown} disponibles
+                              {palcoGrid ? `${shown} palcos disponibles` : `~${shown} disponibles`}
                             </span>
                           )}
                         </button>
@@ -452,22 +644,50 @@ const EventDetailScreen: React.FC = () => {
               )}
               {sections &&
                 selectedSection &&
-                sectionRemaining(selectedSection, availability) > 0 && (
+                sectionEffectiveRemaining(selectedSection, availability, mapZoneSold, event) > 0 && (
                 <p className="availability-pill">
                   <span className="availability-pill__dot" aria-hidden />
-                  ~{showAvailable} en <strong>{selectedSection.name}</strong>
+                  {selectedIsPalcoGrid
+                    ? `${showAvailable} palcos disponibles`
+                    : `~${showAvailable} en `}
+                  {!selectedIsPalcoGrid ? (
+                    <>
+                      <strong>{selectedSection.name}</strong>
+                    </>
+                  ) : (
+                    <>
+                      en <strong>{selectedSection.name}</strong>
+                    </>
+                  )}
+                  {palcoPickRequired && selectedMapZoneId ? (
+                    <>
+                      {' '}
+                      · Palco{' '}
+                      <strong>
+                        {zonesForSectionEvent(event, selectedSection.id).find((z) => z.id === selectedMapZoneId)
+                          ?.label || '?'}
+                      </strong>
+                    </>
+                  ) : null}
                 </p>
               )}
               {sections &&
                 selectedSection &&
-                sectionRemaining(selectedSection, availability) <= 0 && (
+                sectionEffectiveRemaining(selectedSection, availability, mapZoneSold, event) <= 0 && (
                 <p className="availability-pill availability-pill--warn">
                   Esta localidad no tiene cupo. Elige otra.
                 </p>
               )}
               <div className="event-price-row">
-                <span className="event-price-row__label">Precio por entrada</span>
-                <span className="event-price-row__value">{formatPrice(price)}</span>
+                <span className="event-price-row__label">{priceLabelForBooking}</span>
+                <div className="event-price-row__col">
+                  <span className="event-price-row__value">{formatPrice(price)}</span>
+                  {selectedSectionServiceFee != null && price > 0 ? (
+                    <span className="event-price-row__fee">
+                      + {formatCopPlain(selectedSectionServiceFee)} tarifa de servicio
+                    </span>
+                  ) : null}
+                </div>
               </div>
               
               {event.event_type === "external_url" ? (
@@ -486,7 +706,7 @@ const EventDetailScreen: React.FC = () => {
                       type="button"
                       className="quantity-btn quantity-decrease"
                       onClick={() => setTicketQuantity(Math.max(1, ticketQuantity - 1))}
-                      disabled={ticketQuantity <= 1}
+                      disabled={palcoPickRequired || ticketQuantity <= 1}
                       size="small"
                       aria-label="Menos entradas"
                     >
@@ -495,16 +715,24 @@ const EventDetailScreen: React.FC = () => {
                     <CustomInput
                       type="number"
                       label=""
-                      value={ticketQuantity === 0 ? '' : ticketQuantity}
+                      value={
+                        palcoPickRequired
+                          ? 1
+                          : ticketQuantity === 0
+                            ? ''
+                            : ticketQuantity
+                      }
                       onChange={handleTicketQuantityChange}
                       placeholder="1"
                       className="ticket-quantity-input"
                       aria-label="Cantidad de entradas"
+                      disabled={palcoPickRequired}
                     />
                     <SecondaryButton 
                       type="button"
                       className="quantity-btn quantity-increase"
                       onClick={() => setTicketQuantity(ticketQuantity + 1)}
+                      disabled={palcoPickRequired}
                       size="small"
                       aria-label="Más entradas"
                     >

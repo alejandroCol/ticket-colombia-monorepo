@@ -1,6 +1,7 @@
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import {defineSecret} from "firebase-functions/params";
+import {capacityBucketAndCount} from "../reservations/availability";
 import {generateMultipleTicketsPdf} from "../manual-ticket/pdf-generator-multiple";
 import {sendTicketEmail} from "../manual-ticket/email-sender";
 import {randomUUID} from "crypto";
@@ -77,6 +78,25 @@ export const transferTicket = functions
         );
       }
 
+      const tKind = ticketData.ticketKind as string | undefined;
+      const inst = ticketData.installmentPhase as string | undefined;
+      if (tKind === "purchase_bundle_parent") {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Transfiere las entradas individuales del grupo desde «Mis entradas»."
+        );
+      }
+      if (
+        inst === "awaiting_deposit" ||
+        inst === "deposit_paid" ||
+        inst === "awaiting_balance"
+      ) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Completa el pago del abono antes de transferir."
+        );
+      }
+
       if (
         ticketData.ticketStatus === "cancelled" ||
         ticketData.ticketStatus === "disabled" ||
@@ -107,6 +127,7 @@ export const transferTicket = functions
         "General";
       const quantity = (ticketData.quantity as number) || 1;
       const amount = (ticketData.amount as number) || 0;
+      const mzTr = String(ticketData.mapZoneId || "").trim();
 
       const newTicketDoc: Record<string, unknown> = {
         id: newTicketId,
@@ -132,6 +153,16 @@ export const transferTicket = functions
         qrCodeData: qrCodeUrl,
         sectionId: ticketData.sectionId || null,
         sectionName: ticketData.sectionName || null,
+        mapZoneId: mzTr,
+        ticketKind: "standard",
+        transferredTo: null,
+        ...capacityBucketAndCount({
+          mapZoneId: mzTr,
+          sectionId: (ticketData.sectionId as string) ?? null,
+          sectionName: (ticketData.sectionName as string) ?? null,
+          quantity,
+          ticketKind: "standard",
+        }),
         transferredFrom: ticketId,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -190,6 +221,23 @@ export const transferTicket = functions
           sEmail,
           sName
         );
+      }
+
+      try {
+        const actorEmail = (context.auth.token?.email as string | undefined) || "";
+        await db.collection("audit_logs").add({
+          actorUid: context.auth.uid,
+          actorEmail: (actorEmail || "").slice(0, 320),
+          kind: "ticket_transfer_enduser",
+          action: "transfer",
+          entityType: "ticket",
+          entityId: `${ticketId},${newTicketId}`.slice(0, 200),
+          summary:
+            `Transfer ${ticketId.slice(0, 12)} → ${newTicketId.slice(0, 12)} · a ${recipientEmail.slice(0, 64)} · ${eventName.slice(0, 80)}`,
+          at: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } catch (auditErr) {
+        console.warn("[transferTicket] audit_logs:", (auditErr as Error).message);
       }
 
       return {

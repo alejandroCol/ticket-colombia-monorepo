@@ -90,6 +90,25 @@ export const getAdminUsersList = async (): Promise<UserData[]> => {
   return [...byUid.values()].sort((a, b) => (a.email || '').localeCompare(b.email || ''));
 };
 
+/**
+ * Usuarios que pueden aparecer como `actorUid` en audit_logs (super admin, admins, partners).
+ * Uso: filtro en Registro de actividad. Una consulta con `in` (máx. 10 valores en Firestore).
+ */
+export const getAuditActorUsersList = async (): Promise<UserData[]> => {
+  const usersRef = collection(db, 'users');
+  const q = query(
+    usersRef,
+    where('role', 'in', ['SUPER_ADMIN', 'ADMIN', 'admin', 'PARTNER']),
+    limit(500)
+  );
+  const snap = await getDocs(q);
+  const list: UserData[] = [];
+  snap.forEach((d) => {
+    list.push({ uid: d.id, ...d.data() } as UserData);
+  });
+  return list.sort((a, b) => (a.email || '').localeCompare(b.email || ''));
+};
+
 function eventDateMillis(ev: Event): number {
   const ed = ev.event_date as unknown;
   if (ed && typeof ed === 'object' && ed !== null && 'toMillis' in ed) {
@@ -191,34 +210,73 @@ export const getEventOrRecurringById = async (eventId: string): Promise<Event | 
   return null;
 };
 
+/** Indica en qué colección está el documento del evento (para rutas y subnav). */
+export const resolveEventCollection = async (
+  eventId: string
+): Promise<'events' | 'recurring_events' | null> => {
+  const fromEvents = await getEventById(eventId);
+  if (fromEvents) return 'events';
+  try {
+    const recRef = doc(db, 'recurring_events', eventId);
+    const recSnap = await getDoc(recRef);
+    if (recSnap.exists()) return 'recurring_events';
+  } catch {
+    // ignore
+  }
+  return null;
+};
+
+export type AdminPaymentConfig = {
+  fees: number;
+  taxes: number;
+  /** Checkout en línea: backend usará esta pasarela */
+  payment_provider: 'mercadopago' | 'onepay';
+};
+
 // Get payment configuration from Firestore
-export const getPaymentConfig = async (): Promise<{ fees: number; taxes: number } | null> => {
+export const getPaymentConfig = async (): Promise<AdminPaymentConfig | null> => {
   try {
     const configDocRef = doc(db, 'configurations', 'payments_config');
     const configDoc = await getDoc(configDocRef);
     
     if (configDoc.exists()) {
       const data = configDoc.data();
+      const rawProvider = String(data.payment_provider || 'mercadopago').toLowerCase();
       return {
         fees: data.fees || 0,
-        taxes: data.taxes || 0
+        taxes: data.taxes || 0,
+        payment_provider: rawProvider === 'onepay' ? 'onepay' : 'mercadopago',
       };
     }
     
-    // If no config document exists, return default values
     return {
-      fees: 9, // 9% de comisión sobre el subtotal
-      taxes: 19
+      fees: 9,
+      taxes: 19,
+      payment_provider: 'mercadopago',
     };
     
   } catch (error) {
     console.error('Error fetching payment config:', error);
-    // Return default values on error
     return {
-      fees: 9, // 9% de comisión sobre el subtotal
-      taxes: 19
+      fees: 9,
+      taxes: 19,
+      payment_provider: 'mercadopago',
     };
   }
+};
+
+export const updatePaymentProviderConfig = async (payment_provider: 'mercadopago' | 'onepay'): Promise<void> => {
+  const ref = doc(db, 'configurations', 'payments_config');
+  const snap = await getDoc(ref);
+  const base = snap.exists() ? snap.data() : {};
+  await setDoc(
+    ref,
+    {
+      ...base,
+      payment_provider: payment_provider === 'onepay' ? 'onepay' : 'mercadopago',
+    },
+    { merge: true }
+  );
 };
 
 /** Tarifa al comprador por organizador (super admin). Lectura pública en la app. */
@@ -246,6 +304,47 @@ export const getOrganizerBuyerFee = async (
     console.error('Error fetching organizer buyer fee:', e);
     return null;
   }
+};
+
+/** Token de acceso del organizador en MP (marketplace / split). Solo super admin vía reglas. */
+export const getOrganizerMpSellerConfigured = async (organizerId: string): Promise<boolean> => {
+  try {
+    const id = String(organizerId || '').trim();
+    if (!id) return false;
+    const ref = doc(db, 'organizer_mp_seller', id);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return false;
+    const t = String(snap.data()?.access_token || '').trim();
+    return t.length > 0;
+  } catch (e) {
+    console.error('Error fetching organizer_mp_seller:', e);
+    return false;
+  }
+};
+
+export const setOrganizerMpSellerAccessToken = async (
+  organizerId: string,
+  accessToken: string
+): Promise<void> => {
+  const id = String(organizerId || '').trim();
+  const t = accessToken.trim();
+  if (!id) throw new Error('Organizador inválido');
+  if (!t) throw new Error('Pega el access token de producción del organizador');
+  const ref = doc(db, 'organizer_mp_seller', id);
+  await setDoc(
+    ref,
+    {
+      access_token: t,
+      updated_at: serverTimestamp(),
+    },
+    { merge: true }
+  );
+};
+
+export const clearOrganizerMpSellerAccessToken = async (organizerId: string): Promise<void> => {
+  const id = String(organizerId || '').trim();
+  if (!id) throw new Error('Organizador inválido');
+  await deleteDoc(doc(db, 'organizer_mp_seller', id)).catch(() => undefined);
 };
 
 export const setOrganizerBuyerFee = async (
@@ -412,6 +511,28 @@ export const getTotalRevenue = async (): Promise<number> => {
   } catch (error) {
     console.error('Error fetching revenue:', error);
     return 0;
+  }
+};
+
+/**
+ * Asigna un `slug` único en la colección indicada: `base`, luego `base_2`, `base_3`, …
+ * @param excludeDocId — al editar, el documento actual no cuenta como colisión.
+ */
+export const allocateUniqueEventSlug = async (
+  collectionName: 'events' | 'recurring_events',
+  baseSlug: string,
+  excludeDocId?: string
+): Promise<string> => {
+  const root = baseSlug.trim() || 'evento';
+  let candidate = root;
+  let n = 2;
+  for (;;) {
+    const q = query(collection(db, collectionName), where('slug', '==', candidate), limit(5));
+    const snap = await getDocs(q);
+    const conflicting = snap.docs.filter((d) => d.id !== excludeDocId);
+    if (conflicting.length === 0) return candidate;
+    candidate = `${root}_${n}`;
+    n += 1;
   }
 };
 

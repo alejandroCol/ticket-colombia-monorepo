@@ -115,6 +115,23 @@ export class FirestoreTicketRepository implements TicketRepository {
    * @param {string} paymentId - ID del pago
    * @return {Promise<Ticket | null>} Ticket encontrado o null
    */
+  async findDocIdByPreferenceId(preferenceId: string): Promise<string | null> {
+    const pid = String(preferenceId || "").trim();
+    if (!pid) return null;
+    try {
+      const query = await this.db
+        .collection(this.collection)
+        .where("preferenceId", "==", pid)
+        .limit(1)
+        .get();
+      if (query.empty) return null;
+      return query.docs[0].id;
+    } catch (error) {
+      console.error(`Error findDocIdByPreferenceId ${pid}:`, error);
+      return null;
+    }
+  }
+
   async findByPaymentId(paymentId: string): Promise<Ticket | null> {
     try {
       const query = await this.db
@@ -144,6 +161,18 @@ export class FirestoreTicketRepository implements TicketRepository {
    * @param {string} userId - ID del usuario
    * @return {Promise<Ticket[]>} Lista de tickets del usuario
    */
+  async findIdByAbonoToken(token: string): Promise<string | null> {
+    const t = String(token || "").trim();
+    if (!t) return null;
+    const query = await this.db
+      .collection(this.collection)
+      .where("abonoCompletionToken", "==", t)
+      .limit(1)
+      .get();
+    if (query.empty) return null;
+    return query.docs[0].id;
+  }
+
   async findByUserId(userId: string): Promise<Ticket[]> {
     try {
       const query = await this.db

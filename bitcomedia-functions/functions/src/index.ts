@@ -6,7 +6,9 @@ import {
   PaymentServiceFactory,
   CreateTicketRequest,
   WebhookNotification,
+  OnePayWebhookPayload,
 } from "./features/payments";
+import {onePayWebhookInterestingHeaderKeys} from "./features/payments/handlers/onepay.api";
 import {defineSecret} from "firebase-functions/params";
 import {createManualTicket} from "./features/manual-ticket/create-manual-ticket";
 import {transferTicket} from "./features/ticket-transfer/transfer-ticket";
@@ -14,16 +16,34 @@ import {getEventAvailability} from "./features/events/get-event-availability";
 import {createTicketReservation} from "./features/reservations/create-ticket-reservation";
 import {releaseTicketReservation} from "./features/reservations/release-ticket-reservation";
 import {cleanupExpiredReservations} from "./features/reservations/cleanup-expired-reservations";
+import {manageEventPromoterGrant} from "./features/promoters/manage-event-promoter-grant";
+import {getAbonoCheckoutPublicInfo} from "./features/payments/abono-public-callable";
+import {expirePendingInstallments} from "./features/payments/expire-installments";
 
 admin.initializeApp();
 
-// Definir secretos usando el nuevo sistema de Firebase Functions
+// Definir secretos: Mercado Pago, URL app, correo (abono)
 const mercadopagoAccessToken = defineSecret("MERCADOPAGO_ACCESS_TOKEN");
 const mercadopagoWebhookSecret = defineSecret("MERCADOPAGO_WEBHOOK_SECRET");
+const onepayApiKeySecret = defineSecret("ONEPAY_API_KEY");
+const onepayWebhookSecret = defineSecret("ONEPAY_WEBHOOK_SECRET");
+const onepayWebhookTokenSecret = defineSecret("ONEPAY_WEBHOOK_TOKEN");
 const appUrlSecret = defineSecret("APP_URL");
+const resendApiKeySecret = defineSecret("RESEND_API_KEY");
+const senderEmailSecret = defineSecret("SENDER_EMAIL");
+const senderNameSecret = defineSecret("SENDER_NAME");
 
 // Configurar MercadoPago
 const isDevelopment = process.env.NODE_ENV !== "production";
+
+async function paymentsConfigProvider(): Promise<string> {
+  const snap = await admin
+    .firestore()
+    .collection("configurations")
+    .doc("payments_config")
+    .get();
+  return String(snap.data()?.payment_provider || "mercadopago").toLowerCase();
+}
 
 exports.createStandaloneEventsFromRecurring = functions.firestore
   .document("recurring_events/{eventId}")
@@ -70,7 +90,14 @@ exports.createStandaloneEventsFromRecurring = functions.firestore
 // Función para crear ticket y preferencia de pago
 exports.createTicketPreference = functions
   .runWith({
-    secrets: [mercadopagoAccessToken, mercadopagoWebhookSecret, appUrlSecret],
+    secrets: [
+      mercadopagoAccessToken,
+      mercadopagoWebhookSecret,
+      onepayApiKeySecret,
+      onepayWebhookSecret,
+      onepayWebhookTokenSecret,
+      appUrlSecret,
+    ],
   })
   .https.onCall(async (data: CreateTicketRequest, context) => {
     console.log("[createTicketPreference] Llamada recibida", {
@@ -107,25 +134,38 @@ exports.createTicketPreference = functions
         );
       }
 
-      // Obtener valores de los secretos
+      const provider = await paymentsConfigProvider();
       const accessToken = mercadopagoAccessToken.value();
       const webhookSecret = mercadopagoWebhookSecret.value();
       const appUrlValue = appUrlSecret.value();
+      const oneKey = onepayApiKeySecret.value();
+      const oneWh = onepayWebhookSecret.value();
+      const oneTok = onepayWebhookTokenSecret.value();
 
-      // Validar que los secretos estén configurados
-      if (!accessToken || !webhookSecret || !appUrlValue) {
+      if (provider === "onepay") {
+        if (!oneKey?.trim() || !appUrlValue) {
+          throw new functions.https.HttpsError(
+            "internal",
+            "OnePay no está configurado (ONEPAY_API_KEY / APP_URL)"
+          );
+        }
+      } else if (!accessToken || !webhookSecret || !appUrlValue) {
         throw new functions.https.HttpsError(
           "internal",
           "Payment configuration not properly set"
         );
       }
 
-      // Crear configuración y servicio de pagos
       const config = PaymentServiceFactory.createPaymentConfig(
-        accessToken,
-        webhookSecret,
+        provider === "onepay" ? accessToken || "unused" : accessToken,
+        provider === "onepay" ? webhookSecret || "unused" : webhookSecret,
         appUrlValue,
-        isDevelopment
+        isDevelopment,
+        {
+          apiKey: oneKey,
+          webhookSecret: oneWh,
+          webhookToken: oneTok,
+        }
       );
 
       const paymentService = PaymentServiceFactory.createPaymentService(config);
@@ -151,7 +191,17 @@ exports.createTicketPreference = functions
 // Webhook para recibir notificaciones de MercadoPago
 exports.mercadopagoWebhook = functions
   .runWith({
-    secrets: [mercadopagoWebhookSecret, mercadopagoAccessToken, appUrlSecret],
+    secrets: [
+      mercadopagoWebhookSecret,
+      mercadopagoAccessToken,
+      appUrlSecret,
+      resendApiKeySecret,
+      senderEmailSecret,
+      senderNameSecret,
+    ],
+    /** PDF con muchos pases (bundle) + PDFKit supera 256 MiB */
+    memory: "1GB",
+    timeoutSeconds: 180,
   })
   .https.onRequest(async (req, res) => {
     try {
@@ -182,6 +232,15 @@ exports.mercadopagoWebhook = functions
         appUrlValue,
         isDevelopment
       );
+      const rKey = resendApiKeySecret.value();
+      const sEmail = senderEmailSecret.value();
+      if (rKey && sEmail) {
+        config.resend = {
+          apiKey: rKey,
+          senderEmail: sEmail,
+          senderName: senderNameSecret.value() || "Ticket Colombia",
+        };
+      }
 
       const paymentService = PaymentServiceFactory.createPaymentService(config);
 
@@ -200,6 +259,125 @@ exports.mercadopagoWebhook = functions
     }
   });
 
+/** Webhook OnePay: registrar URL en panel OnePay → https://docs.onepay.la/guides/implementar-webhooks */
+exports.onepayWebhook = functions
+  .runWith({
+    secrets: [
+      onepayApiKeySecret,
+      onepayWebhookSecret,
+      onepayWebhookTokenSecret,
+      mercadopagoAccessToken,
+      mercadopagoWebhookSecret,
+      appUrlSecret,
+      resendApiKeySecret,
+      senderEmailSecret,
+      senderNameSecret,
+    ],
+    /** Mismo caso: generateMultipleTicketsPdf con ~100 páginas agota 256 MiB */
+    memory: "1GB",
+    timeoutSeconds: 180,
+  })
+  .https.onRequest(async (req, res) => {
+    const rawBuf = (req as {rawBody?: Buffer}).rawBody;
+    const hasRawBody = Boolean(rawBuf && Buffer.isBuffer(rawBuf));
+    const rawBody = (() => {
+      if (hasRawBody) {
+        return rawBuf!.toString("utf8");
+      }
+      console.warn(
+        "onepayWebhook: req.rawBody ausente; la firma HMAC puede fallar si difiere del JSON recibido"
+      );
+      return JSON.stringify(req.body ?? {});
+    })();
+
+    const hdr = req.headers;
+    const sigHdr =
+      (Array.isArray(hdr["x-signature"]) ?
+        hdr["x-signature"][0] :
+        hdr["x-signature"]) || "";
+    const tokHdr =
+      (Array.isArray(hdr["x-webhook-token"]) ?
+        hdr["x-webhook-token"][0] :
+        hdr["x-webhook-token"]) || "";
+    const hdrLower: Record<string, string> = {};
+    for (const [k, v] of Object.entries(req.headers)) {
+      if (v === undefined || v === null) continue;
+      const val = Array.isArray(v) ? v[0] : v;
+      hdrLower[String(k).toLowerCase()] = String(val);
+    }
+    console.log("[onepayWebhook] POST recibido", {
+      hasRawBody,
+      rawBodyLength: rawBody.length,
+      hasBodyParsed: req.body !== undefined,
+      xSignatureLen: String(sigHdr).length,
+      xWebhookTokenLen: String(tokHdr).trim().length,
+      interestingHeaderKeys: onePayWebhookInterestingHeaderKeys(hdrLower),
+    });
+
+    try {
+      if (req.method !== "POST") {
+        res.status(405).send("Method not allowed");
+        return;
+      }
+
+      const accessToken = mercadopagoAccessToken.value();
+      const mpWh = mercadopagoWebhookSecret.value();
+      const appUrlValue = appUrlSecret.value();
+      if (!appUrlValue) {
+        console.error("APP_URL no configurada");
+        res.status(500).send("Configuration error");
+        return;
+      }
+
+      const config = PaymentServiceFactory.createPaymentConfig(
+        accessToken || "unused",
+        mpWh || "unused",
+        appUrlValue,
+        isDevelopment,
+        {
+          apiKey: onepayApiKeySecret.value(),
+          webhookSecret: onepayWebhookSecret.value(),
+          webhookToken: onepayWebhookTokenSecret.value(),
+        }
+      );
+      const rKey = resendApiKeySecret.value();
+      const sEmail = senderEmailSecret.value();
+      if (rKey && sEmail) {
+        config.resend = {
+          apiKey: rKey,
+          senderEmail: sEmail,
+          senderName: senderNameSecret.value() || "Ticket Colombia",
+        };
+      }
+
+      const paymentService = PaymentServiceFactory.createPaymentService(config);
+      const parsed = req.body;
+      const payload = parsed as OnePayWebhookPayload;
+      await paymentService.processOnePayWebhook(
+        payload,
+        rawBody,
+        req.headers as Record<string, string>,
+        parsed
+      );
+      res.status(200).send("OK");
+    } catch (error) {
+      const err = error as Error;
+      const msg = err.message || "";
+      console.error("[onepayWebhook] error", {message: msg, stack: err.stack});
+      if (
+        msg.includes("inválid") ||
+        msg.includes("inválido") ||
+        msg.includes("no configurado")
+      ) {
+        console.error(
+          "[onepayWebhook] respondiendo 401 — revisa logs anteriores (token o firma). En GCP: Logging filtro text:onepayWebhook"
+        );
+        res.status(401).send("Unauthorized");
+        return;
+      }
+      res.status(200).send("logged");
+    }
+  });
 
 // Función temporal de prueba para simular actualización de ticket
 exports.testTicketUpdate = functions
@@ -275,3 +453,69 @@ exports.getEventAvailability = getEventAvailability;
 exports.createTicketReservation = createTicketReservation;
 exports.releaseTicketReservation = releaseTicketReservation;
 exports.cleanupExpiredReservations = cleanupExpiredReservations;
+
+exports.expirePendingInstallments = expirePendingInstallments;
+
+exports.getAbonoCheckoutPublicInfo = getAbonoCheckoutPublicInfo;
+
+exports.createBalanceInstallmentPreference = functions
+  .runWith({
+    secrets: [
+      mercadopagoAccessToken,
+      mercadopagoWebhookSecret,
+      onepayApiKeySecret,
+      onepayWebhookSecret,
+      onepayWebhookTokenSecret,
+      appUrlSecret,
+    ],
+  })
+  .https.onCall(async (data: { ticketId?: string }, context) => {
+    if (!context.auth?.uid) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "Inicia sesión para pagar el saldo."
+      );
+    }
+    const ticketId = String(data?.ticketId || "").trim();
+    if (!ticketId) {
+      throw new functions.https.HttpsError("invalid-argument", "Falta ticketId");
+    }
+    const provider = await paymentsConfigProvider();
+    const accessToken = mercadopagoAccessToken.value();
+    const webhookSecret = mercadopagoWebhookSecret.value();
+    const appUrlValue = appUrlSecret.value();
+    const oneKey = onepayApiKeySecret.value();
+    const oneWh = onepayWebhookSecret.value();
+    const oneTok = onepayWebhookTokenSecret.value();
+
+    if (provider === "onepay") {
+      if (!oneKey?.trim() || !appUrlValue) {
+        throw new functions.https.HttpsError("internal", "Pago no configurado");
+      }
+    } else if (!accessToken || !webhookSecret || !appUrlValue) {
+      throw new functions.https.HttpsError("internal", "Pago no configurado");
+    }
+    const config = PaymentServiceFactory.createPaymentConfig(
+      provider === "onepay" ? accessToken || "unused" : accessToken,
+      provider === "onepay" ? webhookSecret || "unused" : webhookSecret,
+      appUrlValue,
+      isDevelopment,
+      {
+        apiKey: oneKey,
+        webhookSecret: oneWh,
+        webhookToken: oneTok,
+      }
+    );
+    const paymentService = PaymentServiceFactory.createPaymentService(config);
+    try {
+      return await paymentService.createBalanceInstallmentPreference(
+        ticketId,
+        context.auth.uid
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new functions.https.HttpsError("failed-precondition", msg);
+    }
+  });
+
+exports.manageEventPromoterGrant = manageEventPromoterGrant;

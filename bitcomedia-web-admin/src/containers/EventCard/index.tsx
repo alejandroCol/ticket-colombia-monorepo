@@ -7,6 +7,8 @@ import { Timestamp } from 'firebase/firestore';
 
 interface EventData {
   id?: string;
+  /** Dueño del evento (para atajos de organizador en tarjeta) */
+  organizer_id?: string;
   name: string;
   description: string;
   city: string;
@@ -30,6 +32,8 @@ export type EventCardActionMask = {
   canCreateTickets: boolean;
   canViewTickets: boolean;
   canViewStats: boolean;
+  /** Módulo /taquilla (precio público) */
+  canTaquillaSale?: boolean;
 };
 
 interface EventCardProps {
@@ -38,14 +42,32 @@ interface EventCardProps {
   onCreateTicket?: (eventId: string, eventName: string, eventPrice: number) => void;
   onViewTickets?: (eventId: string, eventName: string) => void;
   onViewStats?: (eventId: string) => void;
+  /** Dueño o super admin: muestra accesos rápidos a promotores y widget */
+  showOrganizerShortcuts?: boolean;
+  onPromoters?: (eventId: string, isRecurring?: boolean) => void;
+  onWidgetEmbed?: (eventId: string, isRecurring?: boolean) => void;
+  /** Acceso rápido a venta en taquilla con evento preseleccionado */
+  onTaquilla?: (eventId: string, isRecurring?: boolean) => void;
   actionMask?: EventCardActionMask;
 }
 
-const EventCard: React.FC<EventCardProps> = ({ event, onReserve, onCreateTicket, onViewTickets, onViewStats, actionMask }) => {
+const EventCard: React.FC<EventCardProps> = ({
+  event,
+  onReserve,
+  onCreateTicket,
+  onViewTickets,
+  onViewStats,
+  showOrganizerShortcuts = false,
+  onPromoters,
+  onWidgetEmbed,
+  onTaquilla,
+  actionMask,
+}) => {
   const canEdit = actionMask?.canEdit !== false;
   const canCreateTickets = actionMask?.canCreateTickets !== false;
   const canViewTickets = actionMask?.canViewTickets !== false;
   const canViewStats = actionMask?.canViewStats !== false;
+  const canTaquillaSale = !actionMask || actionMask.canTaquillaSale === true;
   const showTapStats = canViewStats && !!onViewStats;
   // Format date to a readable format
   const formatDate = (dateString: string) => {
@@ -116,6 +138,27 @@ const EventCard: React.FC<EventCardProps> = ({ event, onReserve, onCreateTicket,
     }
   };
 
+  const handlePromotersClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onPromoters && event.id) {
+      onPromoters(event.id, event.is_recurring);
+    }
+  };
+
+  const handleWidgetClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onWidgetEmbed && event.id) {
+      onWidgetEmbed(event.id, event.is_recurring);
+    }
+  };
+
+  const handleTaquillaClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onTaquilla && event.id) {
+      onTaquilla(event.id, event.is_recurring);
+    }
+  };
+
   const goToStats = () => {
     if (canViewStats && onViewStats && event.id) {
       onViewStats(event.id);
@@ -172,17 +215,18 @@ const EventCard: React.FC<EventCardProps> = ({ event, onReserve, onCreateTicket,
       </div>
 
       <div className="event-card-footer">
-        <div className="event-card-price">{formatPrice(event.ticket_price)}</div>
-        <div className="event-card-actions">
-          {canCreateTickets && (
-            <SecondaryButton
-              onClick={handleCreateTicketClick}
-              size="small"
-              icon={<IconCreate size={16} />}
-            >
-              Crear
-            </SecondaryButton>
-          )}
+        <div className="event-card-footer-row">
+          <div className="event-card-price">{formatPrice(event.ticket_price)}</div>
+          <div className="event-card-actions">
+            {canCreateTickets && (
+              <SecondaryButton
+                onClick={handleCreateTicketClick}
+                size="small"
+                icon={<IconCreate size={16} />}
+              >
+                Crear
+              </SecondaryButton>
+            )}
           {canViewTickets && (
             <SecondaryButton
               onClick={handleViewTicketsClick}
@@ -192,25 +236,45 @@ const EventCard: React.FC<EventCardProps> = ({ event, onReserve, onCreateTicket,
               Ver Boletos
             </SecondaryButton>
           )}
-          {canViewStats && (
-            <SecondaryButton
-              onClick={handleViewStatsClick}
-              size="small"
-              icon={<IconStats size={16} />}
-            >
-              Estadísticas
-            </SecondaryButton>
-          )}
-          {canEdit && (
-            <PrimaryButton
-              onClick={handleReserveClick}
-              size="small"
-              icon={<IconEdit size={16} />}
-            >
-              Editar
+          {canTaquillaSale && onTaquilla && (
+            <PrimaryButton onClick={handleTaquillaClick} size="small">
+              Taquilla
             </PrimaryButton>
           )}
+          {canViewStats && (
+              <SecondaryButton
+                onClick={handleViewStatsClick}
+                size="small"
+                icon={<IconStats size={16} />}
+              >
+                Estadísticas
+              </SecondaryButton>
+            )}
+            {canEdit && (
+              <PrimaryButton
+                onClick={handleReserveClick}
+                size="small"
+                icon={<IconEdit size={16} />}
+              >
+                Editar
+              </PrimaryButton>
+            )}
+          </div>
         </div>
+        {showOrganizerShortcuts && event.id && (onPromoters || onWidgetEmbed) && (
+          <div className="event-card-actions event-card-actions--organizer">
+            {onPromoters && (
+              <SecondaryButton onClick={handlePromotersClick} size="small">
+                Promotores
+              </SecondaryButton>
+            )}
+            {onWidgetEmbed && (
+              <SecondaryButton onClick={handleWidgetClick} size="small">
+                Venta web
+              </SecondaryButton>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

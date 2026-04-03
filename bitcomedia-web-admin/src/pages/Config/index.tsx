@@ -8,6 +8,8 @@ import CustomSelector from '@components/CustomSelector';
 import {
   getContactConfig,
   updateContactConfig,
+  getPaymentConfig,
+  updatePaymentProviderConfig,
   logoutUser,
   getCurrentUser,
   isSuperAdmin,
@@ -15,8 +17,12 @@ import {
   updateUserDocument,
   getOrganizerBuyerFee,
   setOrganizerBuyerFee,
+  getOrganizerMpSellerConfigured,
+  setOrganizerMpSellerAccessToken,
+  clearOrganizerMpSellerAccessToken,
   fetchOrganizerEventsIndex,
   setEventOrganizerId,
+  appendAuditLog,
 } from '@services';
 import type { Event } from '@services/types';
 import type { OrganizerEventsIndex } from '@services';
@@ -31,6 +37,7 @@ import {
   IconHubUsers,
   IconHubChevronRight,
 } from '@components/ConfigHubIcons';
+import { getOnePayWebhookUrl } from '../../config/cloudFunctionsPublic';
 import './index.scss';
 
 type TransferTarget = {
@@ -65,6 +72,11 @@ const ConfigScreen: React.FC = () => {
   const [transferOpen, setTransferOpen] = useState<TransferTarget | null>(null);
   const [transferPickUid, setTransferPickUid] = useState('');
   const [transferSaving, setTransferSaving] = useState(false);
+  const [mpSellerConfigured, setMpSellerConfigured] = useState<Record<string, boolean>>({});
+  const [mpSellerTokenInput, setMpSellerTokenInput] = useState<Record<string, string>>({});
+  const [mpSellerSaving, setMpSellerSaving] = useState<string | null>(null);
+  const [paymentProvider, setPaymentProvider] = useState<'mercadopago' | 'onepay'>('mercadopago');
+  const [paymentProviderSaving, setPaymentProviderSaving] = useState(false);
 
   const adminSelectOptions = useMemo(
     () =>
@@ -110,6 +122,17 @@ const ConfigScreen: React.FC = () => {
 
   useEffect(() => {
     if (!superAdmin || admins.length === 0) return;
+    const run = async () => {
+      const pairs = await Promise.all(
+        admins.map(async (a) => [a.uid, await getOrganizerMpSellerConfigured(a.uid)] as const)
+      );
+      setMpSellerConfigured(Object.fromEntries(pairs));
+    };
+    void run();
+  }, [superAdmin, admins]);
+
+  useEffect(() => {
+    if (!superAdmin || admins.length === 0) return;
     let cancelled = false;
     void (async () => {
       const entries = await Promise.all(
@@ -152,6 +175,24 @@ const ConfigScreen: React.FC = () => {
     };
   }, [superAdmin]);
 
+  useEffect(() => {
+    if (!superAdmin) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const c = await getPaymentConfig();
+        if (!cancelled && c) {
+          setPaymentProvider(c.payment_provider);
+        }
+      } catch {
+        // keep default provider
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [superAdmin]);
+
   const openTransfer = (coll: 'events' | 'recurring_events', ev: Event, fromUid: string) => {
     setTransferOpen({ coll, id: ev.id, name: ev.name, fromUid });
     const preferActive = admins.find((x) => x.uid !== fromUid && x.active !== false);
@@ -181,6 +222,12 @@ const ConfigScreen: React.FC = () => {
     setTransferSaving(true);
     try {
       await setEventOrganizerId(transferOpen.coll, transferOpen.id, pick);
+      void appendAuditLog({
+        kind: 'event_organizer_transfer',
+        entityType: transferOpen.coll,
+        entityId: transferOpen.id,
+        summary: `Evento «${transferOpen.name}» reasignado ${transferOpen.fromUid.slice(0, 8)}… → ${pick.slice(0, 8)}…`,
+      }).catch(() => undefined);
       setOrganizerEventsIndex(await fetchOrganizerEventsIndex());
       setTransferOpen(null);
       setTransferPickUid('');
@@ -217,10 +264,67 @@ const ConfigScreen: React.FC = () => {
           fee_value: f != null ? String(f.fee_value) : '',
         },
       }));
+      void appendAuditLog({
+        kind: 'organizer_buyer_fee',
+        entityType: 'organizer_buyer_fees',
+        entityId: uid,
+        summary: `Tarifa comprador organizador ${uid.slice(0, 8)}…: ${rawType}${rawType !== 'none' ? ` ${num}` : ''}`,
+      }).catch(() => undefined);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'No se pudo guardar la tarifa.');
     } finally {
       setAdminFeeSaving(null);
+    }
+  };
+
+  const handleSaveMpSeller = async (uid: string) => {
+    const raw = (mpSellerTokenInput[uid] || '').trim();
+    if (!raw) {
+      alert('Pega el access token de producción del organizador (Mercado Pago).');
+      return;
+    }
+    setMpSellerSaving(uid);
+    try {
+      await setOrganizerMpSellerAccessToken(uid, raw);
+      setMpSellerTokenInput((prev) => ({ ...prev, [uid]: '' }));
+      setMpSellerConfigured((prev) => ({ ...prev, [uid]: true }));
+      void appendAuditLog({
+        kind: 'organizer_mp_seller',
+        action: 'set',
+        entityType: 'organizer_mp_seller',
+        entityId: uid,
+        summary: `Mercado Pago vendedor configurado para ${uid.slice(0, 8)}…`,
+      }).catch(() => undefined);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'No se pudo guardar el token.');
+    } finally {
+      setMpSellerSaving(null);
+    }
+  };
+
+  const handleClearMpSeller = async (uid: string) => {
+    if (
+      !confirm(
+        '¿Quitar la cuenta Mercado Pago de este organizador? Los pagos volverán a usar solo la credencial global de la plataforma (sin split por organizador).'
+      )
+    ) {
+      return;
+    }
+    setMpSellerSaving(uid);
+    try {
+      await clearOrganizerMpSellerAccessToken(uid);
+      setMpSellerConfigured((prev) => ({ ...prev, [uid]: false }));
+      void appendAuditLog({
+        kind: 'organizer_mp_seller',
+        action: 'clear',
+        entityType: 'organizer_mp_seller',
+        entityId: uid,
+        summary: `Mercado Pago vendedor quitado para ${uid.slice(0, 8)}…`,
+      }).catch(() => undefined);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'No se pudo quitar la cuenta.');
+    } finally {
+      setMpSellerSaving(null);
     }
   };
 
@@ -254,11 +358,34 @@ const ConfigScreen: React.FC = () => {
     setSaving(true);
     try {
       await updateContactConfig({ whatsappPhone: raw });
+      void appendAuditLog({
+        kind: 'config_contact',
+        entityType: 'configurations',
+        entityId: 'contact_config',
+        summary: `WhatsApp público actualizado (${raw.length} dígitos)`,
+      }).catch(() => undefined);
       setSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al guardar.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSavePaymentProvider = async () => {
+    setPaymentProviderSaving(true);
+    try {
+      await updatePaymentProviderConfig(paymentProvider);
+      void appendAuditLog({
+        kind: 'config_payment_provider',
+        entityType: 'configurations',
+        entityId: 'payments_config',
+        summary: `Pasarela checkout: ${paymentProvider === 'onepay' ? 'OnePay' : 'Mercado Pago'}`,
+      }).catch(() => undefined);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'No se pudo guardar la pasarela.');
+    } finally {
+      setPaymentProviderSaving(false);
     }
   };
 
@@ -341,6 +468,111 @@ const ConfigScreen: React.FC = () => {
           </div>
         </section>
 
+        {superAdmin && (
+          <section className="config-hub__section config-hub__section--super" aria-labelledby="config-section-super">
+            <div className="config-hub__section-head">
+              <h2 id="config-section-super" className="config-hub__section-title">
+                <span className="config-hub__section-icon" aria-hidden>
+                  <IconHubSpark size={16} />
+                </span>
+                Control de plataforma
+              </h2>
+              <p className="config-hub__section-desc">
+                Solo super administrador: comisiones, partners, registro de actividad y reglas que afectan a varios organizadores.
+              </p>
+            </div>
+            <div className="config-tile-grid config-tile-grid--2">
+              <button type="button" className="config-tile config-tile--accent" onClick={() => navigate('/super-admin/earnings')}>
+                <span className="config-tile__glyph" aria-hidden>
+                  <IconStats size={24} />
+                </span>
+                <span className="config-tile__body">
+                  <span className="config-tile__name">Comisiones tiquetera</span>
+                  <span className="config-tile__hint">Tarifas por evento y reglas de la plataforma.</span>
+                </span>
+                <span className="config-tile__arrow" aria-hidden>
+                  <IconHubChevronRight size={20} />
+                </span>
+              </button>
+              <button type="button" className="config-tile config-tile--accent" onClick={() => navigate('/super-admin/partners')}>
+                <span className="config-tile__glyph" aria-hidden>
+                  <IconHubHandshake size={24} />
+                </span>
+                <span className="config-tile__body">
+                  <span className="config-tile__name">Usuarios partner</span>
+                  <span className="config-tile__hint">Permisos por evento: boletos, stats, edición, taquilla.</span>
+                </span>
+                <span className="config-tile__arrow" aria-hidden>
+                  <IconHubChevronRight size={20} />
+                </span>
+              </button>
+              <button type="button" className="config-tile config-tile--accent" onClick={() => navigate('/super-admin/audit-log')}>
+                <span className="config-tile__glyph" aria-hidden>
+                  <IconHubBolt size={24} />
+                </span>
+                <span className="config-tile__body">
+                  <span className="config-tile__name">Registro de actividad</span>
+                  <span className="config-tile__hint">Auditoría por fechas y usuario; eventos, boletos y config crítica.</span>
+                </span>
+                <span className="config-tile__arrow" aria-hidden>
+                  <IconHubChevronRight size={20} />
+                </span>
+              </button>
+            </div>
+
+            <div className="config-module config-module--surface" style={{ marginTop: '1.25rem' }}>
+              <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.05rem' }}>Pasarela de pago (checkout)</h3>
+              <p className="helper-text" style={{ marginBottom: '1rem' }}>
+                Define si las compras en la app usan Mercado Pago u OnePay. Los secretos de API y webhook se configuran en
+                Firebase (Functions), no aquí.
+              </p>
+              <div className="config-form" style={{ gap: '0.75rem' }}>
+                <CustomSelector
+                  name="payment_provider"
+                  label="Proveedor en línea"
+                  value={paymentProvider}
+                  options={[
+                    { value: 'mercadopago', label: 'Mercado Pago' },
+                    { value: 'onepay', label: 'OnePay' },
+                  ]}
+                  onChange={(e) =>
+                    setPaymentProvider(e.target.value === 'onepay' ? 'onepay' : 'mercadopago')
+                  }
+                />
+                <div>
+                  <p className="helper-text" style={{ margin: '0 0 0.35rem' }}>
+                    URL del webhook para registrar en el panel de OnePay (eventos de cobro):
+                  </p>
+                  <code
+                    style={{
+                      display: 'block',
+                      padding: '0.65rem 0.75rem',
+                      borderRadius: 8,
+                      background: 'var(--color-surface-muted, #f4f4f5)',
+                      fontSize: '0.85rem',
+                      wordBreak: 'break-all',
+                    }}
+                  >
+                    {getOnePayWebhookUrl()}
+                  </code>
+                  <p className="helper-text" style={{ marginTop: '0.5rem' }}>
+                    Si tu proyecto o la función usan otra URL, define{' '}
+                    <code>VITE_ONEPAY_WEBHOOK_URL</code> al construir el admin.
+                  </p>
+                </div>
+                <PrimaryButton
+                  type="button"
+                  disabled={paymentProviderSaving}
+                  loading={paymentProviderSaving}
+                  onClick={() => void handleSavePaymentProvider()}
+                >
+                  Guardar pasarela
+                </PrimaryButton>
+              </div>
+            </div>
+          </section>
+        )}
+
         <section className="config-hub__section" aria-labelledby="config-section-rapidos">
           <div className="config-hub__section-head">
             <h2 id="config-section-rapidos" className="config-hub__section-title">
@@ -378,48 +610,6 @@ const ConfigScreen: React.FC = () => {
             </button>
           </div>
         </section>
-
-        {superAdmin && (
-          <section className="config-hub__section config-hub__section--super" aria-labelledby="config-section-super">
-            <div className="config-hub__section-head">
-              <h2 id="config-section-super" className="config-hub__section-title">
-                <span className="config-hub__section-icon" aria-hidden>
-                  <IconHubSpark size={16} />
-                </span>
-                Control de plataforma
-              </h2>
-              <p className="config-hub__section-desc">
-                Solo super administrador: comisiones, partners y reglas que afectan a varios organizadores.
-              </p>
-            </div>
-            <div className="config-tile-grid config-tile-grid--2">
-              <button type="button" className="config-tile config-tile--accent" onClick={() => navigate('/super-admin/earnings')}>
-                <span className="config-tile__glyph" aria-hidden>
-                  <IconStats size={24} />
-                </span>
-                <span className="config-tile__body">
-                  <span className="config-tile__name">Comisiones tiquetera</span>
-                  <span className="config-tile__hint">Tarifas por evento y reglas de la plataforma.</span>
-                </span>
-                <span className="config-tile__arrow" aria-hidden>
-                  <IconHubChevronRight size={20} />
-                </span>
-              </button>
-              <button type="button" className="config-tile config-tile--accent" onClick={() => navigate('/super-admin/partners')}>
-                <span className="config-tile__glyph" aria-hidden>
-                  <IconHubHandshake size={24} />
-                </span>
-                <span className="config-tile__body">
-                  <span className="config-tile__name">Usuarios partner</span>
-                  <span className="config-tile__hint">Permisos por evento: boletos, stats, edición, taquilla.</span>
-                </span>
-                <span className="config-tile__arrow" aria-hidden>
-                  <IconHubChevronRight size={20} />
-                </span>
-              </button>
-            </div>
-          </section>
-        )}
 
         {superAdmin && (
           <section className="config-hub__section" aria-labelledby="config-section-admins">
@@ -686,6 +876,58 @@ const ConfigScreen: React.FC = () => {
                           >
                             Guardar tarifa
                           </PrimaryButton>
+                        </div>
+                      </div>
+
+                      <div className="config-admin-fee config-admin-fee--card">
+                        <span className="config-admin-fee__label">Mercado Pago del organizador (split)</span>
+                        <p className="config-admin-muted" style={{ marginTop: 8, marginBottom: 8 }}>
+                          Si guardas el access token de producción del organizador y el evento tiene{' '}
+                          <code>organizer_id</code> apuntando a este usuario, el checkout usa ese vendedor.
+                          La parte de <strong>tarifa de servicio al comprador</strong> (la que ya configuras
+                          arriba o por evento) se envía como <code>marketplace_fee</code> para la tiquetera;
+                          el resto queda para el organizador (después de comisiones MP). Activa el producto{' '}
+                          Marketplace en tu aplicación de desarrolladores MP y vincula vendedores vía OAuth (o
+                          token del usuario vendedor si MP lo permite en tu modelo).
+                        </p>
+                        <div className="config-admin-fee__controls" style={{ flexWrap: 'wrap', gap: 8 }}>
+                          {mpSellerConfigured[a.uid] ? (
+                            <span className="config-admin-chip config-admin-chip--ok">Cuenta MP vinculada</span>
+                          ) : (
+                            <span className="config-admin-chip config-admin-chip--muted">
+                              Sin cuenta propia (solo credencial global de la función)
+                            </span>
+                          )}
+                          <input
+                            type="password"
+                            className="config-admin-fee__input"
+                            style={{ minWidth: 220, flex: 1 }}
+                            autoComplete="off"
+                            placeholder="ACCESS_TOKEN producción del organizador"
+                            value={mpSellerTokenInput[a.uid] ?? ''}
+                            onChange={(e) =>
+                              setMpSellerTokenInput((prev) => ({ ...prev, [a.uid]: e.target.value }))
+                            }
+                          />
+                          <PrimaryButton
+                            type="button"
+                            size="small"
+                            disabled={mpSellerSaving === a.uid}
+                            loading={mpSellerSaving === a.uid}
+                            onClick={() => void handleSaveMpSeller(a.uid)}
+                          >
+                            Guardar token
+                          </PrimaryButton>
+                          {mpSellerConfigured[a.uid] && (
+                            <SecondaryButton
+                              type="button"
+                              size="small"
+                              disabled={mpSellerSaving === a.uid}
+                              onClick={() => void handleClearMpSeller(a.uid)}
+                            >
+                              Quitar
+                            </SecondaryButton>
+                          )}
                         </div>
                       </div>
                     </li>

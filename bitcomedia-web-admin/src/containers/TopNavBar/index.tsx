@@ -17,7 +17,7 @@ interface TopNavBarProps {
   onLogout?: () => void;
   showLogout?: boolean;
   /** En barra admin: ocultar enlaces según rol partner */
-  adminNavOptions?: { showScan?: boolean; showConfig?: boolean };
+  adminNavOptions?: { showScan?: boolean; showConfig?: boolean; showTaquilla?: boolean };
 }
 
 const TopNavBar: React.FC<TopNavBarProps> = ({ 
@@ -30,6 +30,7 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
 }) => {
   const showScan = adminNavOptions?.showScan !== false;
   const showConfig = adminNavOptions?.showConfig !== false;
+  const showTaquilla = adminNavOptions?.showTaquilla === true;
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -82,6 +83,15 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
                 Leer Boletos
               </button>
             )}
+            {showTaquilla && (
+              <button
+                type="button"
+                className="admin-nav-link admin-nav-taquilla"
+                onClick={() => handleNavigation('/taquilla')}
+              >
+                Taquilla
+              </button>
+            )}
             {showConfig && (
               <button
                 type="button"
@@ -91,6 +101,13 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
                 Configuración
               </button>
             )}
+            <button
+              type="button"
+              className="admin-nav-link"
+              onClick={() => handleNavigation('/account/password')}
+            >
+              Cambiar contraseña
+            </button>
             {showLogout && onLogout && (
               <SecondaryButton className="admin-logout-btn" onClick={onLogout} size="small">
                 Cerrar sesión
@@ -115,6 +132,15 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
                 Leer Boletos
               </button>
             )}
+            {showTaquilla && (
+              <button
+                type="button"
+                className="admin-nav-link admin-nav-taquilla"
+                onClick={() => handleNavigation('/taquilla')}
+              >
+                Venta taquilla
+              </button>
+            )}
             {showConfig && (
               <button
                 type="button"
@@ -124,6 +150,13 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
                 Configuración
               </button>
             )}
+            <button
+              type="button"
+              className="admin-nav-link"
+              onClick={() => handleNavigation('/account/password')}
+            >
+              Cambiar contraseña
+            </button>
             {showLogout && onLogout && (
               <SecondaryButton onClick={onLogout} size="medium">
                 Cerrar sesión

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { collection, query, where, getDocs, doc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@services/firebase';
 import TopNavBar from '@containers/TopNavBar';
+import EventSubNav from '@components/EventSubNav';
 import Loader from '@components/Loader';
 import PrimaryButton from '@components/PrimaryButton';
 import SecondaryButton from '@components/SecondaryButton';
@@ -15,6 +16,7 @@ import {
   getUserData,
   listPartnerGrantsForUser,
   getAnyPartnerGrantForTicketEvent,
+  resolveEventCollection,
 } from '@services';
 import { validateTicket } from '@services/ticketService';
 import './index.scss';
@@ -62,14 +64,22 @@ const EventTicketsScreen: React.FC = () => {
     showScan: true,
     showConfig: true,
   });
+  const [showTaquillaNav, setShowTaquillaNav] = useState(false);
+  const [eventCollection, setEventCollection] = useState<'events' | 'recurring_events' | null>(null);
+  const [showOrganizerExtras, setShowOrganizerExtras] = useState(false);
 
   const loadEvent = async () => {
     if (!eventId) return;
     try {
-      const eventData = await getEventOrRecurringById(eventId);
+      const [eventData, coll] = await Promise.all([
+        getEventOrRecurringById(eventId),
+        resolveEventCollection(eventId),
+      ]);
       setEvent(eventData ? { name: eventData.name, organizer_id: eventData.organizer_id } : null);
+      setEventCollection(coll);
     } catch {
       setEvent(null);
+      setEventCollection(null);
     }
   };
 
@@ -111,11 +121,16 @@ const EventTicketsScreen: React.FC = () => {
       const data = await getUserData(u.uid);
       if (data?.role !== 'PARTNER') {
         setNavPartner({ showConfig: true, showScan: true });
+        setShowTaquillaNav(true);
         return;
       }
       const grants = await listPartnerGrantsForUser(u.uid);
       const scanAny = grants.some((g) => g.permissions.scan_validate);
+      const taquillaAny = grants.some(
+        (g) => g.permissions.taquilla_sale || g.permissions.create_tickets
+      );
       setNavPartner({ showConfig: false, showScan: scanAny });
+      setShowTaquillaNav(taquillaAny);
     })();
   }, []);
 
@@ -124,8 +139,11 @@ const EventTicketsScreen: React.FC = () => {
     const check = async () => {
       const user = getCurrentUser();
       if (!user) return;
+      setShowOrganizerExtras(false);
       const superA = await isSuperAdmin(user.uid);
       if (superA) {
+        setShowOrganizerExtras(true);
+        setShowTaquillaNav(true);
         setCanEditRows(true);
         setCanBulkCourtesies(true);
         setCanValidateRow(true);
@@ -133,6 +151,8 @@ const EventTicketsScreen: React.FC = () => {
         return;
       }
       if (event.organizer_id === user.uid) {
+        setShowOrganizerExtras(true);
+        setShowTaquillaNav(true);
         setCanEditRows(true);
         setCanBulkCourtesies(true);
         setCanValidateRow(true);
@@ -156,6 +176,9 @@ const EventTicketsScreen: React.FC = () => {
       setCanBulkCourtesies(!!pair.grant.permissions.create_tickets);
       setCanValidateRow(!!pair.grant.permissions.scan_validate);
       setCanDisableRow(false);
+      setShowTaquillaNav(
+        !!(pair.grant.permissions.create_tickets || pair.grant.permissions.taquilla_sale)
+      );
     };
     check();
   }, [event, eventId, loading, navigate]);
@@ -282,11 +305,23 @@ const EventTicketsScreen: React.FC = () => {
       <TopNavBar
         logoOnly={true}
         showLogout={true}
-        adminNavOptions={{ showConfig: navPartner.showConfig, showScan: navPartner.showScan }}
+        adminNavOptions={{
+          showConfig: navPartner.showConfig,
+          showScan: navPartner.showScan,
+          showTaquilla: showTaquillaNav,
+        }}
       />
+      {eventId && eventCollection && event && (
+        <EventSubNav
+          eventId={eventId}
+          eventTitle={event.name}
+          isRecurring={eventCollection === 'recurring_events'}
+          active="tickets"
+          showOrganizerExtras={showOrganizerExtras}
+        />
+      )}
       <div className="event-tickets-content">
         <header className="event-tickets-header">
-          <SecondaryButton onClick={() => navigate('/dashboard')}>← Volver</SecondaryButton>
           <div className="header-title">
             <h1>🎫 Boletos</h1>
             <p>{event?.name || 'Cargando...'}</p>

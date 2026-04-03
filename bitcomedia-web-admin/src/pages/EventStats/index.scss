@@ -9,8 +9,18 @@
   padding: 1.5rem;
   max-width: 800px;
   margin: 0 auto;
-  padding-top: 80px;
   padding-bottom: 3rem;
+  // Con EventSubNav, ese bloque ya despeja el header fijo
+  padding-top: 1.25rem;
+}
+
+// Sin subnav (carga / error): solo TopNavBar + contenido
+.event-stats-screen > .top-nav-bar + .event-stats-content {
+  padding-top: calc(50px + 0.75rem + 1rem + env(safe-area-inset-top, 0px));
+
+  @include respond-md {
+    padding-top: calc(60px + 1rem + 1rem + env(safe-area-inset-top, 0px));
+  }
 }
 
 .event-stats-loading {

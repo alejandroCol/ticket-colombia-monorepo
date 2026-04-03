@@ -44,7 +44,12 @@ export class PaymentServiceFactory {
     accessToken: string,
     webhookSecret: string,
     appUrl: string,
-    isDevelopment = false
+    isDevelopment = false,
+    onepay?: {
+      apiKey?: string;
+      webhookSecret?: string;
+      webhookToken?: string;
+    }
   ): PaymentConfig {
     return {
       accessToken,
@@ -53,6 +58,9 @@ export class PaymentServiceFactory {
       isDevelopment,
       // $100 COP para desarrollo, $1000 para producción
       minAmount: isDevelopment ? 100 : 1000,
+      onepayApiKey: onepay?.apiKey,
+      onepayWebhookSecret: onepay?.webhookSecret,
+      onepayWebhookToken: onepay?.webhookToken,
     };
   }
 }

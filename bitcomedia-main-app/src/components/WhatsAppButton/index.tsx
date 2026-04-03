@@ -10,6 +10,8 @@ interface WhatsAppButtonProps extends CustomStyleProps {
   eventName?: string;
   children?: React.ReactNode;
   trackingLabel?: string;
+  /** Si se indica (solo dígitos, con código de país), reemplaza al número global del contexto. */
+  phoneOverride?: string;
 }
 
 const WhatsAppButton: React.FC<WhatsAppButtonProps> = ({
@@ -18,6 +20,7 @@ const WhatsAppButton: React.FC<WhatsAppButtonProps> = ({
   className,
   children = 'WhatsApp',
   trackingLabel = 'whatsapp-contact',
+  phoneOverride,
   theme,
   style,
   cssVariables,
@@ -25,10 +28,12 @@ const WhatsAppButton: React.FC<WhatsAppButtonProps> = ({
   animated: _animated
 }) => {
   const { whatsappPhone } = useContactConfig();
+  const overrideDigits = (phoneOverride || '').replace(/\D/g, '');
+  const targetPhone = overrideDigits.length > 0 ? overrideDigits : whatsappPhone;
   const customStyles = generateCustomStyles(theme, cssVariables);
   const containerClassName = generateClassName('whatsapp-button', theme, className);
   const handleWhatsAppContact = () => {
-    const whatsappUrl = `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(message)}`;
+    const whatsappUrl = `https://wa.me/${targetPhone}?text=${encodeURIComponent(message)}`;
 
     metaPixel.trackContact(eventName || trackingLabel);
 

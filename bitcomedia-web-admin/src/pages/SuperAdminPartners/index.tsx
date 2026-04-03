@@ -19,6 +19,7 @@ import {
   DEFAULT_PARTNER_PERMISSIONS,
   createPartnerUserAccount,
   getUserData,
+  appendAuditLog,
 } from '@services';
 import type { PartnerEventGrant, PartnerEventPermissions, UserData } from '@services';
 import { collection, getDocs, query } from 'firebase/firestore';
@@ -34,6 +35,11 @@ type EventOption = {
 const PERM_LABELS: { key: keyof PartnerEventPermissions; label: string; hint: string }[] = [
   { key: 'read_tickets', label: 'Ver listado de boletos', hint: 'Consultar boletos del evento (solo lectura).' },
   { key: 'create_tickets', label: 'Crear boletos manuales / cortesías', hint: 'Modal “Crear” y función en cloud.' },
+  {
+    key: 'taquilla_sale',
+    label: 'Venta en taquilla (precio público)',
+    hint: 'Solo venta presencial a precio de lista; sin cortesías (módulo /taquilla).',
+  },
   { key: 'edit_event', label: 'Editar evento', hint: 'Acceso al formulario del evento o recurrente.' },
   { key: 'view_stats', label: 'Ver estadísticas', hint: 'Pantalla de stats y gastos del evento.' },
   { key: 'scan_validate', label: 'Escanear y validar en taquilla', hint: 'Leer Boletos / validar entradas.' },
@@ -258,6 +264,15 @@ const SuperAdminPartnersScreen: React.FC = () => {
         isRecurring: ev.isRecurring,
         permissions: { ...perms },
       });
+      void appendAuditLog({
+        kind: 'partner_grant_upsert',
+        entityType: ev.isRecurring ? 'recurring_events' : 'events',
+        entityId: ev.id,
+        summary: `Partner ${targetEmail || targetUid.slice(0, 8)} en «${exists.name || ev.id}»: ${Object.entries(perms)
+          .filter(([, v]) => v)
+          .map(([k]) => k)
+          .join(', ') || 'sin permisos'}`,
+      }).catch(() => undefined);
 
       setEditingGrant(null);
       setSearchParams({});
@@ -294,6 +309,12 @@ const SuperAdminPartnersScreen: React.FC = () => {
     setSaving(true);
     try {
       await deletePartnerGrant(g.user_id, g.event_id, g.event_path === 'recurring_events');
+      void appendAuditLog({
+        kind: 'partner_grant_delete',
+        entityType: g.event_path,
+        entityId: g.event_id,
+        summary: `Partner ${g.partner_email || g.user_id.slice(0, 8)} quitado del evento`,
+      }).catch(() => undefined);
       if (editingGrant?.id === g.id) cancelEdit();
       await refreshGrantsAndCandidates();
     } catch (e) {
@@ -320,7 +341,12 @@ const SuperAdminPartnersScreen: React.FC = () => {
 
   return (
     <div className="super-admin-partners">
-      <TopNavBar logoOnly showLogout onLogout={handleLogout} adminNavOptions={{ showConfig: true, showScan: true }} />
+      <TopNavBar
+        logoOnly
+        showLogout
+        onLogout={handleLogout}
+        adminNavOptions={{ showConfig: true, showScan: true, showTaquilla: true }}
+      />
 
       <div className="super-admin-partners__inner">
         <header className="super-admin-partners__hero">

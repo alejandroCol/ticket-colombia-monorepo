@@ -95,11 +95,17 @@ const TicketCard: React.FC<TicketCardProps> = ({
     }).format(date);
   };
 
-  const canShowQR = ticket.ticketStatus === 'paid' && ticket.qrCode;
+  const inst = ticket.installmentPhase;
+  const abonoTok = ticket.abonoCompletionToken;
+  const needsAbonoBalance =
+    (inst === 'deposit_paid' || inst === 'awaiting_balance') && Boolean(abonoTok);
+
+  const canShowQR = ticket.ticketStatus === 'paid' && ticket.qrCode && !needsAbonoBalance;
   const canTransfer =
     (ticket.ticketStatus === 'paid' || (ticket as { status?: string }).status === 'approved') &&
     ticket.qrCode &&
-    !(ticket as { transferredTo?: string }).transferredTo;
+    !(ticket as { transferredTo?: string }).transferredTo &&
+    !needsAbonoBalance;
 
   return (
     <div 
@@ -164,7 +170,14 @@ const TicketCard: React.FC<TicketCardProps> = ({
               Transferir
             </button>
           )}
-          {canShowQR ? (
+          {needsAbonoBalance ? (
+            <a
+              className="show-qr-btn primary"
+              href={`/completar-abono?token=${encodeURIComponent(abonoTok!)}`}
+            >
+              Pagar saldo ({formatAmount(ticket.balanceCOP ?? 0, ticket.currency)})
+            </a>
+          ) : canShowQR ? (
             <button 
               className="show-qr-btn primary"
               onClick={() => onShowQR?.(ticket)}
@@ -176,8 +189,13 @@ const TicketCard: React.FC<TicketCardProps> = ({
               className="show-qr-btn disabled"
               disabled
             >
-              {ticket.ticketStatus === 'paid' ? 'QR no disponible' : 
-               ticket.ticketStatus === 'redeemed' ? 'QR validado' : 'No disponible'}
+              {inst === 'awaiting_deposit'
+                ? 'Esperando confirmación de abono'
+                : ticket.ticketStatus === 'paid'
+                  ? 'QR no disponible'
+                  : ticket.ticketStatus === 'redeemed'
+                    ? 'QR validado'
+                    : 'No disponible'}
             </button>
           )}
         </div>

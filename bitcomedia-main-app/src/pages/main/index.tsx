@@ -11,6 +11,7 @@ import TicketsScreen from '../tickets';
 import EventDetailScreen from '../event';
 import CheckoutScreen from '../Checkout';
 import PurchaseFinishedScreen from '../PurchaseFinished';
+import CompletarAbonoScreen from '../CompletarAbono';
 import EditProfileScreen from '../editProfile';
 import ForgetPasswordScreen from '../forgetPassword';
 import DesignSystemDemo from '../DesignSystemDemo';
@@ -147,6 +148,8 @@ const MainLayout: React.FC = () => {
           path="/compra-finalizada" 
           element={<PurchaseFinishedScreen />} 
         />
+
+        <Route path="/completar-abono" element={<CompletarAbonoScreen />} />
         
         {/* Protected User Routes */}
         <Route 

@@ -43,6 +43,39 @@ $placeholder-color: #9A8574; // A lighter color that contrasts well with the bac
   position: relative;
   display: flex;
   align-items: center;
+
+  &--with-toggle .custom-input {
+    padding-right: 2.75rem;
+  }
+}
+
+.custom-input-password-toggle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: $color-text-secondary;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+
+  &:hover {
+    color: $color-text-primary;
+    background: rgba($color-accent, 0.12);
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgba($color-accent, 0.45);
+    outline-offset: 1px;
+  }
 }
 
 .custom-input-icon {

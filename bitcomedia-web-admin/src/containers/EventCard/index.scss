@@ -146,12 +146,19 @@
   
   .event-card-footer {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
     margin-top: 12px;
     padding-top: 4px;
-    gap: 12px;
-    flex-wrap: wrap;
+    gap: 10px;
+
+    .event-card-footer-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
     
     .event-card-price {
       font-weight: $font-weight-bold;
@@ -236,12 +243,28 @@
       }
     }
 
+    .event-card-actions--organizer {
+      padding-top: 2px;
+      border-top: 1px solid rgba($color-accent, 0.12);
+
+      .secondary-button {
+        font-size: 0.8rem;
+        padding: 0.45rem 0.65rem;
+      }
+    }
+
     // En pantallas muy pequeñas, hacer que el footer sea vertical
     @media (max-width: 380px) {
-      flex-direction: column;
-      align-items: flex-start;
+      .event-card-footer-row {
+        flex-direction: column;
+        align-items: flex-start;
+      }
 
       .event-card-actions {
+        width: 100%;
+      }
+
+      .event-card-actions--organizer {
         width: 100%;
       }
     }

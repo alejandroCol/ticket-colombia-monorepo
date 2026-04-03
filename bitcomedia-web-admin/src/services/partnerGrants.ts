@@ -16,6 +16,8 @@ import type { UserData } from './types';
 export interface PartnerEventPermissions {
   read_tickets: boolean;
   create_tickets: boolean;
+  /** Venta en taquilla a precio público (sin cortesías); módulo /taquilla */
+  taquilla_sale: boolean;
   edit_event: boolean;
   view_stats: boolean;
   scan_validate: boolean;
@@ -35,6 +37,7 @@ export interface PartnerEventGrant {
 export const DEFAULT_PARTNER_PERMISSIONS: PartnerEventPermissions = {
   read_tickets: false,
   create_tickets: false,
+  taquilla_sale: false,
   edit_event: false,
   view_stats: false,
   scan_validate: false,
@@ -90,6 +93,14 @@ export async function partnerCanValidateTicket(userId: string, eventId: string):
   return !!p?.grant.permissions.scan_validate;
 }
 
+/** Venta manual a precio del evento (taquilla); incluye permiso amplio create_tickets. */
+export async function partnerCanSellTaquilla(userId: string, eventId: string): Promise<boolean> {
+  const p = await getAnyPartnerGrantForTicketEvent(userId, eventId);
+  if (!p) return false;
+  const { create_tickets, taquilla_sale } = p.grant.permissions;
+  return create_tickets || taquilla_sale;
+}
+
 export async function listPartnerGrantsForUser(userId: string): Promise<PartnerEventGrant[]> {
   const q = query(collection(db, 'event_partner_grants'), where('user_id', '==', userId));
   const snap = await getDocs(q);
@@ -107,6 +118,35 @@ export async function listPartnerGrantsForUser(userId: string): Promise<PartnerE
       updated_at: data.updated_at,
     });
   });
+  return out;
+}
+
+export async function listPartnerGrantsForEvent(
+  eventId: string,
+  isRecurring: boolean
+): Promise<PartnerEventGrant[]> {
+  const path: 'events' | 'recurring_events' = isRecurring ? 'recurring_events' : 'events';
+  const q = query(
+    collection(db, 'event_partner_grants'),
+    where('event_id', '==', eventId),
+    where('event_path', '==', path)
+  );
+  const snap = await getDocs(q);
+  const out: PartnerEventGrant[] = [];
+  snap.forEach((d) => {
+    const data = d.data();
+    out.push({
+      id: d.id,
+      user_id: data.user_id,
+      event_id: data.event_id,
+      event_path: data.event_path,
+      partner_email: data.partner_email,
+      permissions: { ...DEFAULT_PARTNER_PERMISSIONS, ...data.permissions },
+      created_at: data.created_at,
+      updated_at: data.updated_at,
+    });
+  });
+  out.sort((a, b) => (b.updated_at?.toMillis() || 0) - (a.updated_at?.toMillis() || 0));
   return out;
 }
 

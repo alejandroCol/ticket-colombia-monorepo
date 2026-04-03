@@ -8,6 +8,22 @@ import type { Ticket } from './types';
 // Initialize Firebase Functions
 const functions = getFunctions(app);
 const createTicketPreference = httpsCallable(functions, 'createTicketPreference');
+const getAbonoCheckoutPublicInfoFn = httpsCallable<
+  { token: string },
+  {
+    ticketId: string;
+    eventName: string;
+    balanceCOP: number;
+    depositCOP: number;
+    totalCOP: number;
+    balanceDueAtMs: number | null;
+    phase: string;
+  }
+>(functions, 'getAbonoCheckoutPublicInfo');
+const createBalanceInstallmentPreferenceFn = httpsCallable<
+  { ticketId: string },
+  { ticketId: string; preferenceId: string; initPoint: string; sandboxInitPoint?: string }
+>(functions, 'createBalanceInstallmentPreference');
 
 // Ticket data interface
 export interface TicketData {
@@ -18,6 +34,8 @@ export interface TicketData {
   buyerEmail: string;
   reservationId: string;
   guestCheckout?: boolean;
+  /** full (default) o deposit (abono; requiere sesión y localidad con abono). */
+  paymentMode?: 'full' | 'deposit';
   metadata: {
     userName: string;
     eventName: string;
@@ -27,6 +45,9 @@ export interface TicketData {
     city: string;
     seatNumber?: string;
     sectionId?: string;
+    mapZoneId?: string;
+    mapZoneLabel?: string;
+    buyerIdNumber?: string;
   };
 }
 
@@ -44,9 +65,11 @@ export async function getUserTickets(userId: string): Promise<Ticket[]> {
     const tickets: Ticket[] = [];
     
     querySnapshot.forEach((doc) => {
+      const d = doc.data();
+      if (d.ticketKind === 'purchase_bundle_parent') return;
       tickets.push({
         id: doc.id,
-        ...doc.data()
+        ...d
       } as Ticket);
     });
     
@@ -86,6 +109,16 @@ export async function transferTicket(
     { success: boolean; message: string; newTicketId?: string }
   >(functions, 'transferTicket');
   const result = await transferTicketFn({ ticketId, recipientEmail, recipientName });
+  return result.data;
+}
+
+export async function getAbonoCheckoutPublicInfo(token: string) {
+  const result = await getAbonoCheckoutPublicInfoFn({ token });
+  return result.data;
+}
+
+export async function createBalanceInstallmentPreference(ticketId: string) {
+  const result = await createBalanceInstallmentPreferenceFn({ ticketId });
   return result.data;
 }
 

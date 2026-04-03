@@ -1,0 +1,51 @@
+@import '../../main.scss';
+
+.completar-abono {
+  min-height: 100vh;
+  background: $color-primary;
+
+  &__center {
+    display: flex;
+    justify-content: center;
+    padding: 3rem;
+  }
+
+  &__main {
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 4rem;
+    color: $color-text-primary;
+
+    h1 {
+      color: $color-text-primary;
+    }
+  }
+
+  &__lead {
+    font-size: 1.1rem;
+    margin: 0.5rem 0 1rem;
+  }
+
+  &__list {
+    margin: 0 0 1rem;
+    padding-left: 1.25rem;
+    line-height: 1.6;
+  }
+
+  &__hint {
+    color: $color-text-secondary;
+    font-size: 0.95rem;
+    margin-bottom: 1.5rem;
+  }
+
+  &__error {
+    color: #c0392b;
+    margin: 1rem 0;
+  }
+
+  &__actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+}

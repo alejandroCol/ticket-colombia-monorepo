@@ -61,6 +61,21 @@ service cloud.firestore {
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN'
         );
     }
+
+    /** El organizador dueño del evento del grant puede listar/ver ese documento (gestión de promotores en admin). */
+    function organizerReadsOwnEventGrant() {
+      return request.auth != null &&
+        resource.data.event_path == 'events' &&
+        exists(/databases/$(database)/documents/events/$(resource.data.event_id)) &&
+        get(/databases/$(database)/documents/events/$(resource.data.event_id)).data.organizer_id == request.auth.uid;
+    }
+
+    function organizerReadsOwnRecurringEventGrant() {
+      return request.auth != null &&
+        resource.data.event_path == 'recurring_events' &&
+        exists(/databases/$(database)/documents/recurring_events/$(resource.data.event_id)) &&
+        get(/databases/$(database)/documents/recurring_events/$(resource.data.event_id)).data.organizer_id == request.auth.uid;
+    }
     // Events collection - publicly readable, authenticated users can write
     match /events/{eventId} {
       allow read: if true; // Allow anyone to read event data
@@ -94,6 +109,12 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN';
     }
 
+    // Credencial Mercado Pago del vendedor (organizador) para split marketplace — solo super admin
+    match /organizer_mp_seller/{organizerId} {
+      allow read, write: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN';
+    }
+
     // Configurations collection - publicly readable, only admins can write
     match /configurations/{configId} {
       allow read: if true; // Allow anyone to read configuration data (landing, app)
@@ -109,7 +130,9 @@ service cloud.firestore {
     match /event_partner_grants/{grantId} {
       allow read: if request.auth != null && (
         resource.data.user_id == request.auth.uid ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN'
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN' ||
+        organizerReadsOwnEventGrant() ||
+        organizerReadsOwnRecurringEventGrant()
       );
       allow create, update, delete: if request.auth != null &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN';
@@ -161,6 +184,31 @@ service cloud.firestore {
     // Reservas de cupo (solo Cloud Functions / Admin SDK)
     match /ticket_reservations/{reservationId} {
       allow read, write: if false;
+    }
+
+    // Registro de auditoría (append-only; lectura solo super admin; escriben admin/partner como actorUid propio)
+    match /audit_logs/{logId} {
+      allow read: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN';
+      allow create: if request.auth != null &&
+        (isAdminRole() || isPartnerUser()) &&
+        request.resource.data.actorUid == request.auth.uid &&
+        request.resource.data.keys().hasOnly(['actorUid', 'actorEmail', 'kind', 'action', 'entityType', 'entityId', 'summary', 'at']) &&
+        request.resource.data.actorEmail is string &&
+        request.resource.data.actorEmail.size() <= 320 &&
+        request.resource.data.kind is string &&
+        request.resource.data.kind.size() <= 64 &&
+        request.resource.data.action is string &&
+        request.resource.data.action.size() <= 32 &&
+        request.resource.data.entityType is string &&
+        request.resource.data.entityType.size() <= 64 &&
+        request.resource.data.entityId is string &&
+        request.resource.data.entityId.size() <= 200 &&
+        request.resource.data.summary is string &&
+        request.resource.data.summary.size() <= 500 &&
+        request.resource.data.at is timestamp;
+      allow update, delete: if false;
     }
 
     // Plantillas de mapa de localidades (por organizador)

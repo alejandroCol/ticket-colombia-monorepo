@@ -1,6 +1,11 @@
 import PDFDocument from "pdfkit";
 import * as https from "https";
 import * as http from "http";
+import {
+  ticketFlyerAccentColorFromEvent,
+  ticketFlyerMinimalEmailColorFromEvent,
+  ticketFlyerMinimalNameColorFromEvent,
+} from "./ticket-flyer-pdf-theme";
 
 interface TicketData {
   ticketId?: string;
@@ -14,11 +19,157 @@ interface TicketData {
   buyerEmail: string;
   price: number;
   sectionName?: string;
+  buyerIdNumber?: string;
 }
 
 interface TicketWithQR {
   ticket: TicketData;
   qrCodeImage: string;
+}
+
+/** Diseño del flyer PDF (configurable en admin por evento). */
+export type TicketFlyerPdfLayout = "standard" | "minimal_center";
+
+type PdfKitDoc = InstanceType<typeof PDFDocument>;
+
+function flyerLayoutFromEvent(eventData: any): TicketFlyerPdfLayout {
+  const v = String(eventData?.ticket_flyer_pdf_layout ?? "standard")
+    .toLowerCase()
+    .trim();
+  if (v === "minimal_center" || v === "opcion_2" || v === "2") {
+    return "minimal_center";
+  }
+  return "standard";
+}
+
+/**
+ * Opción 2 (OnePay / cualquier pasarela): sin titular del evento.
+ * Recuadro a todo el ancho útil (márgenes laterales), centrado verticalmente:
+ * QR a la izquierda, datos del comprador y localidad a la derecha.
+ */
+function drawMinimalCenterFlyerPage(
+  doc: PdfKitDoc,
+  ticket: TicketData,
+  qrCodeImage: string,
+  ticketIndex: number,
+  totalTickets: number,
+  localityColor: string,
+  buyerNameColor: string,
+  emailAndCaptionColor: string
+): void {
+  const pageW = doc.page.width;
+  const pageH = doc.page.height;
+  const marginX = 50;
+  const boxW = pageW - 2 * marginX;
+  const pad = 22;
+  const gapQrText = 28;
+  const qrSize = 188;
+
+  const innerTextW = Math.max(
+    120,
+    boxW - 2 * pad - qrSize - gapQrText
+  );
+  const textX = marginX + pad + qrSize + gapQrText;
+
+  const localityH = ticket.sectionName ? 22 : 0;
+  const nameH = 20;
+  const emailH = 18;
+  const idDocH = ticket.buyerIdNumber ? 16 : 0;
+  const hintH = 14;
+  const multiH = totalTickets > 1 ? 14 : 0;
+  const idGap = ticket.buyerIdNumber ? 10 : 0;
+  const gaps =
+    (ticket.sectionName ? 10 : 0) +
+    10 +
+    10 +
+    idGap +
+    10 +
+    (totalTickets > 1 ? 6 : 0);
+  const textColH =
+    localityH + nameH + emailH + idDocH + hintH + multiH + gaps;
+  const boxH = Math.max(qrSize + 2 * pad, textColH + 2 * pad);
+  /** Desplazamiento respecto al centro: 10 % de la altura de página hacia arriba (antes 20 %; bajado 10 pp). */
+  const verticalLift = pageH * 0.1;
+  const boxTop = Math.max(36, (pageH - boxH) / 2 - verticalLift);
+
+  doc
+    .rect(marginX, boxTop, boxW, boxH)
+    .strokeColor("#ffffff")
+    .lineWidth(1.75)
+    .stroke();
+
+  const qrX = marginX + pad;
+  const qrY = boxTop + pad;
+
+  try {
+    const base64Data = qrCodeImage.split(",")[1];
+    const qrBuffer = Buffer.from(base64Data, "base64");
+    doc.image(qrBuffer, qrX, qrY, {width: qrSize, height: qrSize});
+  } catch (error) {
+    console.error("Error adding QR to PDF (minimal layout):", error);
+    doc
+      .fontSize(10)
+      .fillColor("#ff0000")
+      .text("Error cargando QR", qrX, qrY + qrSize * 0.35, {
+        width: qrSize,
+        align: "center",
+      });
+  }
+
+  let yText = boxTop + pad;
+  if (ticket.sectionName) {
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(16)
+      .fillColor(localityColor)
+      .text(ticket.sectionName, textX, yText, {width: innerTextW, align: "left"});
+    yText += localityH + 10;
+  }
+
+  doc
+    .font("Helvetica")
+    .fontSize(13)
+    .fillColor(buyerNameColor)
+    .text(ticket.buyerName, textX, yText, {width: innerTextW, align: "left"});
+  yText += nameH + 10;
+
+  doc
+    .fontSize(11)
+    .fillColor(emailAndCaptionColor)
+    .text(ticket.buyerEmail, textX, yText, {width: innerTextW, align: "left"});
+  yText += emailH + 10;
+
+  if (ticket.buyerIdNumber) {
+    doc
+      .font("Helvetica")
+      .fontSize(10)
+      .fillColor(emailAndCaptionColor)
+      .text(`Cédula / documento: ${ticket.buyerIdNumber}`, textX, yText, {
+        width: innerTextW,
+        align: "left",
+      });
+    yText += idDocH + 10;
+  }
+
+  doc
+    .font("Helvetica")
+    .fontSize(9)
+    .fillColor(emailAndCaptionColor)
+    .text("Presenta este QR en la entrada", textX, yText, {
+      width: innerTextW,
+      align: "left",
+    });
+  yText += hintH + 8;
+
+  if (totalTickets > 1) {
+    doc
+      .fontSize(9)
+      .fillColor(emailAndCaptionColor)
+      .text(`Entrada ${ticketIndex + 1} de ${totalTickets}`, textX, yText, {
+        width: innerTextW,
+        align: "left",
+      });
+  }
 }
 
 /**
@@ -100,7 +251,12 @@ export async function generateMultipleTicketsPdf(
           }
         }
 
-        console.log("[generateMultipleTicketsPdf] Generando páginas...");
+        const layout = flyerLayoutFromEvent(eventData);
+        const accentColor = ticketFlyerAccentColorFromEvent(eventData);
+        const minimalNameColor = ticketFlyerMinimalNameColorFromEvent(eventData);
+        const minimalEmailColor = ticketFlyerMinimalEmailColorFromEvent(eventData);
+        console.log("[generateMultipleTicketsPdf] Diseño flyer:", layout, "accent:", accentColor);
+
         // Generar cada ticket en el PDF
         for (let i = 0; i < ticketsWithQR.length; i++) {
           const {ticket, qrCodeImage} = ticketsWithQR[i];
@@ -122,7 +278,21 @@ export async function generateMultipleTicketsPdf(
             }
           }
 
-          // --- HEADER (texto blanco sobre imagen oscura) ---
+          if (layout === "minimal_center") {
+            drawMinimalCenterFlyerPage(
+              doc,
+              ticket,
+              qrCodeImage,
+              i,
+              ticketsWithQR.length,
+              accentColor,
+              minimalNameColor,
+              minimalEmailColor
+            );
+            continue;
+          }
+
+          // --- Estándar (opción 1): HEADER (texto blanco sobre imagen oscura) ---
           doc
             .fontSize(28)
             .font("Helvetica-Bold")
@@ -173,7 +343,7 @@ export async function generateMultipleTicketsPdf(
             doc.moveDown(0.3);
             doc
               .fontSize(16)
-              .fillColor("#00d4ff")
+              .fillColor(accentColor)
               .font("Helvetica-Bold")
               .text(`${ticket.sectionName}`, {align: "center"});
           }
@@ -203,13 +373,16 @@ export async function generateMultipleTicketsPdf(
             .fillColor("#e0e0e0")
             .text(`Nombre: ${ticket.buyerName}`)
             .text(`Email: ${ticket.buyerEmail}`);
+          if (ticket.buyerIdNumber) {
+            doc.text(`Cédula / documento: ${ticket.buyerIdNumber}`);
+          }
 
           doc.moveDown(1.5);
 
           // --- QR CODE SECTION ---
           doc
             .fontSize(16)
-            .fillColor("#00d4ff")
+            .fillColor(accentColor)
             .text(`Ticket ${i + 1} de ${ticketsWithQR.length}:`, {align: "left"});
 
           doc.moveDown(1);
@@ -247,36 +420,46 @@ export async function generateMultipleTicketsPdf(
           const ticketId = ticket.ticketId || ticket.id || "N/A";
           const displayId = ticketId.length > 20 ? ticketId.substring(0, 20) + "..." : ticketId;
 
+          let infoRy = infoY;
           doc
             .fontSize(10)
             .fillColor("#e0e0e0")
-            .text(`ID: ${displayId}`, infoX, infoY)
-            .text(`Titular: ${ticket.buyerName}`, infoX, infoY + 25)
-            .text(`Email: ${ticket.buyerEmail}`, infoX, infoY + 45);
+            .text(`ID: ${displayId}`, infoX, infoRy);
+          infoRy += 22;
+          doc.text(`Titular: ${ticket.buyerName}`, infoX, infoRy);
+          infoRy += 20;
+          doc.text(`Email: ${ticket.buyerEmail}`, infoX, infoRy);
+          infoRy += 20;
+          if (ticket.buyerIdNumber) {
+            doc.text(`Cédula / documento: ${ticket.buyerIdNumber}`, infoX, infoRy);
+            infoRy += 22;
+          }
 
           if (ticket.sectionName) {
             doc
               .fontSize(12)
-              .fillColor("#00d4ff")
+              .fillColor(accentColor)
               .font("Helvetica-Bold")
-              .text(`Localidad: ${ticket.sectionName}`, infoX, infoY + 70);
+              .text(`Localidad: ${ticket.sectionName}`, infoX, infoRy);
+            infoRy += 22;
           }
 
           doc
             .fontSize(12)
-            .fillColor("#00d4ff")
+            .fillColor(accentColor)
             .font("Helvetica-Bold")
             .text(
               ticket.price === 0 ? "Valor: Cortesía" : `Valor: $${ticket.price.toLocaleString("es-CO")}`,
               infoX,
-              infoY + (ticket.sectionName ? 95 : 70)
+              infoRy
             );
+          infoRy += 24;
 
           doc
             .fontSize(9)
             .fillColor("#cccccc")
             .font("Helvetica")
-            .text("Presenta este QR en la entrada", infoX, infoY + (ticket.sectionName ? 120 : 95), {width: 280});
+            .text("Presenta este QR en la entrada", infoX, infoRy, {width: 280});
 
           // Si hay más tickets, agregar espacio antes del siguiente
           if (i < ticketsWithQR.length - 1) {

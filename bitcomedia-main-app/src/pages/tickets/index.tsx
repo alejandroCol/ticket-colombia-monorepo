@@ -22,6 +22,9 @@ import {
 } from '../../utils/mpCheckoutReturnIntent';
 import './index.scss';
 
+const GUEST_PAY_CONFIRMATION_MESSAGE =
+  'Revisa tu correo: te enviamos la confirmación. También puedes crear una cuenta gratuita con el mismo correo para ver el código QR y tus entradas en la app.';
+
 const TicketsScreen: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -106,7 +109,7 @@ const TicketsScreen: React.FC = () => {
             variant="tickets"
             eyebrow="Mis entradas"
             title="Activa tu cuenta y ve tus boletos aquí"
-            message="Si pagaste con Mercado Pago sin iniciar sesión, revisa tu correo: te enviamos la confirmación. Crea una cuenta gratuita con el mismo correo para ver el código QR y tus entradas en la app."
+            message={GUEST_PAY_CONFIRMATION_MESSAGE}
             benefitsTitle="Por qué crear cuenta"
             benefits={[
               'QR y entradas siempre a mano en el celular',

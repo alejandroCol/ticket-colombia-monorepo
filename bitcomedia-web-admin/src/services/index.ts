@@ -15,6 +15,7 @@ export {
   isPartnerUserAuth,
   isSuperAdmin,
   sendPasswordResetEmail,
+  changePasswordWithCurrent,
   auth
 } from './auth';
 
@@ -26,8 +27,12 @@ export {
   getEventById,
   getEventOrRecurringById,
   getPaymentConfig,
+  updatePaymentProviderConfig,
   getOrganizerBuyerFee,
   setOrganizerBuyerFee,
+  getOrganizerMpSellerConfigured,
+  setOrganizerMpSellerAccessToken,
+  clearOrganizerMpSellerAccessToken,
   getContactConfig,
   updateContactConfig,
   getVenues,
@@ -39,8 +44,11 @@ export {
   getExpensesByEventId,
   getTotalRevenue,
   getAdminUsersList,
+  getAuditActorUsersList,
   fetchOrganizerEventsIndex,
   setEventOrganizerId,
+  resolveEventCollection,
+  allocateUniqueEventSlug,
   db
 } from './firestore';
 
@@ -67,6 +75,14 @@ export {
 } from './firebase';
 
 export { createPartnerUserAccount } from './createPartnerUserAccount';
+
+export {
+  appendAuditLog,
+  fetchAuditLogsPage,
+  AUDIT_SUMMARY_MAX,
+  AUDIT_KIND_LABELS,
+} from './auditLog';
+export type { AuditLogKind, AuditLogRow } from './auditLog';
 
 // Ticket service exports
 export {
@@ -97,7 +113,9 @@ export {
   getAnyPartnerGrantForTicketEvent,
   partnerCanReadTicket,
   partnerCanValidateTicket,
+  partnerCanSellTaquilla,
   listPartnerGrantsForUser,
+  listPartnerGrantsForEvent,
   listAllPartnerGrants,
   upsertPartnerGrant,
   deletePartnerGrant,

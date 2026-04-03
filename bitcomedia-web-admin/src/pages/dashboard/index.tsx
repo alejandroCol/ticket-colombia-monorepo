@@ -112,6 +112,42 @@ const DashboardScreen: React.FC = () => {
     [isPartnerUser, partnerGrantMap]
   );
 
+  const partnerTaquillaAny = useMemo(
+    () =>
+      isPartnerUser &&
+      Object.values(partnerGrantMap).some((p) => p.taquilla_sale || p.create_tickets),
+    [isPartnerUser, partnerGrantMap]
+  );
+
+  const showTaquillaNav = !isPartnerUser || partnerTaquillaAny;
+
+  /** Dueño del evento o super admin: atajos Promotores / Venta web en la tarjeta */
+  const [organizerShortcutSession, setOrganizerShortcutSession] = useState<{
+    uid: string;
+    superAdmin: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    const u = getCurrentUser();
+    if (!u) {
+      setOrganizerShortcutSession(null);
+      return;
+    }
+    let cancelled = false;
+    void isSuperAdmin(u.uid).then((sa) => {
+      if (!cancelled) setOrganizerShortcutSession({ uid: u.uid, superAdmin: sa });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function showOrganizerShortcutsOnCard(ev: EventData): boolean {
+    if (!organizerShortcutSession) return false;
+    if (organizerShortcutSession.superAdmin) return true;
+    return ev.organizer_id === organizerShortcutSession.uid;
+  }
+
   function eventCardMaskFor(eventId: string | undefined): EventCardActionMask | undefined {
     if (!isPartnerUser || !eventId) return undefined;
     const p = partnerGrantMap[eventId];
@@ -121,6 +157,7 @@ const DashboardScreen: React.FC = () => {
         canCreateTickets: false,
         canViewTickets: false,
         canViewStats: false,
+        canTaquillaSale: false,
       };
     }
     return {
@@ -128,6 +165,7 @@ const DashboardScreen: React.FC = () => {
       canCreateTickets: p.create_tickets,
       canViewTickets: p.read_tickets,
       canViewStats: p.view_stats,
+      canTaquillaSale: p.taquilla_sale || p.create_tickets,
     };
   }
 
@@ -193,6 +231,7 @@ const DashboardScreen: React.FC = () => {
             grantMap[g.event_id] = {
               read_tickets: cur.read_tickets || g.permissions.read_tickets,
               create_tickets: cur.create_tickets || g.permissions.create_tickets,
+              taquilla_sale: cur.taquilla_sale || g.permissions.taquilla_sale,
               edit_event: cur.edit_event || g.permissions.edit_event,
               view_stats: cur.view_stats || g.permissions.view_stats,
               scan_validate: cur.scan_validate || g.permissions.scan_validate,
@@ -305,6 +344,7 @@ const DashboardScreen: React.FC = () => {
             grantMap[g.event_id] = {
               read_tickets: cur.read_tickets || g.permissions.read_tickets,
               create_tickets: cur.create_tickets || g.permissions.create_tickets,
+              taquilla_sale: cur.taquilla_sale || g.permissions.taquilla_sale,
               edit_event: cur.edit_event || g.permissions.edit_event,
               view_stats: cur.view_stats || g.permissions.view_stats,
               scan_validate: cur.scan_validate || g.permissions.scan_validate,
@@ -526,6 +566,21 @@ const DashboardScreen: React.FC = () => {
     navigate(`/events/${eventId}/stats`);
   };
 
+  const handleCardPromoters = (eventId: string, isRecurring?: boolean) => {
+    navigate(
+      isRecurring ? `/recurring-events/${eventId}/promoters` : `/events/${eventId}/promoters`
+    );
+  };
+
+  const handleCardWidget = (eventId: string, isRecurring?: boolean) => {
+    navigate(isRecurring ? `/recurring-events/${eventId}/widget` : `/events/${eventId}/widget`);
+  };
+
+  const handleCardTaquilla = (eventId: string, isRecurring?: boolean) => {
+    const q = isRecurring ? `?eventId=${encodeURIComponent(eventId)}&recurring=1` : `?eventId=${encodeURIComponent(eventId)}`;
+    navigate(`/taquilla${q}`);
+  };
+
   const handleToggleRecurringSection = () => {
     setIsRecurringCollapsed(!isRecurringCollapsed);
   };
@@ -622,6 +677,7 @@ const DashboardScreen: React.FC = () => {
         adminNavOptions={{
           showConfig: !isPartnerUser,
           showScan: !isPartnerUser || partnerScanAny,
+          showTaquilla: showTaquillaNav,
         }}
       />
 
@@ -635,6 +691,30 @@ const DashboardScreen: React.FC = () => {
           </div>
           <span className="scan-card-arrow">→</span>
         </div>
+        )}
+
+        {showTaquillaNav && (
+          <div
+            className="dashboard-scan-card dashboard-taquilla-card"
+            onClick={() => navigate('/taquilla')}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                navigate('/taquilla');
+              }
+            }}
+          >
+            <span className="scan-card-icon" aria-hidden>
+              🎟️
+            </span>
+            <div className="scan-card-text">
+              <h2>Venta en taquilla</h2>
+              <p>Vender al precio público del evento o localidad</p>
+            </div>
+            <span className="scan-card-arrow">→</span>
+          </div>
         )}
 
         {!isPartnerUser && (
@@ -737,39 +817,35 @@ const DashboardScreen: React.FC = () => {
           )}
         </div>
 
-        <div className="dashboard-header">
-          <div className="header-title-wrapper">
-            <h1>Eventos recurrentes</h1>
-            <button 
-              className="collapse-button"
-              onClick={handleToggleRecurringSection}
-              aria-label={isRecurringCollapsed ? "Expandir eventos recurrentes" : "Colapsar eventos recurrentes"}
-            >
-              {isRecurringCollapsed ? '▼' : '▲'}
-            </button>
+        <section className="dashboard-events-block dashboard-events-block--primary" aria-label="Eventos con fecha">
+          <div className="dashboard-header">
+            <div className="header-title-wrapper header-title-wrapper--stacked">
+              <h1>Eventos</h1>
+              <p className="dashboard-section-kicker">
+                Fechas puntuales. Usa las pestañas al editar un evento para promotores y venta embebida en tu web.
+              </p>
+            </div>
+            {!isPartnerUser && (
+              <div className="header-actions desktop-only">
+                <PrimaryButton onClick={handleAddEvent}>
+                  + Evento
+                </PrimaryButton>
+              </div>
+            )}
           </div>
-          {!isPartnerUser && (
-          <div className="header-actions desktop-only">
-            <PrimaryButton onClick={handleAddRecurringEvent}>
-              + Recurrente
-            </PrimaryButton>
-          </div>
-          )}
-        </div>
-        
-        {!isRecurringCollapsed && (
+
           <div className="events-container">
-            {loadingRecurring ? (
+            {loading ? (
               <div className="loading-state">
-                <p>Cargando eventos recurrentes...</p>
+                <p>Cargando eventos...</p>
               </div>
-            ) : errorRecurring ? (
+            ) : error ? (
               <div className="error-state">
-                <p>{errorRecurring}</p>
+                <p>{error}</p>
               </div>
-            ) : filteredRecurringEvents.length > 0 ? (
+            ) : filteredEvents.length > 0 ? (
               <div className="events-grid">
-                {filteredRecurringEvents.map((event) => (
+                {filteredEvents.map((event) => (
                   <EventCard
                     key={event.id}
                     event={event}
@@ -777,66 +853,91 @@ const DashboardScreen: React.FC = () => {
                     onCreateTicket={handleCreateTicket}
                     onViewTickets={(eventId) => handleViewTickets(eventId)}
                     onViewStats={handleViewStats}
+                    showOrganizerShortcuts={showOrganizerShortcutsOnCard(event)}
+                    onPromoters={handleCardPromoters}
+                    onWidgetEmbed={handleCardWidget}
+                    onTaquilla={handleCardTaquilla}
                     actionMask={eventCardMaskFor(event.id)}
                   />
                 ))}
               </div>
-            ) : recurringEvents.length > 0 ? (
+            ) : events.length > 0 ? (
               <div className="empty-state">
-                <p>Ningún evento recurrente coincide con los filtros.</p>
+                <p>Ningún evento coincide con los filtros.</p>
               </div>
             ) : (
               <div className="empty-state">
-                <p>No hay eventos recurrentes para mostrar</p>
+                <p>No hay eventos para mostrar</p>
               </div>
             )}
           </div>
-        )}
+        </section>
 
-        <div className="dashboard-header">
-          <h1>Eventos</h1>
-          {!isPartnerUser && (
-          <div className="header-actions desktop-only">
-            <PrimaryButton onClick={handleAddEvent}>
-              + Evento
-            </PrimaryButton>
+        <section className="dashboard-events-block dashboard-events-block--recurring" aria-label="Series recurrentes">
+          <div className="dashboard-header">
+            <div className="header-title-wrapper header-title-wrapper--stacked">
+              <div className="dashboard-header-title-row">
+                <h1>Eventos recurrentes</h1>
+                <button
+                  type="button"
+                  className="collapse-button"
+                  onClick={handleToggleRecurringSection}
+                  aria-label={isRecurringCollapsed ? 'Expandir eventos recurrentes' : 'Colapsar eventos recurrentes'}
+                >
+                  {isRecurringCollapsed ? '▼' : '▲'}
+                </button>
+              </div>
+              <p className="dashboard-section-kicker">Series y horarios fijos. Mismas herramientas que un evento puntual.</p>
+            </div>
+            {!isPartnerUser && (
+              <div className="header-actions desktop-only">
+                <PrimaryButton onClick={handleAddRecurringEvent}>
+                  + Recurrente
+                </PrimaryButton>
+              </div>
+            )}
           </div>
+
+          {!isRecurringCollapsed && (
+            <div className="events-container">
+              {loadingRecurring ? (
+                <div className="loading-state">
+                  <p>Cargando eventos recurrentes...</p>
+                </div>
+              ) : errorRecurring ? (
+                <div className="error-state">
+                  <p>{errorRecurring}</p>
+                </div>
+              ) : filteredRecurringEvents.length > 0 ? (
+                <div className="events-grid">
+                  {filteredRecurringEvents.map((event) => (
+                    <EventCard
+                      key={event.id}
+                      event={event}
+                      onReserve={handleReserveEvent}
+                      onCreateTicket={handleCreateTicket}
+                      onViewTickets={(eventId) => handleViewTickets(eventId)}
+                      onViewStats={handleViewStats}
+                      showOrganizerShortcuts={showOrganizerShortcutsOnCard(event)}
+                      onPromoters={handleCardPromoters}
+                      onWidgetEmbed={handleCardWidget}
+                      onTaquilla={handleCardTaquilla}
+                      actionMask={eventCardMaskFor(event.id)}
+                    />
+                  ))}
+                </div>
+              ) : recurringEvents.length > 0 ? (
+                <div className="empty-state">
+                  <p>Ningún evento recurrente coincide con los filtros.</p>
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <p>No hay eventos recurrentes para mostrar</p>
+                </div>
+              )}
+            </div>
           )}
-        </div>
-        
-        <div className="events-container">
-          {loading ? (
-            <div className="loading-state">
-              <p>Cargando eventos...</p>
-            </div>
-          ) : error ? (
-            <div className="error-state">
-              <p>{error}</p>
-            </div>
-          ) : filteredEvents.length > 0 ? (
-            <div className="events-grid">
-              {filteredEvents.map((event) => (
-                <EventCard
-                  key={event.id}
-                  event={event}
-                  onReserve={handleReserveEvent}
-                  onCreateTicket={handleCreateTicket}
-                  onViewTickets={(eventId) => handleViewTickets(eventId)}
-                  onViewStats={handleViewStats}
-                  actionMask={eventCardMaskFor(event.id)}
-                />
-              ))}
-            </div>
-          ) : events.length > 0 ? (
-            <div className="empty-state">
-              <p>Ningún evento coincide con los filtros.</p>
-            </div>
-          ) : (
-            <div className="empty-state">
-              <p>No hay eventos para mostrar</p>
-            </div>
-          )}
-        </div>
+        </section>
       </div>
       
       {/* Mobile fixed button */}

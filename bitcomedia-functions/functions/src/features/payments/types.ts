@@ -1,23 +1,49 @@
 import {Timestamp} from "firebase-admin/firestore";
+import type {OnePayWebhookPayload} from "./handlers/onepay.api";
 
 // Interfaces principales
+/** full: un solo pago. deposit: abono (requiere cuenta); el saldo se paga después. */
+export type PaymentMode = "full" | "deposit";
+
 export interface CreateTicketRequest {
   userId: string;
   eventId: string;
   amount: number;
-  quantity: number; // Cantidad de tickets/reservas
+  quantity: number; // Cantidad de unidades de localidad (palcos o entradas)
   buyerEmail: string;
   /** Reserva de 10 min (callable createTicketReservation) obligatoria para compra pública */
   reservationId: string;
   /** Compra sin cuenta: el backend genera userId guest_* */
   guestCheckout?: boolean;
+  /** Por defecto full. deposit solo con login y localidad con abono_allowed. */
+  paymentMode?: PaymentMode;
   metadata?: {
     userName?: string;
     eventName?: string;
+    /** Nombre de la localidad (debe coincidir con la reserva). */
     seatNumber?: string;
     sectionId?: string;
+    /** id de `venue_map.zones` cuando hay palcos divididos */
+    mapZoneId?: string;
+    /** Etiqueta en mapa (ej. "1", "2") */
+    mapZoneLabel?: string;
+    /** Cédula u otro documento del comprador (opcional); se guarda y muestra en PDF. */
+    buyerIdNumber?: string;
   };
 }
+
+export type TicketKind =
+  | "standard"
+  | "purchase_bundle_parent"
+  | "purchase_pass";
+
+export type InstallmentPhase =
+  | "none"
+  | "awaiting_deposit"
+  | "deposit_paid"
+  | "awaiting_balance"
+  | "completed"
+  | "forfeited";
 
 export interface Ticket {
   userId: string;
@@ -27,7 +53,7 @@ export interface Ticket {
   paymentStatus: PaymentStatus;
   paymentMethod: string;
   amount: number;
-  quantity: number; // Cantidad de tickets/reservas
+  quantity: number; // Unidades de inventario (palcos o entradas)
   currency: string;
   ticketStatus: TicketStatus;
   createdAt: Timestamp;
@@ -39,7 +65,34 @@ export interface Ticket {
     userName: string;
     eventName: string;
     seatNumber: string;
+    buyerIdNumber?: string;
   };
+  /** Set when Checkout Pro se creó con token del organizador y split marketplace */
+  mpSplitOrganizerId?: string;
+  /** Monto COP de marketplace_fee enviado a MP (comisión tiquetera en el split) */
+  mpMarketplaceFeeCOP?: number;
+  /** Asientos por unidad (palco de 10 → 10). Default 1. */
+  seatsPerUnit?: number;
+  ticketKind?: TicketKind;
+  childTicketIds?: string[];
+  bundleParentTicketId?: string;
+  passIndex?: number;
+  passCount?: number;
+  sectionId?: string;
+  sectionName?: string;
+  mapZoneId?: string;
+  /** Cupo por evento (denormalizado para agregaciones rápidas en getEventAvailability). */
+  capacityBucket?: string;
+  capacityCount?: number;
+  transferredTo?: string | null;
+  transferredFrom?: string | null;
+  /** Plan de abono (solo documento padre de la compra) */
+  installmentPhase?: InstallmentPhase;
+  totalPurchaseCOP?: number;
+  depositCOP?: number;
+  balanceCOP?: number;
+  balanceDueAt?: Timestamp;
+  abonoCompletionToken?: string;
 }
 
 export interface PaymentData {
@@ -108,6 +161,12 @@ export interface PaymentService {
     userId: string
   ): Promise<PreferenceResponse>;
 
+  /** Segundo cobro del plan de abono (usuario autenticado dueño del ticket). */
+  createBalanceInstallmentPreference(
+    ticketId: string,
+    userId: string
+  ): Promise<PreferenceResponse>;
+
   processWebhookNotification(
     notification: WebhookNotification,
     headers: Record<string, string>
@@ -117,6 +176,13 @@ export interface PaymentService {
     ticketId: string,
     paymentData: PaymentData
   ): Promise<void>;
+
+  processOnePayWebhook(
+    payload: OnePayWebhookPayload,
+    rawBody: string,
+    headers: Record<string, string>,
+    parsedBodyForSignature?: unknown
+  ): Promise<void>;
 }
 
 export interface TicketRepository {
@@ -125,7 +191,10 @@ export interface TicketRepository {
   update(ticketId: string, updates: Partial<Ticket>): Promise<void>;
   delete(ticketId: string): Promise<void>;
   findByPaymentId(paymentId: string): Promise<Ticket | null>;
+  /** id del documento Firestore cuando `preferenceId` es el de Mercado Pago */
+  findDocIdByPreferenceId(preferenceId: string): Promise<string | null>;
   findByUserId(userId: string): Promise<Ticket[]>;
+  findIdByAbonoToken(token: string): Promise<string | null>;
 }
 
 export interface PaymentProvider {
@@ -151,4 +220,16 @@ export interface PaymentConfig {
   appUrl: string;
   isDevelopment: boolean;
   minAmount: number;
+  /** API key OnePay (Bearer) cuando `payment_provider` es onepay */
+  onepayApiKey?: string;
+  /** Secreto HMAC de webhooks OnePay (wh_tok_...) */
+  onepayWebhookSecret?: string;
+  /** Opcional: mismo valor que en panel OnePay `x-webhook-token` */
+  onepayWebhookToken?: string;
+  /** Opcional: envío de correo de abono tras webhook */
+  resend?: {
+    apiKey: string;
+    senderEmail: string;
+    senderName: string;
+  };
 }

@@ -289,11 +289,16 @@ function loadImageCover(
   });
 }
 
-export async function exportVenueMapToBlob(
-  visual: VenueMapVisualConfig,
-  width = 1280,
-  height = 720
-): Promise<Blob | null> {
+function exportDimensions(visual: VenueMapVisualConfig): { width: number; height: number } {
+  if (visual.frame_aspect === 'portrait') {
+    /** Mismo 4∶5 que flyers / mapas tipo boletería vertical (p. ej. material KOЯΛ). */
+    return { width: 1080, height: 1350 };
+  }
+  return { width: 1280, height: 720 };
+}
+
+export async function exportVenueMapToBlob(visual: VenueMapVisualConfig): Promise<Blob | null> {
+  const { width, height } = exportDimensions(visual);
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;

@@ -1,0 +1,81 @@
+@import '../../main.scss';
+
+// Igual que Config: TopNavBar es fixed (50px móvil / 60px desktop)
+.account-password-screen {
+  min-height: 100vh;
+  background-color: $color-primary;
+  padding-top: calc(50px + 0.75rem + env(safe-area-inset-top, 0px));
+
+  @include respond-md {
+    padding-top: calc(60px + 1rem + env(safe-area-inset-top, 0px));
+  }
+}
+
+.account-password-screen__wrap {
+  display: flex;
+  justify-content: center;
+  padding: 1.5rem 1rem 2.5rem;
+}
+
+.account-password-screen__card {
+  width: 100%;
+  max-width: 480px;
+  background-color: $color-surface;
+  border-radius: 16px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  padding: 1.75rem 1.5rem 2rem;
+}
+
+.account-password-screen__title {
+  color: $color-text-primary;
+  font-size: 1.5rem;
+  font-weight: $font-weight-bold;
+  margin: 0 0 0.5rem;
+}
+
+.account-password-screen__lede {
+  color: $color-text-secondary;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  margin: 0 0 1rem;
+}
+
+.account-password-screen__email {
+  color: $color-text-secondary;
+  font-size: 0.9rem;
+  margin: 0 0 1.25rem;
+
+  strong {
+    color: $color-text-primary;
+  }
+}
+
+.account-password-screen__form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.account-password-screen__error {
+  color: #ff3b30;
+  font-size: 0.9rem;
+  margin: 0.5rem 0 0;
+  padding: 0.65rem 0.75rem;
+  background: rgba(255, 59, 48, 0.08);
+  border-radius: 6px;
+  border-left: 3px solid #ff3b30;
+}
+
+.account-password-screen__success {
+  color: #34c759;
+  font-size: 0.9rem;
+  font-weight: $font-weight-medium;
+  margin: 0.5rem 0 0;
+}
+
+.account-password-screen__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}

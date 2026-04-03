@@ -19,6 +19,7 @@ import type {
 import DecorationPreview from './DecorationPreview';
 import { compressImageForMapBackground } from '../../utils/imageCompression';
 import { createDecoration, DECORATION_PALETTE, DEFAULT_VENUE_MAP_BACKGROUND } from './constants';
+import { formatCopThousandsDisplay } from '../../utils/formatCopInput';
 import { exportVenueMapToBlob } from './exportVenueMapPng';
 import { adminZoneCanvasStyle } from './zoneColors';
 import './index.scss';
@@ -133,6 +134,9 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [templateBusy, setTemplateBusy] = useState(false);
+  const [palcoSplitCount, setPalcoSplitCount] = useState('10');
+  /** Personas / QRs por cada celda tras dividir (cada celda = 1 unidad de inventario). */
+  const [palcoSplitPeoplePerCell, setPalcoSplitPeoplePerCell] = useState('1');
 
   const refreshTemplates = useCallback(async () => {
     if (!organizerId) {
@@ -183,6 +187,7 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
         y: z.y,
         w: z.w,
         h: z.h,
+        ...(z.shape === 'circle' ? { shape: 'circle' as const } : {}),
         defaultPrice: sec?.price ?? defaultNewSectionPrice,
         defaultAvailable: sec?.available ?? defaultNewSectionAvailable,
         ...(z.color?.trim() ? { color: z.color.trim() } : {}),
@@ -327,6 +332,9 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
       name: defaultName,
       available,
       price,
+      seats_per_unit: 1,
+      abono_allowed: false,
+      palco_multipersona: false,
     };
     onSectionsChange([...sections, newSection]);
 
@@ -535,6 +543,7 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
         y: clamp(zl.y, 0, 100),
         w: clamp(zl.w, 4, 100),
         h: clamp(zl.h, 4, 100),
+        ...(zl.shape === 'circle' ? { shape: 'circle' as const } : {}),
         ...(zl.color?.trim() ? { color: zl.color.trim() } : {}),
       }));
 
@@ -544,6 +553,8 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
         background: t.visual.background || DEFAULT_VENUE_MAP_BACKGROUND,
         backgroundImageUrl: t.visual.backgroundImageUrl || '',
         flatRenderUrl: '',
+        frame_aspect: t.visual.frame_aspect === 'portrait' ? 'portrait' : 'landscape',
+        hide_public_zone_labels: t.visual.hide_public_zone_labels === true,
         decorations: Array.isArray(t.visual.decorations)
           ? t.visual.decorations.map((d) => ({ ...d }))
           : [],
@@ -586,6 +597,61 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
   const sortedDecorations = [...visual.decorations].sort(
     (a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)
   );
+
+  const splitSelectedZoneIntoPalcos = () => {
+    if (selection?.kind !== 'zone') return;
+    const index = selection.index;
+    const z = zones[index];
+    if (!z?.sectionId) {
+      alert('Enlaza la zona a una localidad antes de dividir.');
+      return;
+    }
+    const n = Math.min(
+      40,
+      Math.max(2, parseInt(String(palcoSplitCount).replace(/\D/g, ''), 10) || 2)
+    );
+    /** Rejilla de celdas iguales; fila incompleta centrada. */
+    const cols = Math.max(1, Math.floor(Math.sqrt(n)));
+    const rows = Math.ceil(n / cols);
+    const cellW = z.w / cols;
+    const cellH = z.h / rows;
+    const genId = () =>
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `z_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    const split: VenueMapZone[] = [];
+    for (let i = 0; i < n; i++) {
+      const row = Math.floor(i / cols);
+      const col = i % cols;
+      const startOfRow = row * cols;
+      const countInRow = Math.min(cols, n - startOfRow);
+      const padX = countInRow < cols ? (z.w - countInRow * cellW) / 2 : 0;
+      split.push({
+        id: genId(),
+        sectionId: z.sectionId,
+        x: z.x + padX + col * cellW,
+        y: z.y + row * cellH,
+        w: cellW,
+        h: cellH,
+        label: String(i + 1),
+        palco_index: i + 1,
+        ...(z.color?.trim() ? { color: z.color.trim() } : {}),
+      });
+    }
+    const before = zones.slice(0, index);
+    const after = zones.slice(index + 1);
+    onZonesChange([...before, ...split, ...after]);
+    const people = Math.min(
+      100,
+      Math.max(1, parseInt(String(palcoSplitPeoplePerCell).replace(/\D/g, ''), 10) || 1)
+    );
+    updateLinkedSection(z.sectionId, {
+      available: n,
+      seats_per_unit: people,
+      palco_multipersona: people >= 2,
+    });
+    setSelection({ kind: 'zone', index: before.length });
+  };
 
   return (
     <div className="vmb">
@@ -655,6 +721,43 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
             </button>
           </p>
         ) : null}
+      </div>
+
+      <div>
+        <span className="vmb__toolbar-label">Formato en la tienda</span>
+        <div className="vmb__toolbar vmb__toolbar--format">
+          <label className="vmb__radio-label">
+            <input
+              type="radio"
+              name="vmb-frame-aspect"
+              checked={(visual.frame_aspect ?? 'landscape') === 'landscape'}
+              onChange={() => onVisualChange({ ...visual, frame_aspect: 'landscape' })}
+            />
+            Horizontal (16∶9)
+          </label>
+          <label className="vmb__radio-label">
+            <input
+              type="radio"
+              name="vmb-frame-aspect"
+              checked={visual.frame_aspect === 'portrait'}
+              onChange={() => onVisualChange({ ...visual, frame_aspect: 'portrait' })}
+            />
+            Vertical (4∶5)
+          </label>
+        </div>
+        <p className="vmb__hint vmb__hint--block">
+          El lienzo y la vista pública usan la misma proporción; la imagen de fondo y el PNG exportado se adaptan.
+        </p>
+        <label className="vmb__checkbox-row">
+          <input
+            type="checkbox"
+            checked={visual.hide_public_zone_labels === true}
+            onChange={(e) =>
+              onVisualChange({ ...visual, hide_public_zone_labels: e.target.checked })
+            }
+          />
+          <span>Ocultar texto dentro de las zonas en el mapa del comprador (solo el recuadro)</span>
+        </label>
       </div>
 
       <div>
@@ -750,7 +853,9 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
         <div className="vmb__canvas-wrap">
           <div
             ref={canvasRef}
-            className={`vmb__canvas${drag ? ' vmb__canvas--dragging' : ''}`}
+            className={`vmb__canvas${
+              (visual.frame_aspect ?? 'landscape') === 'portrait' ? ' vmb__canvas--portrait' : ''
+            }${drag ? ' vmb__canvas--dragging' : ''}`}
             onMouseDown={(e) => {
               if (e.target === e.currentTarget) setSelection(null);
             }}
@@ -776,7 +881,7 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
                   key={z.id}
                   role="button"
                   tabIndex={0}
-                  className={`vmb-zone${zSelected ? ' vmb-zone--selected' : ''}${hasCustomColor ? ' vmb-zone--custom' : ''}`}
+                  className={`vmb-zone${z.shape === 'circle' ? ' vmb-zone--circle' : ''}${zSelected ? ' vmb-zone--selected' : ''}${hasCustomColor ? ' vmb-zone--custom' : ''}`}
                   style={{
                     left: `${z.x}%`,
                     top: `${z.y}%`,
@@ -790,7 +895,9 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
                   }}
                 >
                   <span className="vmb-zone__tag">
-                    {sections.find((s) => s.id === z.sectionId)?.name || z.label || 'Zona'}
+                    {z.palco_index != null
+                      ? z.label
+                      : sections.find((s) => s.id === z.sectionId)?.name || z.label || 'Zona'}
                   </span>
                   <button
                     type="button"
@@ -910,8 +1017,8 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
                 <input
                   type="text"
                   inputMode="numeric"
-                  value={String(
-                    sections.find((s) => s.id === selectedZone.sectionId)?.price ?? 0
+                  value={formatCopThousandsDisplay(
+                    Number(sections.find((s) => s.id === selectedZone.sectionId)?.price ?? 0)
                   )}
                   onChange={(e) => {
                     const n = parseInt(e.target.value.replace(/\D/g, ''), 10) || 0;
@@ -920,22 +1027,74 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
                     }
                   }}
                 />
+                {(() => {
+                  const sec = sections.find((s) => s.id === selectedZone.sectionId);
+                  const n = Math.max(1, Number(sec?.seats_per_unit) || 1);
+                  if (
+                    selectedZone.palco_index != null &&
+                    sec?.palco_multipersona === true &&
+                    n > 1
+                  ) {
+                    return (
+                      <small className="vmb__hint" style={{ display: 'block', marginTop: 4 }}>
+                        Precio <strong>total</strong> del palco (incluye las {n} personas de la celda).
+                      </small>
+                    );
+                  }
+                  return null;
+                })()}
               </label>
               <label>
                 Cupo (entradas)
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={String(
-                    sections.find((s) => s.id === selectedZone.sectionId)?.available ?? 0
-                  )}
-                  onChange={(e) => {
-                    const n = parseInt(e.target.value.replace(/\D/g, ''), 10) || 0;
-                    if (selectedZone.sectionId) {
-                      updateLinkedSection(selectedZone.sectionId, { available: n });
-                    }
-                  }}
-                />
+                {selectedZone.palco_index != null ? (
+                  <>
+                    <input type="text" readOnly value="1" title="Cada división es una unidad de venta" />
+                    <label style={{ marginTop: 8, display: 'block' }}>
+                      Personas por celda (QR al vender una división)
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={String(
+                          Math.max(
+                            1,
+                            Number(sections.find((s) => s.id === selectedZone.sectionId)?.seats_per_unit) || 1
+                          )
+                        )}
+                        onChange={(e) => {
+                          const people = Math.max(
+                            1,
+                            parseInt(e.target.value.replace(/\D/g, ''), 10) || 1
+                          );
+                          if (selectedZone.sectionId) {
+                            updateLinkedSection(selectedZone.sectionId, {
+                              seats_per_unit: people,
+                              palco_multipersona: people >= 2,
+                            });
+                          }
+                        }}
+                      />
+                    </label>
+                    <small className="vmb__hint" style={{ display: 'block', marginTop: 4 }}>
+                      {zones.filter((zz) => zz.sectionId === selectedZone.sectionId).length} celdas: cada una es{' '}
+                      <strong>1</strong> unidad de inventario; al comprar una celda se generan las personas indicadas
+                      arriba.
+                    </small>
+                  </>
+                ) : (
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={String(
+                      sections.find((s) => s.id === selectedZone.sectionId)?.available ?? 0
+                    )}
+                    onChange={(e) => {
+                      const n = parseInt(e.target.value.replace(/\D/g, ''), 10) || 0;
+                      if (selectedZone.sectionId) {
+                        updateLinkedSection(selectedZone.sectionId, { available: n });
+                      }
+                    }}
+                  />
+                )}
               </label>
               <label>
                 Enlazar a otra localidad ya creada
@@ -958,6 +1117,34 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
                   ))}
                 </select>
               </label>
+              <div>
+                <span className="vmb__toolbar-label" style={{ marginBottom: 6 }}>
+                  Forma en el mapa
+                </span>
+                <div className="vmb__toolbar vmb__toolbar--format">
+                  <label className="vmb__radio-label">
+                    <input
+                      type="radio"
+                      name={`vmb-zone-shape-${selectedZone.id}`}
+                      checked={selectedZone.shape !== 'circle'}
+                      onChange={() => updateSelectedZone({ shape: undefined })}
+                    />
+                    Rectangular
+                  </label>
+                  <label className="vmb__radio-label">
+                    <input
+                      type="radio"
+                      name={`vmb-zone-shape-${selectedZone.id}`}
+                      checked={selectedZone.shape === 'circle'}
+                      onChange={() => updateSelectedZone({ shape: 'circle' })}
+                    />
+                    Circular
+                  </label>
+                </div>
+                <p className="vmb__hint" style={{ margin: '0.35rem 0 0' }}>
+                  Con <strong>Circular</strong>, el recuadro se muestra redondo. Igual ancho y alto ⇒ círculo.
+                </p>
+              </div>
               <label>
                 Color en el mapa
                 <input
@@ -975,8 +1162,51 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
                 size="small"
                 onClick={() => updateSelectedZone({ color: '' })}
               >
-                Color por defecto (cyan)
+                Color por defecto
               </SecondaryButton>
+              <div className="vmb__palco-split">
+                <h4 style={{ margin: '0.75rem 0 0.35rem', fontSize: '0.95rem' }}>Divide la localidad</h4>
+                <label>
+                  Número de divisiones (celdas)
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={palcoSplitCount}
+                    onChange={(e) => setPalcoSplitCount(e.target.value.replace(/\D/g, '') || '2')}
+                  />
+                </label>
+                <label>
+                  Personas por división
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={palcoSplitPeoplePerCell}
+                    onChange={(e) =>
+                      setPalcoSplitPeoplePerCell(e.target.value.replace(/\D/g, '') || '1')
+                    }
+                  />
+                </label>
+                <small className="vmb__hint" style={{ display: 'block', margin: '0.25rem 0 0.5rem' }}>
+                  Se crearán{' '}
+                  <strong>
+                    {Math.min(
+                      40,
+                      Math.max(2, parseInt(String(palcoSplitCount).replace(/\D/g, ''), 10) || 2)
+                    )}
+                  </strong>{' '}
+                  localidades con{' '}
+                  <strong>
+                    {Math.min(
+                      100,
+                      Math.max(1, parseInt(String(palcoSplitPeoplePerCell).replace(/\D/g, ''), 10) || 1)
+                    )}
+                  </strong>{' '}
+                  personas por localidad.
+                </small>
+                <SecondaryButton type="button" size="small" onClick={() => splitSelectedZoneIntoPalcos()}>
+                  Dividir zona
+                </SecondaryButton>
+              </div>
               <SecondaryButton
                 type="button"
                 size="small"

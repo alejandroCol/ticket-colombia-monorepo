@@ -9,6 +9,14 @@
   @include respond-md {
     padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
   }
+
+  &--embed {
+    padding-top: 0.5rem;
+
+    .checkout-content {
+      padding-top: 0.25rem;
+    }
+  }
 }
 
 .loading-container {
@@ -70,54 +78,54 @@
 
 .checkout-header {
   text-align: center;
-  margin-bottom: 2.5rem;
+  margin-bottom: 1.65rem;
   
   @include respond-md {
-    margin-bottom: 3rem;
+    margin-bottom: 2rem;
   }
   
   h1 {
-    font-size: 1.75rem;
+    font-size: 1.6rem;
     font-weight: $font-weight-bold;
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.45rem;
     color: $color-text-primary;
     
     @include respond-md {
-      font-size: 2.2rem;
-      margin-bottom: 1rem;
+      font-size: 1.95rem;
+      margin-bottom: 0.55rem;
     }
     
     @include respond-lg {
-      font-size: 2.5rem;
+      font-size: 2.15rem;
     }
   }
   
   p {
     color: $color-text-secondary;
-    font-size: 1rem;
-    line-height: 1.5;
+    font-size: 0.95rem;
+    line-height: 1.45;
     font-weight: $font-weight-regular;
     
     @include respond-md {
-      font-size: 1.1rem;
+      font-size: 1.02rem;
     }
   }
 }
 
 .checkout-summary {
   background: linear-gradient(135deg, $color-surface, darken($color-surface, 3%));
-  border-radius: 16px;
-  padding: 1.5rem;
-  margin-bottom: 2.5rem;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  border-radius: 14px;
+  padding: 1.2rem;
+  margin-bottom: 1.85rem;
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.26);
   border: 1px solid rgba($color-text-secondary, 0.1);
   position: relative;
   overflow: hidden;
   
   @include respond-md {
-    padding: 2.5rem;
-    border-radius: 20px;
-    margin-bottom: 3rem;
+    padding: 1.65rem 1.85rem;
+    border-radius: 16px;
+    margin-bottom: 2.25rem;
   }
   
   // Subtle background pattern
@@ -143,30 +151,30 @@
   display: flex;
   flex-wrap: nowrap;
   align-items: flex-start;
-  gap: 0.875rem;
-  margin-bottom: 1.5rem;
-  padding-bottom: 1.5rem;
+  gap: 0.75rem;
+  margin-bottom: 1.15rem;
+  padding-bottom: 1.15rem;
   border-bottom: 1px solid rgba($color-accent, 0.12);
   
   @include respond-md {
     align-items: center;
-    gap: 1.125rem;
-    margin-bottom: 1.75rem;
-    padding-bottom: 1.75rem;
+    gap: 0.95rem;
+    margin-bottom: 1.35rem;
+    padding-bottom: 1.35rem;
   }
   
   .event-image {
     flex-shrink: 0;
-    width: 88px;
-    height: 88px;
-    border-radius: 12px;
+    width: 76px;
+    height: 76px;
+    border-radius: 11px;
     overflow: hidden;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
     
     @include respond-md {
-      width: 108px;
-      height: 108px;
-      border-radius: 14px;
+      width: 92px;
+      height: 92px;
+      border-radius: 12px;
     }
     
     img {
@@ -181,10 +189,10 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.4rem;
 
     &__title {
-      font-size: 1.05rem;
+      font-size: 1rem;
       font-weight: $font-weight-bold;
       margin: 0;
       line-height: 1.28;
@@ -192,7 +200,7 @@
       letter-spacing: -0.01em;
       
       @include respond-md {
-        font-size: 1.25rem;
+        font-size: 1.15rem;
         line-height: 1.25;
       }
     }
@@ -201,27 +209,27 @@
   .event-meta {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: 0.32rem;
 
     @include respond-sm {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 0.5rem 0.75rem;
+      gap: 0.4rem 0.65rem;
     }
 
     &__item {
       display: flex;
       align-items: flex-start;
-      gap: 0.5rem;
-      padding: 0.45rem 0.6rem;
+      gap: 0.45rem;
+      padding: 0.38rem 0.5rem;
       margin: 0;
-      border-radius: 10px;
+      border-radius: 9px;
       background: rgba($color-text-primary, 0.04);
       border: 1px solid rgba($color-text-secondary, 0.08);
 
       @include respond-md {
-        padding: 0.5rem 0.65rem;
-        gap: 0.55rem;
+        padding: 0.42rem 0.55rem;
+        gap: 0.5rem;
       }
     }
 
@@ -435,14 +443,14 @@
 
 .order-summary {
   h3 {
-    font-size: 1.3rem;
+    font-size: 1.15rem;
     font-weight: $font-weight-bold;
-    margin-bottom: 1.5rem;
+    margin-bottom: 0.85rem;
     color: $color-text-primary;
     
     @include respond-md {
-      font-size: 1.4rem;
-      margin-bottom: 2rem;
+      font-size: 1.25rem;
+      margin-bottom: 1.1rem;
     }
   }
   
@@ -450,36 +458,36 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1.25rem 0;
+    padding: 0.85rem 0;
     border-bottom: 1px solid rgba($color-text-secondary, 0.15);
     transition: background-color 0.3s ease;
     
     &:hover {
       background-color: rgba($color-accent, 0.02);
-      margin: 0 -1rem;
-      padding-left: 1rem;
-      padding-right: 1rem;
+      margin: 0 -0.65rem;
+      padding-left: 0.65rem;
+      padding-right: 0.65rem;
       border-radius: 8px;
     }
     
     .item-info {
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
+      gap: 0.28rem;
       
       .item-name {
         font-weight: $font-weight-semi-bold;
         color: $color-text-primary;
-        font-size: 1rem;
+        font-size: 0.95rem;
         
         @include respond-md {
-          font-size: 1.1rem;
+          font-size: 1.02rem;
         }
       }
       
       .item-quantity {
         color: $color-text-secondary;
-        font-size: 0.9rem;
+        font-size: 0.86rem;
         font-weight: $font-weight-medium;
       }
     }
@@ -487,10 +495,10 @@
     .item-price {
       font-weight: $font-weight-bold;
       color: $color-accent;
-      font-size: 1.1rem;
+      font-size: 1.02rem;
       
       @include respond-md {
-        font-size: 1.2rem;
+        font-size: 1.1rem;
       }
     }
   }
@@ -817,15 +825,15 @@
 }
 
 .order-total {
-  margin: 1.5rem 0;
-  padding: 1.25rem;
+  margin: 1.05rem 0 0;
+  padding: 0.95rem 1rem;
   background: linear-gradient(135deg, rgba($color-accent, 0.02), rgba($color-accent, 0.01));
   border-radius: 8px;
   border: 1px solid rgba($color-accent, 0.1);
   
   .quantity-input {
-    margin-bottom: 1.5rem;
-    padding-bottom: 1.5rem;
+    margin-bottom: 1.1rem;
+    padding-bottom: 1.1rem;
     border-bottom: 1px solid rgba($color-accent, 0.15);
     
     .quantity-controls {
@@ -862,31 +870,31 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1rem;
+    margin-bottom: 0.72rem;
     
     &.final-total {
-      margin-top: 1.5rem;
-      padding-top: 1.5rem;
+      margin-top: 1.1rem;
+      padding-top: 1.1rem;
       border-top: 2px solid rgba($color-accent, 0.3);
       
       .total-label {
-        font-size: 1.2rem;
+        font-size: 1.08rem;
         font-weight: $font-weight-bold;
         color: $color-text-primary;
         
         @include respond-md {
-          font-size: 1.3rem;
+          font-size: 1.18rem;
         }
       }
       
       .total-value {
-        font-size: 1.4rem;
+        font-size: 1.22rem;
         font-weight: $font-weight-bold;
         color: $color-accent;
         text-shadow: 0 2px 4px rgba($color-accent, 0.3);
         
         @include respond-md {
-          font-size: 1.6rem;
+          font-size: 1.38rem;
         }
       }
     }
@@ -894,13 +902,13 @@
     .total-label {
       color: $color-text-secondary;
       font-weight: $font-weight-semi-bold;
-      font-size: 1rem;
+      font-size: 0.94rem;
     }
     
     .total-value {
       font-weight: $font-weight-bold;
       color: $color-text-primary;
-      font-size: 1.1rem;
+      font-size: 1.02rem;
     }
   }
 }
@@ -944,4 +952,36 @@
     display: flex;
     justify-content: center;
   }
+}
+
+.checkout-pay-plan {
+  margin: 0.95rem 0;
+  padding: 0.85rem 0.95rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+
+  h3 {
+    margin: 0 0 0.55rem;
+    font-size: 0.95rem;
+  }
+
+  &__option {
+    display: flex;
+    gap: 0.65rem;
+    align-items: flex-start;
+    margin-bottom: 0.65rem;
+    cursor: pointer;
+    line-height: 1.45;
+
+    input {
+      margin-top: 0.2rem;
+    }
+  }
+}
+
+.checkout-pass-hint {
+  font-size: 0.88rem;
+  color: $color-text-secondary;
+  margin: 0.35rem 0 0.5rem;
 }

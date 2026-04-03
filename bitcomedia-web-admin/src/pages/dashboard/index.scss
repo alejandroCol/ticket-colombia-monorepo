@@ -277,6 +277,22 @@
       }
     }
 
+    .dashboard-taquilla-card {
+      background: linear-gradient(135deg, rgba(#7cb342, 0.18) 0%, rgba($color-accent, 0.08) 100%);
+      border-color: rgba(#7cb342, 0.45);
+
+      &:hover {
+        background: linear-gradient(135deg, rgba(#7cb342, 0.28) 0%, rgba($color-accent, 0.12) 100%);
+        border-color: rgba(#7cb342, 0.75);
+        box-shadow: 0 8px 24px rgba(#7cb342, 0.18);
+      }
+
+      .scan-card-icon {
+        font-size: 1.75rem;
+        line-height: 1;
+      }
+    }
+
     .dashboard-event-filters {
       display: flex;
       flex-direction: column;
@@ -374,10 +390,40 @@
       }
     }
     
+    .dashboard-events-block {
+      margin-bottom: 1.75rem;
+    }
+
+    .dashboard-events-block--recurring {
+      padding-top: 1.25rem;
+      margin-top: 0.25rem;
+      border-top: 1px solid rgba($color-text-secondary, 0.14);
+    }
+
+    .dashboard-section-kicker {
+      margin: 0;
+      font-size: 0.82rem;
+      color: $color-text-secondary;
+      line-height: 1.45;
+      max-width: 40rem;
+    }
+
+    .header-title-wrapper--stacked {
+      flex-direction: column;
+      align-items: flex-start !important;
+      gap: 0.35rem !important;
+    }
+
+    .dashboard-header-title-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
     .dashboard-header {
       display: flex;
       justify-content: space-between;
-      align-items: center;
+      align-items: flex-start;
       margin-bottom: 20px;
       
       .header-title-wrapper {
