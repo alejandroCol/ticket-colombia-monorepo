@@ -5,6 +5,202 @@
   background-color: $color-primary;
   color: $color-text-primary;
   padding: 0 0 calc(2rem + env(safe-area-inset-bottom, 0px)) 0;
+
+  &--embed {
+    min-height: 0;
+
+    .loading-container {
+      height: auto;
+      min-height: 200px;
+      padding: 1.5rem 0;
+    }
+
+    .event-content {
+      margin-top: 0.5rem;
+
+      @include respond-md {
+        margin-top: 0.65rem;
+      }
+
+      @include respond-lg {
+        margin-top: 0.85rem;
+      }
+    }
+  }
+
+  /** Solo con ?tc_ui=glass (widget cristal); no afecta /evento sin ese parámetro */
+  &--tc-glass {
+    background: transparent;
+    color: #f0f6fc;
+    -webkit-font-smoothing: antialiased;
+
+    .event-booking,
+    .event-hero-panel {
+      background: rgba(255, 255, 255, 0.09);
+      backdrop-filter: saturate(185%) blur(28px);
+      -webkit-backdrop-filter: saturate(185%) blur(28px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow:
+        0 12px 48px rgba(0, 0, 0, 0.22),
+        inset 0 1px 0 rgba(255, 255, 255, 0.12);
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+    }
+
+    .event-hero-panel__meta-row {
+      background: rgba(255, 255, 255, 0.07);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .event-hero-panel__support,
+    .event-hero-panel__venue-card {
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+
+    .event-section-card:not(.event-section-card--soldout) {
+      background: rgba(255, 255, 255, 0.08) !important;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-color: rgba(255, 255, 255, 0.14);
+
+      /* Sin :not(--selected) el hover con !important tapaba el estado elegido (p. ej. “General”) */
+      &:hover:not(:disabled):not(.event-section-card--selected) {
+        background: rgba(255, 255, 255, 0.12) !important;
+        border-color: rgba($color-accent, 0.5);
+      }
+    }
+
+    .event-section-card--selected:not(.event-section-card--soldout) {
+      background:
+        linear-gradient(
+          155deg,
+          rgba($color-accent, 0.4) 0%,
+          rgba($color-accent, 0.12) 50%,
+          rgba(255, 255, 255, 0.1) 100%
+        ) !important;
+      backdrop-filter: blur(20px) saturate(200%);
+      -webkit-backdrop-filter: blur(20px) saturate(200%);
+      border-color: rgba(255, 255, 255, 0.42);
+      box-shadow:
+        0 0 0 2px rgba($color-accent, 0.65),
+        0 0 24px rgba($color-accent, 0.28),
+        inset 0 1px 0 rgba(255, 255, 255, 0.35);
+
+      .event-section-card__name {
+        color: #fff;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+      }
+
+      .event-section-card__price {
+        color: #b8fbff;
+      }
+    }
+
+    .external-booking-notice {
+      background: rgba(255, 255, 255, 0.07);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .venue-map-preview .venue-map-img {
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-color: rgba(255, 255, 255, 0.14);
+    }
+
+    /* Contraste sobre blur / fondo del host (solo vidrio iOS) */
+    .event-booking__title,
+    .event-hero-panel__title {
+      color: #f8fbff;
+    }
+
+    .event-booking__subtitle,
+    .event-section-picker__label,
+    .venue-map-preview .venue-map-title {
+      color: rgba(238, 245, 252, 0.95);
+    }
+
+    .event-hero-panel__meta-label {
+      color: rgba(228, 238, 248, 0.94);
+    }
+
+    .event-hero-panel__meta-value,
+    .event-hero-panel__venue-name {
+      color: #f5f9fe;
+    }
+
+    .event-hero-panel__section-body,
+    .event-hero-panel__venue-address,
+    .event-hero-panel__support-hint {
+      color: rgba(234, 242, 252, 0.93);
+    }
+
+    .event-hero-panel__meta-sep {
+      color: rgba(218, 232, 246, 0.82);
+    }
+
+    .event-hero-panel__venue-city {
+      color: rgba(232, 240, 250, 0.9);
+    }
+
+    .event-hero-panel__section-title {
+      color: #7ff0f7;
+      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    }
+
+    .event-section-card:not(.event-section-card--selected) {
+      .event-section-card__name {
+        color: #f3f8fc;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+      }
+
+      .event-section-card__price {
+        color: #8ff5ff;
+        text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+      }
+
+      .event-section-card__badge {
+        color: rgba(236, 243, 252, 0.92);
+      }
+    }
+
+    .availability-pill {
+      color: rgba(234, 242, 252, 0.96);
+
+      strong {
+        color: #f7fbfe;
+      }
+    }
+
+    .event-price-row__label {
+      color: rgba(232, 240, 250, 0.93);
+    }
+
+    .event-price-row__value {
+      color: #8ef6ff;
+      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    }
+
+    .event-price-row__fee {
+      color: rgba(222, 234, 246, 0.88);
+    }
+
+    .booking-details .quantity-selector__label {
+      color: rgba(230, 240, 250, 0.92);
+    }
+
+    .external-booking-notice .notice-text p:first-child {
+      color: #f4f9fd;
+    }
+
+    .external-booking-notice .notice-text p:last-child {
+      color: rgba(230, 240, 250, 0.93);
+    }
+  }
 }
 
 .loading-container {
@@ -38,35 +234,39 @@
   margin: 0 auto;
   padding: 0 max(1rem, env(safe-area-inset-left, 0px)) 0
     max(1rem, env(safe-area-inset-right, 0px));
-  margin-top: 3.5rem;
-  
+  /* Altura real del TopNavBar logoOnly: ~50px móvil / 60px md+ + padding + safe area */
+  margin-top: calc(50px + 1.1rem + env(safe-area-inset-top, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+
   @media (max-width: 767px) {
     margin-bottom: 2rem;
   }
-  
+
   @include respond-md {
-    margin-top: 4.5rem;
+    margin-top: calc(60px + 1.25rem + env(safe-area-inset-top, 0px));
+    gap: 2rem;
   }
-  
+
   @include respond-lg {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 3rem;
+    grid-template-rows: auto auto;
+    align-items: start;
+    gap: 3rem 3rem;
     padding-left: max(2rem, env(safe-area-inset-left, 0px));
     padding-right: max(2rem, env(safe-area-inset-right, 0px));
-    margin-top: 5.5rem;
+    margin-top: calc(60px + 1.5rem + env(safe-area-inset-top, 0px));
   }
 }
 
-.event-image-container {
-  margin-bottom: 2rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-
+/* Móvil: 1) portada 2) Tu entrada 3) ficha (hero). Desktop: columna izq. = portada + ficha. */
+.event-cover-wrap {
   @include respond-lg {
-    margin-bottom: 0;
-    gap: 1.75rem;
+    grid-column: 1;
+    grid-row: 1;
+    margin: 0;
   }
 
   .event-image {
@@ -77,11 +277,6 @@
     border-radius: 12px;
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
     overflow: hidden;
-    
-    @include respond-lg {
-      height: 0;
-      padding-bottom: 125%;
-    }
 
     img {
       position: absolute;
@@ -90,15 +285,20 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
-      object-position: center;
+      object-position: center top;
       border-radius: 12px;
     }
   }
 }
 
-// Panel de información encima del flyer (columna izquierda)
+// Ficha técnica; en móvil va después de «Tu entrada»; en desktop columna izquierda fila 2.
 .event-hero-panel {
   flex-shrink: 0;
+
+  @include respond-lg {
+    grid-column: 1;
+    grid-row: 2;
+  }
   padding: 1.35rem 1.4rem 1.5rem;
   border-radius: 16px;
   background: linear-gradient(
@@ -278,9 +478,11 @@
 }
 
 .event-details {
-  margin-top: 0.25rem;
+  margin-top: 0;
 
   @include respond-lg {
+    grid-column: 2;
+    grid-row: 1 / -1;
     align-self: start;
     margin-top: 0;
   }

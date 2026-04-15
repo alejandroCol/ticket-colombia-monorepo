@@ -16,6 +16,11 @@ service cloud.firestore {
         (userRole() == 'ADMIN' || userRole() == 'admin' || userRole() == 'SUPER_ADMIN');
     }
 
+    function isSuperAdminRole() {
+      return request.auth != null && exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        userRole() == 'SUPER_ADMIN';
+    }
+
     function isPartnerUser() {
       return request.auth != null && exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         userRole() == 'PARTNER';
@@ -115,13 +120,12 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN';
     }
 
-    // Configurations collection - publicly readable, only admins can write
+    // Configurations collection - publicly readable; home_banners solo SUPER_ADMIN; resto admins
     match /configurations/{configId} {
       allow read: if true; // Allow anyone to read configuration data (landing, app)
       allow create, update: if request.auth != null && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN' ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN'
+        (configId == 'home_banners' && isSuperAdminRole()) ||
+        (configId != 'home_banners' && isAdminRole())
       );
       allow delete: if false;
     }

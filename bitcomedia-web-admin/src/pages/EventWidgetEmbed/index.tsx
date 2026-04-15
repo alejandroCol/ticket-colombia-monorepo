@@ -33,6 +33,8 @@ const EventWidgetEmbedScreen: React.FC = () => {
   const [isRecurring, setIsRecurring] = useState(false);
   const [accessDenied, setAccessDenied] = useState(false);
   const [showOrganizerExtras, setShowOrganizerExtras] = useState(false);
+  /** Marco del embed en sitios externos (solo afecta al script / shadow DOM, no a ticketcolombia.co). */
+  const [embedFrame, setEmbedFrame] = useState<'solid' | 'glass'>('solid');
 
   const load = useCallback(async () => {
     if (!eventId) return;
@@ -74,14 +76,16 @@ const EventWidgetEmbedScreen: React.FC = () => {
     const sl = slug.trim();
     if (!b || !sl) return '';
     const src = `${b}/embed/tc-embed-widget.js`;
+    const frameLine =
+      embedFrame === 'glass' ? '\n  data-tc-frame="glass"' : '';
     return `<script
   src="${src}"
   data-tc-base="${b}"
   data-tc-slug="${sl.replace(/"/g, '&quot;')}"
-  data-tc-label="Comprar entradas"
+  data-tc-inline="1"${frameLine}
   defer
 ></script>`;
-  }, [baseUrl, slug]);
+  }, [baseUrl, slug, embedFrame]);
 
   const postMessageHint = useMemo(() => {
     const b = baseUrl.replace(/\/+$/, '');
@@ -90,6 +94,7 @@ const EventWidgetEmbedScreen: React.FC = () => {
   if (ev.origin !== '${b}') return;
   var d = ev.data;
   if (!d || d.source !== 'ticket-colombia-embed') return;
+  if (d.version !== 1) return;
   if (d.kind === 'purchase_finished') {
     console.log('Compra:', d.status);
   }
@@ -143,8 +148,11 @@ const EventWidgetEmbedScreen: React.FC = () => {
         <section className="event-widget-panel">
           <h2 className="event-widget-h2">Venta embebida en tu web</h2>
           <p className="event-widget-lead">
-            Pega el script antes de <code className="event-widget-code-inline">&lt;/body&gt;</code> en tu sitio. El botón
-            abre el checkout en un iframe; puedes escuchar el resultado con <code className="event-widget-code-inline">postMessage</code>.
+            Pega el script antes de <code className="event-widget-code-inline">&lt;/body&gt;</code>. El embed usa alto{' '}
+            completo (<code className="event-widget-code-inline">100dvh</code>) y solo estiliza el marco alrededor del
+            iframe en <strong>tu</strong> web; la ficha en{' '}
+            <code className="event-widget-code-inline">ticketcolombia.co/evento/…</code> sin este script no cambia. Modo
+            modal opcional: <code className="event-widget-code-inline">data-tc-modal=&quot;1&quot;</code>.
           </p>
 
           <div className="event-widget-fields">
@@ -157,11 +165,29 @@ const EventWidgetEmbedScreen: React.FC = () => {
             />
             <CustomInput
               name="tc_slug"
-              label="Slug del evento (ruta /compra/...)"
+              label="Slug del evento (ruta /evento/... y /compra/...)"
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
               placeholder="mi-evento-2026"
             />
+            <div className="event-widget-field">
+              <label className="event-widget-field-label" htmlFor="tc_embed_frame">
+                Marco del embed (solo sitio del organizador)
+              </label>
+              <select
+                id="tc_embed_frame"
+                className="event-widget-select"
+                value={embedFrame}
+                onChange={(e) => setEmbedFrame(e.target.value === 'glass' ? 'glass' : 'solid')}
+              >
+                <option value="solid">Sólido (borde Ticket Colombia)</option>
+                <option value="glass">Cristal / vidrio (blur tipo iOS)</option>
+              </select>
+              <p className="event-widget-field-hint">
+                Añade <code className="event-widget-code-inline">data-tc-frame=&quot;glass&quot;</code>: marco
+                translúcido con blur respecto al fondo de tu web (el iframe sigue opaco; se ve una franja tipo iOS).
+              </p>
+            </div>
           </div>
 
           {!slug.trim() && (
@@ -201,8 +227,9 @@ const EventWidgetEmbedScreen: React.FC = () => {
           </div>
 
           <p className="event-widget-foot">
-            Archivo de referencia en la app pública: <code className="event-widget-code-inline">/embed/tc-embed-widget.js</code>.
-            Checkout embebido usa la query <code className="event-widget-code-inline">?tc_embed=1</code>.
+            Archivo: <code className="event-widget-code-inline">/embed/tc-embed-widget.js</code>. Iframe:{' '}
+            <code className="event-widget-code-inline">/evento/{'{slug}'}?tc_embed=1</code>. Opcional:{' '}
+            <code className="event-widget-code-inline">data-tc-iframe-height=&quot;85vh&quot;</code>.
           </p>
         </section>
       </div>

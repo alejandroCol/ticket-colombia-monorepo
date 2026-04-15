@@ -126,6 +126,21 @@ body {
   overflow-x: clip;
 }
 
+/* Iframe embed cristal: sin capa sólida detrás de los paneles con backdrop-filter */
+html.tc-embed-glass-ui,
+html.tc-embed-glass-ui body {
+  background: transparent !important;
+}
+
+html.tc-embed-glass-ui #root {
+  background: transparent;
+}
+
+/* Embed en iframe: el contenido define la altura (widget con data-tc-iframe-height=auto) */
+html.tc-embed-frame #root {
+  min-height: 0;
+}
+
 // Responsive images by default
 img {
   max-width: 100%;

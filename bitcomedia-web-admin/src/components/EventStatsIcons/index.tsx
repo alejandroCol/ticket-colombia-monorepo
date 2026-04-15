@@ -66,3 +66,14 @@ export const IconSection: React.FC<{ className?: string }> = ({ className }) => 
     <path d="M16 6v36M32 6v36" />
   </svg>
 );
+
+/** Icono de evento en calendario */
+export const IconCalendarEvent: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} viewBox="0 0 48 48" fill="none" stroke={iconColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="8" y="12" width="32" height="28" rx="3" />
+    <path d="M8 20h32" />
+    <path d="M18 8v6M30 8v6" />
+    <path d="M18 28h6v6h-6z" fill={iconColor} stroke="none" />
+    <path d="M28 28h4M28 32h4" />
+  </svg>
+);

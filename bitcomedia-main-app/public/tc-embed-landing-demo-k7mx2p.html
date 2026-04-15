@@ -1,0 +1,1899 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ticket Colombia · Demo comercial para organizadores</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://images.unsplash.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg-deep: #0a0c10;
+        --bg-card: rgba(28, 32, 40, 0.42);
+        --text: #f5f8fb;
+        --muted: #9ba8b8;
+        --accent: #5eead4;
+        --line: rgba(255, 255, 255, 0.12);
+        --hero-glow: rgba(94, 234, 212, 0.22);
+        --liquid-blur: blur(22px) saturate(190%);
+        /* Fondo fluido + marco liquid (Unsplash + widget glass) */
+        --demo-wallpaper: url("https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&w=2400&q=85");
+        font-family: "Outfit", system-ui, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      html {
+        scroll-behavior: smooth;
+        scroll-padding-top: 88px;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--text);
+        line-height: 1.55;
+        background-color: #06080d;
+        background-image: linear-gradient(
+            165deg,
+            rgba(8, 10, 18, 0.88) 0%,
+            rgba(12, 14, 24, 0.72) 40%,
+            rgba(10, 12, 22, 0.82) 100%
+          ),
+          var(--demo-wallpaper);
+        background-size: cover, cover;
+        background-position: center center, center center;
+        background-repeat: no-repeat, no-repeat;
+        background-attachment: scroll, scroll;
+      }
+
+      @media (min-width: 900px) {
+        body {
+          background-attachment: scroll, fixed;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        body {
+          background-attachment: scroll, scroll;
+        }
+      }
+
+      /* ——— Header (liquid / vidrio) ——— */
+      .site-header {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.85rem max(5vw, 1.25rem);
+        background: rgba(18, 20, 28, 0.52);
+        backdrop-filter: var(--liquid-blur);
+        -webkit-backdrop-filter: var(--liquid-blur);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+      }
+
+      .brand {
+        font-weight: 700;
+        font-size: 1rem;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--text);
+        text-decoration: none;
+      }
+
+      .brand span {
+        color: var(--accent);
+      }
+
+      .header-cta {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.6rem 1.2rem;
+        border-radius: 999px;
+        font-size: 0.85rem;
+        font-weight: 650;
+        text-decoration: none;
+        letter-spacing: 0.01em;
+        color: #0c1220;
+        background: linear-gradient(180deg, #7ff5e8 0%, #5eead4 40%, #2dd4bf 100%);
+        box-shadow:
+          0 0 0 1px rgba(255, 255, 255, 0.35) inset,
+          0 6px 20px rgba(45, 212, 191, 0.35);
+        transition: transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease;
+      }
+
+      .header-cta:hover {
+        transform: scale(1.02);
+        filter: brightness(1.06);
+        box-shadow:
+          0 0 0 1px rgba(255, 255, 255, 0.45) inset,
+          0 10px 28px rgba(45, 212, 191, 0.42);
+      }
+
+      /* ——— Hero ——— */
+      .hero {
+        position: relative;
+        min-height: min(88vh, 720px);
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        padding: 4rem max(5vw, 1.25rem) 5rem;
+        overflow: hidden;
+      }
+
+      .hero__bg {
+        position: absolute;
+        inset: 0;
+        /* Deja ver el wallpaper del body + leve bruma para legibilidad */
+        background:
+          radial-gradient(ellipse 90% 65% at 50% 0%, rgba(94, 234, 212, 0.12), transparent 55%),
+          linear-gradient(
+            to top,
+            rgba(6, 8, 14, 0.75) 0%,
+            rgba(6, 8, 14, 0.2) 45%,
+            transparent 100%
+          );
+        z-index: 0;
+      }
+
+      .hero__grid {
+        position: absolute;
+        inset: 0;
+        background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        background-size: 48px 48px;
+        mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.5), transparent 70%);
+        z-index: 0;
+      }
+
+      .hero__inner {
+        position: relative;
+        z-index: 1;
+        max-width: 920px;
+      }
+
+      .hero__eyebrow {
+        font-size: 0.72rem;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin: 0 0 1rem;
+        font-weight: 600;
+      }
+
+      .hero h1 {
+        margin: 0 0 1rem;
+        font-size: clamp(2.4rem, 7vw, 3.75rem);
+        font-weight: 800;
+        line-height: 1.05;
+        letter-spacing: -0.03em;
+      }
+
+      .hero__lead {
+        margin: 0 0 1.35rem;
+        max-width: 42rem;
+        font-size: clamp(1rem, 2.5vw, 1.15rem);
+        color: rgba(210, 220, 232, 0.92);
+        font-weight: 500;
+        line-height: 1.55;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+      }
+
+      .hero__lead strong {
+        font-weight: 750;
+        color: #f2fbff;
+      }
+
+      .hero__stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        margin-bottom: 1.5rem;
+        max-width: 38rem;
+      }
+
+      .hero-stat {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 0.55rem 0.85rem 0.6rem;
+        min-height: 4.1rem;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.09);
+        backdrop-filter: var(--liquid-blur);
+        -webkit-backdrop-filter: var(--liquid-blur);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset;
+      }
+
+      .hero-stat__num {
+        font-size: 1.45rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        line-height: 1;
+        color: #e8fffa;
+      }
+
+      .hero-stat__num--accent {
+        color: var(--accent);
+      }
+
+      .hero-stat__logo {
+        font-size: 1.05rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        background: linear-gradient(100deg, #fff 0%, #a8fff0 50%, var(--accent) 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        -webkit-text-fill-color: transparent;
+        line-height: 1.1;
+      }
+
+      .hero-stat__cap {
+        font-size: 0.62rem;
+        font-weight: 650;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: rgba(184, 198, 212, 0.9);
+        margin-top: 0.35rem;
+      }
+
+      .hero-stat--wallet {
+        min-width: 11rem;
+      }
+
+      .hero-stat__wallets {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+      }
+
+      .w-chip {
+        padding: 0.2rem 0.45rem;
+        border-radius: 8px;
+        font-size: 0.68rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+      }
+
+      .w-chip--nequi {
+        background: linear-gradient(135deg, rgba(218, 0, 128, 0.35), rgba(138, 0, 120, 0.25));
+        border: 1px solid rgba(255, 120, 200, 0.45);
+        color: #ffc8ec;
+      }
+
+      .w-chip--breb {
+        background: linear-gradient(135deg, rgba(255, 214, 0, 0.22), rgba(0, 140, 90, 0.2));
+        border: 1px solid rgba(220, 255, 160, 0.35);
+        color: #f8ffd0;
+      }
+
+      .hero-stat--icons {
+        flex-direction: row;
+        align-items: center;
+        gap: 0.45rem;
+        flex-wrap: wrap;
+      }
+
+      .hero-stat__mini {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 2rem;
+        height: 2rem;
+        border-radius: 10px;
+        background: rgba(94, 234, 212, 0.15);
+        border: 1px solid rgba(94, 234, 212, 0.28);
+        color: var(--accent);
+      }
+
+      .hero-stat__mini svg {
+        width: 1.1rem;
+        height: 1.1rem;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .hero__actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.85rem;
+        align-items: center;
+      }
+
+      .hero__cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 1rem 1.75rem;
+        border-radius: 999px;
+        font-size: 0.95rem;
+        font-weight: 700;
+        text-decoration: none;
+        color: #051014;
+        background: linear-gradient(135deg, #00e5c3 0%, #00c6ff 100%);
+        box-shadow: 0 0 0 1px rgba(0, 229, 195, 0.4), 0 16px 48px rgba(0, 198, 255, 0.28);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .hero__cta:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 0 0 1px rgba(0, 229, 195, 0.55), 0 20px 56px rgba(0, 198, 255, 0.35);
+      }
+
+      .hero__cta svg {
+        width: 1.1em;
+        height: 1.1em;
+      }
+
+      .hero__ghost {
+        padding: 1rem 1.35rem;
+        border-radius: 999px;
+        font-size: 0.92rem;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.88);
+        text-decoration: none;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(255, 255, 255, 0.07);
+        backdrop-filter: blur(16px) saturate(160%);
+        -webkit-backdrop-filter: blur(16px) saturate(160%);
+        transition: border-color 0.2s, background 0.2s, transform 0.2s;
+      }
+
+      .hero__ghost:hover {
+        background: rgba(255, 255, 255, 0.11);
+        border-color: rgba(255, 255, 255, 0.22);
+        transform: scale(1.02);
+      }
+
+      /* ——— Bands ——— */
+      .band {
+        padding: clamp(3rem, 8vw, 5rem) max(5vw, 1.25rem);
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+      }
+
+      .band__title {
+        font-size: 0.78rem;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 0 0 1.5rem;
+        font-weight: 600;
+      }
+
+      .meta-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 1rem;
+        max-width: 960px;
+      }
+
+      .meta-card {
+        padding: 1.35rem 1.5rem;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.06);
+        backdrop-filter: blur(18px) saturate(170%);
+        -webkit-backdrop-filter: blur(18px) saturate(170%);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+      }
+
+      .meta-card strong {
+        display: block;
+        font-size: 0.72rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 0.35rem;
+        font-weight: 600;
+      }
+
+      .meta-card p {
+        margin: 0;
+        font-size: 1.05rem;
+      }
+
+      .features {
+        max-width: 960px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 1.25rem;
+      }
+
+      .feature {
+        padding: 1.5rem;
+        border-radius: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(16px) saturate(160%);
+        -webkit-backdrop-filter: blur(16px) saturate(160%);
+        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+      }
+
+      .feature h3 {
+        margin: 0 0 0.5rem;
+        font-size: 1.1rem;
+        font-weight: 600;
+      }
+
+      .feature p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      /* ——— Taquilla / widget ——— */
+      #entradas {
+        scroll-margin-top: 96px;
+        padding-left: max(0.75rem, 2.5vw);
+        padding-right: max(0.75rem, 2.5vw);
+      }
+
+      .taquilla {
+        width: 100%;
+        max-width: none;
+        margin: 0 auto;
+        text-align: center;
+      }
+
+      .taquilla__card {
+        margin-top: 1.75rem;
+        padding: 0;
+        border-radius: 0;
+        background: transparent;
+        border: none;
+        box-shadow: none;
+      }
+
+      .taquilla h2 {
+        margin: 0 0 0.65rem;
+        font-size: clamp(1.65rem, 4vw, 2rem);
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+
+      .taquilla__sub {
+        margin: 0 auto 1rem;
+        max-width: 28rem;
+        color: var(--muted);
+        font-size: 0.95rem;
+        line-height: 1.5;
+      }
+
+      /* Recuadro pequeño: snippet listo para pegar (Ticket Colombia) */
+      .embed-snippet {
+        margin: 0 auto 1.35rem;
+        max-width: 28rem;
+        text-align: left;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(8, 12, 18, 0.72);
+        backdrop-filter: blur(18px) saturate(160%);
+        -webkit-backdrop-filter: blur(18px) saturate(160%);
+        overflow: hidden;
+        box-shadow:
+          0 1px 0 rgba(255, 255, 255, 0.06) inset,
+          0 12px 36px rgba(0, 0, 0, 0.28);
+      }
+
+      .embed-snippet__head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        padding: 0.55rem 0.75rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        font-size: 0.68rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        font-weight: 650;
+      }
+
+      .embed-snippet__head span {
+        color: var(--accent);
+      }
+
+      .embed-snippet__copy {
+        flex-shrink: 0;
+        margin: 0;
+        padding: 0.35rem 0.65rem;
+        border-radius: 999px;
+        border: 1px solid rgba(94, 234, 212, 0.35);
+        background: rgba(94, 234, 212, 0.12);
+        color: #b8fff4;
+        font-family: inherit;
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        cursor: pointer;
+        transition:
+          background 0.15s ease,
+          border-color 0.15s ease,
+          transform 0.12s ease;
+      }
+
+      .embed-snippet__copy:hover {
+        background: rgba(94, 234, 212, 0.2);
+        border-color: rgba(94, 234, 212, 0.55);
+      }
+
+      .embed-snippet__copy:active {
+        transform: scale(0.98);
+      }
+
+      .embed-snippet__copy[data-copied="1"] {
+        border-color: rgba(94, 234, 212, 0.75);
+        color: #eafffb;
+      }
+
+      .embed-snippet__copy:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      .embed-snippet pre {
+        margin: 0;
+        padding: 0.75rem 0.85rem;
+        max-height: 11rem;
+        overflow: auto;
+        font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+        font-size: 0.62rem;
+        line-height: 1.5;
+        white-space: pre;
+        color: #9ecee0;
+        background: #050a10;
+        border: none;
+        border-radius: 0;
+        word-break: normal;
+      }
+
+      .widget-slot {
+        width: 100%;
+        text-align: left;
+      }
+
+      .widget-hint {
+        font-size: 0.8rem;
+        color: var(--muted);
+        margin-top: 0.25rem;
+      }
+
+      /* ——— Dev panel ——— */
+      .dev-wrap {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 0 max(5vw, 1.25rem) 4rem;
+      }
+
+      details.dev {
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(8, 14, 20, 0.65);
+        overflow: hidden;
+      }
+
+      details.dev summary {
+        padding: 1rem 1.25rem;
+        cursor: pointer;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--muted);
+        list-style: none;
+        user-select: none;
+      }
+
+      details.dev summary::-webkit-details-marker {
+        display: none;
+      }
+
+      details.dev[open] summary {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+
+      .dev-body {
+        padding: 1.25rem;
+      }
+
+      .dev-body h3 {
+        font-size: 0.72rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 1.25rem 0 0.65rem;
+        font-weight: 600;
+      }
+
+      .dev-body h3:first-child {
+        margin-top: 0;
+      }
+
+      pre {
+        margin: 0;
+        padding: 1rem;
+        background: #050a0e;
+        border-radius: 10px;
+        font-size: 0.7rem;
+        line-height: 1.45;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: #b8d4de;
+      }
+
+      code {
+        font-family: ui-monospace, "Cascadia Code", monospace;
+      }
+
+      .url-pill {
+        display: block;
+        padding: 0.65rem 0.85rem;
+        background: rgba(0, 229, 195, 0.08);
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        word-break: break-all;
+        font-size: 0.78rem;
+      }
+
+      #tc-log {
+        min-height: 4rem;
+        white-space: pre-wrap;
+      }
+
+      #tc-log:empty::before {
+        content: "Sin mensajes aún (completa un pago en el iframe embebido).";
+        color: var(--muted);
+        font-style: italic;
+      }
+
+      .site-footer {
+        padding: 2rem max(5vw, 1.25rem);
+        text-align: center;
+        font-size: 0.78rem;
+        color: var(--muted);
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+      }
+
+      /* ——— Pitch organizadores (liquid) ——— */
+      .band--center {
+        text-align: center;
+      }
+
+      .band--center > .band__title {
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      .band--tight {
+        padding-top: clamp(2.25rem, 5vw, 3.25rem);
+        padding-bottom: clamp(2.25rem, 5vw, 3.25rem);
+      }
+
+      .pitch-lead {
+        max-width: 44rem;
+        margin: 0 auto 1.35rem;
+        color: rgba(210, 222, 234, 0.9);
+        font-size: 1.05rem;
+        line-height: 1.62;
+        font-weight: 500;
+      }
+
+      .organizer-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 1.15rem;
+        max-width: 1140px;
+        margin: 0 auto;
+        text-align: left;
+      }
+
+      .org-card {
+        padding: 1.35rem 1.4rem 1.4rem;
+        border-radius: 22px;
+        border: 1px solid rgba(255, 255, 255, 0.11);
+        background: rgba(255, 255, 255, 0.07);
+        backdrop-filter: blur(20px) saturate(185%);
+        -webkit-backdrop-filter: blur(20px) saturate(185%);
+        box-shadow:
+          0 1px 0 rgba(255, 255, 255, 0.09) inset,
+          0 18px 50px rgba(0, 0, 0, 0.24);
+        transition:
+          transform 0.22s ease,
+          border-color 0.22s ease,
+          box-shadow 0.22s ease;
+      }
+
+      .org-card:hover {
+        transform: translateY(-4px);
+        border-color: rgba(94, 234, 212, 0.38);
+        box-shadow:
+          0 1px 0 rgba(255, 255, 255, 0.12) inset,
+          0 22px 56px rgba(0, 0, 0, 0.28),
+          0 0 0 1px rgba(94, 234, 212, 0.12);
+      }
+
+      .org-card__icon {
+        width: 3rem;
+        height: 3rem;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 0.65rem;
+        background: rgba(94, 234, 212, 0.14);
+        border: 1px solid rgba(94, 234, 212, 0.28);
+        color: var(--accent);
+      }
+
+      .org-card__icon svg {
+        width: 1.5rem;
+        height: 1.5rem;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .org-card h3 {
+        margin: 0;
+        font-size: clamp(1.12rem, 2.2vw, 1.35rem);
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+      }
+
+      .org-card__desc {
+        margin: 0.65rem 0 0;
+        font-size: 1.06rem;
+        line-height: 1.65;
+        color: rgba(205, 218, 232, 0.94);
+        font-weight: 450;
+      }
+
+      .org-card__desc code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.88em;
+        padding: 0.12em 0.38em;
+        border-radius: 6px;
+        background: rgba(0, 0, 0, 0.32);
+        border: 1px solid rgba(94, 234, 212, 0.22);
+        color: #c9fff4;
+      }
+
+      .org-card__hint {
+        display: block;
+        margin-top: 0.5rem;
+        font-size: 0.76rem;
+        font-weight: 700;
+        color: rgba(94, 234, 212, 0.95);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .org-card__viz {
+        margin-top: 1.1rem;
+        min-height: 118px;
+        height: 118px;
+        border-radius: 16px;
+        background: rgba(0, 0, 0, 0.28);
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        padding: 0.65rem 0.75rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+      }
+
+      .viz-browser__url {
+        height: 7px;
+        width: 58%;
+        border-radius: 4px;
+        background: linear-gradient(90deg, rgba(94, 234, 212, 0.55), rgba(94, 234, 212, 0.12));
+        margin-bottom: 0.5rem;
+      }
+
+      .viz-browser__body {
+        flex: 1;
+        min-height: 52px;
+        border-radius: 10px;
+        background: linear-gradient(165deg, rgba(94, 234, 212, 0.14), rgba(40, 60, 80, 0.35));
+        border: 1px dashed rgba(94, 234, 212, 0.35);
+      }
+
+      .org-card__viz--map {
+        flex-direction: row;
+        align-items: flex-end;
+        justify-content: center;
+        gap: 0.45rem;
+        padding-bottom: 0.65rem;
+      }
+
+      .viz-map__blk {
+        width: 22%;
+        max-width: 52px;
+        border-radius: 6px;
+        background: rgba(94, 234, 212, 0.22);
+        border: 1px solid rgba(94, 234, 212, 0.3);
+      }
+
+      .viz-map__blk:nth-child(1) {
+        height: 34px;
+      }
+
+      .viz-map__blk:nth-child(2) {
+        height: 56px;
+      }
+
+      .viz-map__blk:nth-child(3) {
+        height: 44px;
+      }
+
+      .org-card__viz--bars {
+        flex-direction: row;
+        align-items: flex-end;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+      }
+
+      .viz-bar {
+        width: 18%;
+        border-radius: 6px 6px 2px 2px;
+        background: linear-gradient(180deg, rgba(94, 234, 212, 0.75), rgba(94, 234, 212, 0.2));
+      }
+
+      .viz-bar:nth-child(1) {
+        height: 42%;
+      }
+
+      .viz-bar:nth-child(2) {
+        height: 78%;
+      }
+
+      .viz-bar:nth-child(3) {
+        height: 58%;
+      }
+
+      .org-card__viz--liquid {
+        background: radial-gradient(ellipse 80% 120% at 30% 20%, rgba(94, 234, 212, 0.35), transparent 55%),
+          rgba(0, 0, 0, 0.35);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .org-card__viz--liquid::after {
+        content: "";
+        position: absolute;
+        inset: -40%;
+        background: radial-gradient(circle at 70% 60%, rgba(0, 198, 255, 0.18), transparent 45%);
+        opacity: 0.9;
+      }
+
+      .org-card__viz--steps {
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        gap: 0.35rem;
+        padding: 0.5rem;
+      }
+
+      .viz-step {
+        width: 2rem;
+        height: 2rem;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.72rem;
+        font-weight: 800;
+        background: rgba(94, 234, 212, 0.2);
+        border: 2px solid rgba(94, 234, 212, 0.5);
+        color: #eafffb;
+      }
+
+      .org-card__viz--steps {
+        position: relative;
+        gap: 0.5rem;
+      }
+
+      .org-card__viz--grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.4rem;
+        padding: 0.65rem;
+        align-content: center;
+      }
+
+      .viz-mini {
+        border-radius: 8px;
+        background: rgba(94, 234, 212, 0.15);
+        border: 1px solid rgba(94, 234, 212, 0.22);
+        min-height: 2.1rem;
+      }
+
+      /* Tablero comparativo */
+      .compare-board {
+        max-width: 640px;
+        margin: 0 auto;
+        padding: 1.25rem 1.35rem 1.4rem;
+        border-radius: 24px;
+        background: rgba(8, 12, 20, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        backdrop-filter: var(--liquid-blur);
+        -webkit-backdrop-filter: var(--liquid-blur);
+        text-align: left;
+      }
+
+      .compare-board__head {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        font-size: 0.72rem;
+        font-weight: 750;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .compare-board__tc {
+        color: var(--accent);
+        text-align: right;
+      }
+
+      .compare-board__ot {
+        color: rgba(255, 180, 160, 0.85);
+      }
+
+      .compare-col--tc,
+      .compare-col--ot {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        min-width: 0;
+      }
+
+      .compare-row + .compare-row {
+        margin-top: 0.85rem;
+      }
+
+      .compare-row__label {
+        display: block;
+        font-size: 0.88rem;
+        font-weight: 650;
+        margin-bottom: 0.4rem;
+        color: rgba(232, 240, 250, 0.95);
+      }
+
+      .compare-row__pair {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.55rem;
+        align-items: center;
+      }
+
+      .compare-meter {
+        height: 12px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+        overflow: hidden;
+      }
+
+      .compare-meter__fill {
+        height: 100%;
+        border-radius: 999px;
+        transition: width 0.6s ease;
+      }
+
+      .compare-meter__fill--tc {
+        background: linear-gradient(90deg, #2dd4bf, #5eead4);
+        box-shadow: 0 0 12px rgba(94, 234, 212, 0.45);
+      }
+
+      .compare-meter__fill--ot {
+        background: linear-gradient(90deg, rgba(255, 120, 100, 0.6), rgba(180, 80, 80, 0.35));
+      }
+
+      .compare-row__pct {
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: rgba(184, 198, 212, 0.88);
+        margin-top: 0.2rem;
+        text-align: center;
+      }
+
+      .compare-col--tc .compare-row__pct {
+        text-align: right;
+      }
+
+      .compare-col--ot .compare-row__pct {
+        text-align: left;
+      }
+
+      /* Barras comisión extra */
+      .commission-chart {
+        max-width: 520px;
+        margin: 1.35rem auto 0;
+        padding: 1rem 1.2rem;
+        border-radius: 18px;
+        background: rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+      }
+
+      .commission-chart__row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 0.65rem;
+      }
+
+      .commission-chart__row:last-child {
+        margin-bottom: 0;
+      }
+
+      .commission-chart__tag {
+        width: 3rem;
+        flex-shrink: 0;
+        font-size: 0.85rem;
+        font-weight: 800;
+        color: rgba(245, 250, 255, 0.9);
+      }
+
+      .commission-chart__track {
+        flex: 1;
+        height: 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.06);
+        overflow: hidden;
+      }
+
+      .commission-chart__fill {
+        height: 100%;
+        border-radius: 999px;
+      }
+
+      .commission-chart__fill--12 {
+        width: 100%;
+        background: linear-gradient(90deg, rgba(239, 100, 100, 0.55), rgba(120, 50, 50, 0.35));
+      }
+
+      .commission-chart__fill--10 {
+        width: calc(100% * 10 / 12);
+        background: linear-gradient(90deg, #2dd4bf, #5eead4);
+        box-shadow: 0 0 14px rgba(94, 234, 212, 0.35);
+      }
+
+      .commission-showcase {
+        max-width: 920px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0.85rem;
+        align-items: stretch;
+      }
+
+      @media (min-width: 800px) {
+        .commission-showcase {
+          grid-template-columns: 1fr auto 1fr;
+          align-items: center;
+          gap: 0.65rem;
+        }
+      }
+
+      .commission-savings {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 0.5rem 0.35rem;
+        text-align: center;
+      }
+
+      .commission-savings__bubble {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-width: 5.5rem;
+        min-height: 5.5rem;
+        padding: 0.65rem;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle at 30% 25%,
+          rgba(94, 234, 212, 0.35),
+          rgba(8, 14, 22, 0.85) 70%
+        );
+        border: 2px solid rgba(94, 234, 212, 0.55);
+        box-shadow:
+          0 0 32px rgba(94, 234, 212, 0.25),
+          0 1px 0 rgba(255, 255, 255, 0.15) inset;
+      }
+
+      .commission-savings__bubble span {
+        font-size: 1.85rem;
+        font-weight: 900;
+        line-height: 1;
+        letter-spacing: -0.04em;
+        color: #eafffb;
+      }
+
+      .commission-savings__bubble small {
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: rgba(184, 255, 244, 0.85);
+        margin-top: 0.2rem;
+      }
+
+      .commission-card {
+        padding: 1.65rem 1.75rem 1.75rem;
+        border-radius: 24px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.055);
+        backdrop-filter: blur(22px) saturate(175%);
+        -webkit-backdrop-filter: blur(22px) saturate(175%);
+        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.07) inset;
+        text-align: left;
+      }
+
+      .commission-card--muted {
+        opacity: 0.92;
+      }
+
+      .commission-card--highlight {
+        border-color: rgba(94, 234, 212, 0.42);
+        background: linear-gradient(
+          155deg,
+          rgba(94, 234, 212, 0.18) 0%,
+          rgba(255, 255, 255, 0.06) 52%,
+          rgba(8, 12, 20, 0.4) 100%
+        );
+        box-shadow:
+          0 1px 0 rgba(255, 255, 255, 0.14) inset,
+          0 20px 60px rgba(0, 0, 0, 0.28),
+          0 0 0 1px rgba(94, 234, 212, 0.15);
+      }
+
+      .commission-card__label {
+        font-size: 0.72rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.55);
+        font-weight: 650;
+        margin-bottom: 0.85rem;
+      }
+
+      .commission-pct {
+        font-size: clamp(2.6rem, 7vw, 3.4rem);
+        font-weight: 800;
+        letter-spacing: -0.04em;
+        line-height: 0.95;
+        margin: 0 0 0.65rem;
+        text-shadow: 0 2px 16px rgba(0, 0, 0, 0.35);
+      }
+
+      .commission-card--muted .commission-pct {
+        color: rgba(255, 255, 255, 0.55);
+        text-decoration: line-through;
+        text-decoration-thickness: 3px;
+        text-decoration-color: rgba(255, 120, 120, 0.55);
+      }
+
+      .commission-card--highlight .commission-pct {
+        color: #e8fffb;
+      }
+
+      .commission-card p {
+        margin: 0;
+        color: rgba(210, 222, 234, 0.9);
+        font-size: 1.02rem;
+        line-height: 1.52;
+        font-weight: 500;
+      }
+
+      .commission-footnote {
+        max-width: 36rem;
+        margin: 1rem auto 0;
+        font-size: 0.72rem;
+        color: rgba(155, 168, 184, 0.92);
+        line-height: 1.45;
+      }
+
+      .pay-showcase {
+        max-width: 920px;
+        margin: 0 auto;
+      }
+
+      .pay-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+      }
+
+      @media (min-width: 640px) {
+        .pay-grid {
+          grid-template-columns: repeat(4, 1fr);
+        }
+      }
+
+      .pay-tile {
+        border-radius: 22px;
+        padding: 1.35rem 1.1rem 1.4rem;
+        text-align: center;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(20px) saturate(175%);
+        -webkit-backdrop-filter: blur(20px) saturate(175%);
+        box-shadow: 0 14px 40px rgba(0, 0, 0, 0.22), 0 1px 0 rgba(255, 255, 255, 0.08) inset;
+        min-height: 132px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .pay-tile strong {
+        display: block;
+        font-size: clamp(1.25rem, 3vw, 1.55rem);
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        line-height: 1.1;
+        margin-bottom: 0.35rem;
+      }
+
+      .pay-tile small {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: rgba(210, 222, 234, 0.88);
+        line-height: 1.35;
+      }
+
+      .pay-tile--nequi {
+        background: linear-gradient(155deg, rgba(180, 0, 120, 0.35), rgba(40, 12, 40, 0.55));
+      }
+
+      .pay-tile--nequi strong {
+        color: #ffb8e8;
+      }
+
+      .pay-tile--breb {
+        background: linear-gradient(155deg, rgba(0, 120, 80, 0.35), rgba(30, 50, 30, 0.55));
+      }
+
+      .pay-tile--breb strong {
+        color: #c8ffd8;
+      }
+
+      .pay-tile--card {
+        background: linear-gradient(155deg, rgba(60, 90, 120, 0.45), rgba(12, 18, 28, 0.6));
+      }
+
+      .pay-tile--card strong {
+        color: #e8f4ff;
+      }
+
+      .pay-tile--pse {
+        background: linear-gradient(155deg, rgba(90, 70, 140, 0.4), rgba(15, 12, 35, 0.58));
+      }
+
+      .pay-tile--pse strong {
+        color: #e6e0ff;
+      }
+
+      .pay-lead {
+        margin: 1.25rem auto 0;
+        max-width: 36rem;
+        font-size: 1.05rem;
+        line-height: 1.55;
+        font-weight: 500;
+        color: rgba(220, 230, 242, 0.95);
+        text-align: center;
+      }
+
+      .pay-micro {
+        margin: 0.65rem auto 0;
+        max-width: 32rem;
+        font-size: 0.78rem;
+        line-height: 1.45;
+        color: rgba(155, 170, 188, 0.9);
+        text-align: center;
+      }
+
+      .taquilla-badges {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.45rem;
+        margin: 0 auto 0.85rem;
+        max-width: 28rem;
+      }
+
+      .taquilla-badges span {
+        padding: 0.32rem 0.7rem;
+        border-radius: 999px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: rgba(245, 252, 255, 0.95);
+        background: rgba(94, 234, 212, 0.14);
+        border: 1px solid rgba(94, 234, 212, 0.4);
+      }
+
+      .public-row {
+        max-width: 960px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 0.75rem;
+      }
+
+      .public-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 1.45rem 1.15rem 1.5rem;
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.11);
+        background: rgba(255, 255, 255, 0.06);
+        backdrop-filter: var(--liquid-blur);
+        -webkit-backdrop-filter: var(--liquid-blur);
+        box-shadow: 0 1px 0 rgba(255, 255, 255, 0.07) inset;
+      }
+
+      .public-card__ico {
+        width: 3.25rem;
+        height: 3.25rem;
+        margin-bottom: 0.75rem;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(94, 234, 212, 0.16);
+        border: 1px solid rgba(94, 234, 212, 0.32);
+        color: var(--accent);
+      }
+
+      .public-card__ico svg {
+        width: 1.45rem;
+        height: 1.45rem;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .public-card h3 {
+        margin: 0;
+        font-size: clamp(1.08rem, 2.4vw, 1.22rem);
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        line-height: 1.25;
+      }
+
+      .public-card p {
+        margin: 0.5rem 0 0;
+        font-size: 0.95rem;
+        color: rgba(198, 210, 226, 0.95);
+        line-height: 1.45;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#">Ticket <span>Colombia</span></a>
+      <a class="header-cta" href="#entradas">Ver demo en vivo</a>
+    </header>
+
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero__bg" aria-hidden="true"></div>
+      <div class="hero__grid" aria-hidden="true"></div>
+      <div class="hero__inner">
+        <p class="hero__eyebrow">Ticket Colombia · organizadores</p>
+        <h1 id="hero-title">Taquilla liquid en tu web</h1>
+        <div class="hero__stats" aria-label="En resumen">
+          <div class="hero-stat">
+            <span class="hero-stat__num hero-stat__num--accent">10%</span>
+            <span class="hero-stat__cap">comisión</span>
+          </div>
+          <div class="hero-stat">
+            <span class="hero-stat__num">−2</span>
+            <span class="hero-stat__cap">pp vs 12%</span>
+          </div>
+          <div class="hero-stat hero-stat--wallet">
+            <div class="hero-stat__wallets" aria-label="Medios de pago aceptados">
+              <span class="w-chip w-chip--nequi">Nequi</span>
+              <span class="w-chip w-chip--breb">Bre-B</span>
+            </div>
+            <span class="hero-stat__cap">también tarjetas · PSE</span>
+          </div>
+          <div class="hero-stat">
+            <span class="hero-stat__num">1×</span>
+            <span class="hero-stat__cap">script</span>
+          </div>
+        </div>
+        <p class="hero__lead">
+          Taquilla embebida con estilo liquid, <strong>Nequi</strong> y <strong>Bre-B</strong> para tu público en Colombia, más tarjetas y PSE cuando
+          aplique. Menos fricción en el sitio del evento y comisión orientativa por debajo del 12% que muchos pagamos hoy.
+        </p>
+        <div class="hero__actions">
+          <a class="hero__cta" href="#entradas">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+              <path d="M2 9a3 3 0 013-3h14a3 3 0 013 3v1H2V9zM2 11h20v4a3 3 0 01-3 3H5a3 3 0 01-3-3v-4z" stroke-linejoin="round" />
+              <path d="M8 14h8" stroke-linecap="round" />
+            </svg>
+            Demo en vivo
+          </a>
+          <a class="hero__ghost" href="#ventajas-organizadores">Puntos clave</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="ventajas-organizadores" class="band band--center band--tight" aria-labelledby="ventajas-title">
+      <p class="band__title">Pilares</p>
+      <h2 id="ventajas-title" class="visually-hidden">Ventajas para organizadores</h2>
+      <p class="pitch-lead">
+        Estas son las piezas que usamos día a día con productoras y venues: texto claro y un mini‑gráfico en cada tarjeta para que veas,
+        de un vistazo, cómo se siente el producto en producción — embed, mapa, números, marca, onboarding y escala del calendario.
+      </p>
+      <div class="organizer-grid">
+        <article class="org-card">
+          <div class="org-card__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" /></svg>
+          </div>
+          <h3>Embed en tu dominio</h3>
+          <p class="org-card__desc">
+            La taquilla vive dentro de tu propia web: un solo <code>&lt;script&gt;</code>, mismo dominio y la confianza del visitante intacta. El
+            comprador no salta a otra marca para pagar; el flujo se siente parte de tu sitio y puedes rodearlo de tu narrativa y diseño.
+          </p>
+          <span class="org-card__hint">Un · script</span>
+          <div class="org-card__viz" aria-hidden="true">
+            <div class="viz-browser__url"></div>
+            <div class="viz-browser__body"></div>
+          </div>
+        </article>
+        <article class="org-card">
+          <div class="org-card__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+          </div>
+          <h3>Mapa · cupos · localidades</h3>
+          <p class="org-card__desc">
+            Asientos agrupados por localidad, cupos en tiempo real y una vista clara del recinto. El público entiende dónde va a quedar,
+            tú reduces soporte por malentendidos y liquidas más rápido en noches llenas o en ventas por oleadas.
+          </p>
+          <span class="org-card__hint">Listo para sala llena</span>
+          <div class="org-card__viz org-card__viz--map" aria-hidden="true">
+            <div class="viz-map__blk"></div>
+            <div class="viz-map__blk"></div>
+            <div class="viz-map__blk"></div>
+          </div>
+        </article>
+        <article class="org-card">
+          <div class="org-card__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 20V10M18 20V4M6 20v-4" /></svg>
+          </div>
+          <h3>Reportes y control</h3>
+          <p class="org-card__desc">
+            Ventas, cortesías y accesos en un solo tablero: tu equipo ve tendencias al instante, compara cortes y detecta cuellos de botella
+            antes del show. Menos hojas sueltas, menos sorpresas en taquilla física el día del evento.
+          </p>
+          <span class="org-card__hint">Tu equipo al día</span>
+          <div class="org-card__viz org-card__viz--bars" aria-hidden="true">
+            <div class="viz-bar"></div>
+            <div class="viz-bar"></div>
+            <div class="viz-bar"></div>
+          </div>
+        </article>
+        <article class="org-card">
+          <div class="org-card__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M2 13c2.2 2.5 5.5 2.5 8 0s5.8-2.5 8 0 5.8 2.5 8 0M2 9c2.2 2.5 5.5 2.5 8 0s5.8-2.5 8 0" />
+            </svg>
+          </div>
+          <h3>UI liquid opcional</h3>
+          <p class="org-card__desc">
+            Cristal esmerilado, blur y reflejos suaves que recuerdan interfaces premium del sistema, sin perder legibilidad. Activa el modo
+            cuando quieras un look “nativo 2020s”; apágalo si tu marca pide bloques sólidos y alto contraste.
+          </p>
+          <span class="org-card__hint">Vidrio fluido · marca</span>
+          <div class="org-card__viz org-card__viz--liquid" aria-hidden="true"></div>
+        </article>
+        <article class="org-card">
+          <div class="org-card__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
+          </div>
+          <h3>Onboarding guiado</h3>
+          <p class="org-card__desc">
+            Flujo paso a paso para publicar tu primer evento: fechas, precios, mapa simplificado y embed listo para pegar. Reducimos la
+            carga cognitiva para productoras pequeñas y para equipos que solo entran una vez al trimestre.
+          </p>
+          <span class="org-card__hint">Primer evento sin ruido</span>
+          <div class="org-card__viz org-card__viz--steps" aria-hidden="true">
+            <span class="viz-step">1</span>
+            <span class="viz-step">2</span>
+            <span class="viz-step">3</span>
+          </div>
+        </article>
+        <article class="org-card">
+          <div class="org-card__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+            </svg>
+          </div>
+          <h3>Escala con el tour</h3>
+          <p class="org-card__desc">
+            Cuando el calendario crece, clonas plantillas, duplicas fechas y mantienes la misma configuración de pagos y embed. Un solo
+            backoffice para muchas ciudades evita errores de copy‑paste y ahorra horas a producción y marketing.
+          </p>
+          <span class="org-card__hint">Más fechas · mismas piezas</span>
+          <div class="org-card__viz org-card__viz--grid" aria-hidden="true">
+            <div class="viz-mini"></div>
+            <div class="viz-mini"></div>
+            <div class="viz-mini"></div>
+            <div class="viz-mini"></div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="comparativo" class="band band--center band--tight" aria-labelledby="comparativo-title">
+      <p class="band__title">Comparativo rápido</p>
+      <h2 id="comparativo-title" class="visually-hidden">Ticket Colombia frente a un referente típico</h2>
+      <p class="pitch-lead">
+        No es una promesa mágica: es cómo invertimos el tiempo de producto. Abajo, tres dimensiones que suelen importar al organizador, con
+        barras solo para lectura visual — los porcentajes de comisión son orientativos; el resto es una escala relativa.
+      </p>
+      <div class="compare-board">
+        <div class="compare-board__head">
+          <span class="compare-board__ot">Referente típico</span>
+          <span class="compare-board__tc">Ticket Colombia</span>
+        </div>
+        <div class="compare-row">
+          <span class="compare-row__label">Comisión sobre venta (orientativo)</span>
+          <div class="compare-row__pair">
+            <div class="compare-col--ot">
+              <div class="compare-meter" aria-hidden="true">
+                <div class="compare-meter__fill compare-meter__fill--ot" style="width: 100%"></div>
+              </div>
+              <p class="compare-row__pct">~12%</p>
+            </div>
+            <div class="compare-col--tc">
+              <div class="compare-meter" aria-hidden="true">
+                <div class="compare-meter__fill compare-meter__fill--tc" style="width: 83%"></div>
+              </div>
+              <p class="compare-row__pct">~10%</p>
+            </div>
+          </div>
+        </div>
+        <div class="compare-row">
+          <span class="compare-row__label">Integración en tu propio sitio</span>
+          <div class="compare-row__pair">
+            <div class="compare-col--ot">
+              <div class="compare-meter" aria-hidden="true">
+                <div class="compare-meter__fill compare-meter__fill--ot" style="width: 42%"></div>
+              </div>
+              <p class="compare-row__pct">Variable</p>
+            </div>
+            <div class="compare-col--tc">
+              <div class="compare-meter" aria-hidden="true">
+                <div class="compare-meter__fill compare-meter__fill--tc" style="width: 96%"></div>
+              </div>
+              <p class="compare-row__pct">Embed 1× script</p>
+            </div>
+          </div>
+        </div>
+        <div class="compare-row">
+          <span class="compare-row__label">Superficie para medios locales (Nequi · Bre-B)</span>
+          <div class="compare-row__pair">
+            <div class="compare-col--ot">
+              <div class="compare-meter" aria-hidden="true">
+                <div class="compare-meter__fill compare-meter__fill--ot" style="width: 62%"></div>
+              </div>
+              <p class="compare-row__pct">Según proveedor</p>
+            </div>
+            <div class="compare-col--tc">
+              <div class="compare-meter" aria-hidden="true">
+                <div class="compare-meter__fill compare-meter__fill--tc" style="width: 100%"></div>
+              </div>
+              <p class="compare-row__pct">Nequi + Bre-B destacados</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="comision" class="band band--center band--tight" aria-labelledby="comision-title">
+      <p class="band__title">Comisión</p>
+      <h2 id="comision-title" class="visually-hidden">Comisión 10 por ciento</h2>
+      <div class="commission-showcase">
+        <div class="commission-card commission-card--muted">
+          <div class="commission-card__label">Referente mercado</div>
+          <p class="commission-pct">12%</p>
+          <p>Lo que muchos organizadores pagan hoy.</p>
+        </div>
+        <div class="commission-savings">
+          <div class="commission-savings__bubble">
+            <span>−2</span>
+            <small>puntos</small>
+          </div>
+        </div>
+        <div class="commission-card commission-card--highlight">
+          <div class="commission-card__label">Ticket Colombia</div>
+          <p class="commission-pct">10%</p>
+          <p>Más margen por cada venta.</p>
+        </div>
+      </div>
+      <div class="commission-chart" aria-labelledby="commission-chart-label">
+        <p id="commission-chart-label" class="visually-hidden">Gráfico comparativo de comisión 12 por ciento frente a 10 por ciento</p>
+        <div class="commission-chart__row">
+          <span class="commission-chart__tag">12%</span>
+          <div class="commission-chart__track">
+            <div class="commission-chart__fill commission-chart__fill--12"></div>
+          </div>
+        </div>
+        <div class="commission-chart__row">
+          <span class="commission-chart__tag">10%</span>
+          <div class="commission-chart__track">
+            <div class="commission-chart__fill commission-chart__fill--10"></div>
+          </div>
+        </div>
+      </div>
+      <p class="commission-footnote">Cifras orientativas · ajuste final por contrato.</p>
+    </section>
+
+    <section id="pagos" class="band band--center band--tight" aria-labelledby="pagos-title">
+      <p class="band__title">Pagos</p>
+      <h2 id="pagos-title" class="visually-hidden">Medios de pago aceptados</h2>
+      <div class="pay-showcase">
+        <div class="pay-grid" role="list">
+          <div class="pay-tile pay-tile--nequi" role="listitem">
+            <strong>Nequi</strong>
+            <small>Billetera y transferencias que tu público ya usa a diario.</small>
+          </div>
+          <div class="pay-tile pay-tile--breb" role="listitem">
+            <strong>Bre-B</strong>
+            <small>Clave y experiencia QR alineada al ecosistema local.</small>
+          </div>
+          <div class="pay-tile pay-tile--card" role="listitem">
+            <strong>Tarjetas</strong>
+            <small>Débito y crédito cuando el comprador prefiere franquicia bancaria.</small>
+          </div>
+          <div class="pay-tile pay-tile--pse" role="listitem">
+            <strong>PSE</strong>
+            <small>Débito en línea desde cuentas de ahorro o corriente.</small>
+          </div>
+        </div>
+        <p class="pay-lead">
+          El checkout contempla <strong>Nequi</strong> y <strong>Bre-B</strong> como piezas centrales para Colombia, junto con tarjetas y PSE según la
+          configuración del evento. Un solo flujo para el asistente: elige monto, medio, confirma y recibe su acceso sin saltos innecesarios.
+        </p>
+        <p class="pay-micro">Disponibilidad exacta por método puede variar por contrato, adquirente o reglas del evento; valida siempre con tu ejecutivo.</p>
+      </div>
+    </section>
+
+    <section id="entradas" class="band" aria-labelledby="entradas-title">
+      <div class="taquilla">
+        <p class="band__title" style="text-align: center">Demo en vivo</p>
+        <h2 id="entradas-title">Fest</h2>
+        <div class="taquilla-badges" aria-label="Modo del widget">
+          <span>Liquid</span>
+          <span>Alto automático</span>
+          <span>Inline</span>
+        </div>
+        <div class="embed-snippet" aria-label="Código de integración Ticket Colombia">
+          <div class="embed-snippet__head">
+            <span>Ticket Colombia · <code style="letter-spacing: 0.04em">&lt;script&gt;</code></span>
+            <button type="button" class="embed-snippet__copy" id="copy-embed-snippet">
+              Copiar
+            </button>
+          </div>
+          <pre id="taquilla-snippet" tabindex="0"></pre>
+        </div>
+        <div class="taquilla__card">
+          <div class="widget-slot" id="widget-slot">
+            <script
+              src="/embed/tc-embed-widget.js"
+              data-tc-slug="fest"
+              data-tc-inline="1"
+              data-tc-frame="glass"
+              data-tc-iframe-height="auto"
+              defer
+            ></script>
+          </div>
+          <p class="widget-hint"><code>data-tc-base</code> en el recuadro · dev tools al final.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="info" class="band band--tight">
+      <p class="band__title">Evento muestra</p>
+      <div class="meta-row">
+        <div class="meta-card">
+          <strong>Fecha</strong>
+          <p>Sábado noche</p>
+        </div>
+        <div class="meta-card">
+          <strong>Ciudad</strong>
+          <p>Bogotá · demo</p>
+        </div>
+        <div class="meta-card">
+          <strong>Live</strong>
+          <p>Misma taquilla que en producción</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="band band--tight band--center">
+      <p class="band__title">Tu público ve</p>
+      <div class="public-row">
+        <div class="public-card">
+          <div class="public-card__ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" /></svg>
+          </div>
+          <h3>Mapa + localidad</h3>
+          <p>Claro · rápido · en tu sitio</p>
+        </div>
+        <div class="public-card">
+          <div class="public-card__ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></svg>
+          </div>
+          <h3>Checkout cerrado</h3>
+          <p>Mismo iframe · menos saltos</p>
+        </div>
+        <div class="public-card">
+          <div class="public-card__ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <path d="M3 9h18M9 21V9" />
+            </svg>
+          </div>
+          <h3>Tu marca primero</h3>
+          <p>Liquid o sólido · tú eliges</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="dev-wrap">
+      <details class="dev">
+        <summary>Herramientas para desarrolladores (snippet, URL, log)</summary>
+        <div class="dev-body">
+          <h3>URL de esta demo</h3>
+          <p class="url-pill"><code id="self-url"></code></p>
+          <h3>Snippet de referencia</h3>
+          <pre id="snippet-ref"></pre>
+          <h3>postMessage</h3>
+          <pre id="tc-log"></pre>
+        </div>
+      </details>
+    </div>
+
+    <footer class="site-footer">
+      Demo comercial <strong>Ticket Colombia</strong> · Fest · Fondo{' '}
+      <a href="https://unsplash.com/photos/1541701494587-cb58502866ab" rel="noopener noreferrer" target="_blank" style="color: var(--accent)">Unsplash</a>
+    </footer>
+
+    <script>
+      (function () {
+        var appOrigin = window.location.origin;
+        var slug = "fest";
+
+        var refPre = document.getElementById("snippet-ref");
+        var taqPre = document.getElementById("taquilla-snippet");
+        var selfUrl = document.getElementById("self-url");
+        var copyBtn = document.getElementById("copy-embed-snippet");
+        var offlineMsg =
+          "Abre esta página con Vite (http://localhost:PUERTO/tc-embed-landing-demo-k7mx2p.html). file:// no aplica.";
+
+        if (!appOrigin || appOrigin === "null") {
+          if (refPre) refPre.textContent = offlineMsg;
+          if (taqPre) taqPre.textContent = offlineMsg;
+          if (copyBtn) copyBtn.disabled = true;
+          return;
+        }
+
+        var lines = [
+          "<script",
+          '  src="' + appOrigin + '/embed/tc-embed-widget.js"',
+          '  data-tc-base="' + appOrigin + '"',
+          '  data-tc-slug="' + slug + '"',
+          '  data-tc-inline="1"',
+          '  data-tc-frame="glass"',
+          '  data-tc-iframe-height="auto"',
+          "  defer",
+          "><\/script>",
+        ];
+        var snippetText = lines.join("\n");
+        if (refPre) refPre.textContent = snippetText;
+        if (taqPre) taqPre.textContent = snippetText;
+        if (selfUrl) selfUrl.textContent = window.location.href;
+
+        if (copyBtn) {
+          copyBtn.addEventListener("click", function () {
+            function ok() {
+              copyBtn.textContent = "Copiado";
+              copyBtn.setAttribute("data-copied", "1");
+              window.setTimeout(function () {
+                copyBtn.textContent = "Copiar";
+                copyBtn.removeAttribute("data-copied");
+              }, 2000);
+            }
+            function fail() {
+              copyBtn.textContent = "Error";
+              window.setTimeout(function () {
+                copyBtn.textContent = "Copiar";
+              }, 2000);
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(snippetText).then(ok).catch(fail);
+            } else {
+              try {
+                var ta = document.createElement("textarea");
+                ta.value = snippetText;
+                ta.style.position = "fixed";
+                ta.style.opacity = "0";
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand("copy");
+                document.body.removeChild(ta);
+                ok();
+              } catch (e) {
+                fail();
+              }
+            }
+          });
+        }
+
+        var logEl = document.getElementById("tc-log");
+        function logLine(msg) {
+          if (!logEl) return;
+          var t = new Date().toISOString().slice(11, 19);
+          logEl.textContent += "[" + t + "] " + msg + "\n";
+        }
+
+        window.addEventListener("message", function (ev) {
+          if (ev.origin !== appOrigin) return;
+          var d = ev.data;
+          if (!d || d.source !== "ticket-colombia-embed") return;
+          if (d.version !== 1) return;
+          logLine(JSON.stringify(d));
+        });
+      })();
+    </script>
+  </body>
+</html>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom';
 import type { User } from 'firebase/auth';
 import Loader from '../../components/Loader';
+import { TcEmbedGlassChrome } from '../../components/TcEmbedGlassChrome';
 import LoginScreen from '../login';
 import SignupScreen from '../signup';
 import MarketplaceScreen from '../marketplace';
@@ -90,6 +91,7 @@ const MainLayout: React.FC = () => {
   return (
     <BrowserRouter>
       <PageTracker />
+      <TcEmbedGlassChrome />
       <Routes>
         {/* Public Routes */}
         <Route 

@@ -46,6 +46,44 @@
   margin-bottom: 1rem;
 }
 
+.event-widget-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.event-widget-field-label {
+  font-size: 0.88rem;
+  font-weight: $font-weight-semi-bold;
+  color: $color-text-primary;
+}
+
+.event-widget-select {
+  width: 100%;
+  max-width: 420px;
+  padding: 0.6rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid rgba($color-text-secondary, 0.2);
+  background: rgba($color-surface, 0.95);
+  color: $color-text-primary;
+  font-size: 0.9rem;
+  font-family: inherit;
+  cursor: pointer;
+
+  &:focus {
+    outline: none;
+    border-color: rgba($color-accent, 0.5);
+    box-shadow: 0 0 0 2px rgba($color-accent, 0.15);
+  }
+}
+
+.event-widget-field-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: $color-text-secondary;
+  line-height: 1.45;
+}
+
 .event-widget-warn {
   background: rgba(#f9a825, 0.12);
   color: #6d4c00;

@@ -186,9 +186,10 @@ const EventStatsScreen: React.FC = () => {
 
   const emailDomainCount: Record<string, number> = {};
   validTickets.forEach((t) => {
+    const qty = t.quantity || 1;
     const email = t.buyerEmail || '';
     const domain = email.includes('@') ? email.split('@')[1]?.toLowerCase() || 'sin_email' : 'sin_email';
-    emailDomainCount[domain] = (emailDomainCount[domain] || 0) + (t.quantity || 1);
+    emailDomainCount[domain] = (emailDomainCount[domain] || 0) + qty;
   });
   const demographics: Demographics[] = Object.entries(emailDomainCount)
     .map(([label, count]) => ({

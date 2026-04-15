@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Ticket Colombia horizontal lockup. ~1000x260, text #e0e1dd / accent #00d4ff -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 260" fill="none" role="img" aria-label="Ticket Colombia">
+  <title>Ticket Colombia horizontal logo</title>
+  <g transform="translate(32 28) scale(7.75) translate(-12 -12)">
+    <g transform="rotate(-90 12 12)">
+      <path
+        d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"
+        stroke="#00d4ff"
+        stroke-width="1.35"
+        stroke-linejoin="round"
+        stroke-linecap="round"
+      />
+    </g>
+    <text
+      x="12"
+      y="15.25"
+      text-anchor="middle"
+      fill="none"
+      stroke="#00d4ff"
+      stroke-width="1.15"
+      font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+      font-size="11"
+      font-weight="900"
+    >T</text>
+  </g>
+  <g font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-weight="800" text-anchor="start">
+    <text x="268" y="118" font-size="62" letter-spacing="0.04em" fill="#e0e1dd" stroke="#1b263b" stroke-width="1.2">TICKET</text>
+    <text x="268" y="198" font-size="58" letter-spacing="0.06em" fill="#00d4ff" stroke="#1b263b" stroke-width="1.2">COLOMBIA</text>
+  </g>
+</svg>

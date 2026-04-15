@@ -584,18 +584,20 @@ const ConfigScreen: React.FC = () => {
             <p className="config-hub__section-desc">Módulos que usas en el día a día del panel.</p>
           </div>
           <div className="config-tile-grid config-tile-grid--2">
-            <button type="button" className="config-tile" onClick={() => navigate('/banners')}>
-              <span className="config-tile__glyph" aria-hidden>
-                <IconHubImage size={24} />
-              </span>
-              <span className="config-tile__body">
-                <span className="config-tile__name">Banners del sitio</span>
-                <span className="config-tile__hint">Carrusel e imágenes de la página principal.</span>
-              </span>
-              <span className="config-tile__arrow" aria-hidden>
-                <IconHubChevronRight size={20} />
-              </span>
-            </button>
+            {superAdmin && (
+              <button type="button" className="config-tile" onClick={() => navigate('/banners')}>
+                <span className="config-tile__glyph" aria-hidden>
+                  <IconHubImage size={24} />
+                </span>
+                <span className="config-tile__body">
+                  <span className="config-tile__name">Banners del sitio</span>
+                  <span className="config-tile__hint">Carrusel e imágenes de la página principal.</span>
+                </span>
+                <span className="config-tile__arrow" aria-hidden>
+                  <IconHubChevronRight size={20} />
+                </span>
+              </button>
+            )}
             <button type="button" className="config-tile" onClick={() => navigate('/balance')}>
               <span className="config-tile__glyph" aria-hidden>
                 <IconHubWallet size={24} />

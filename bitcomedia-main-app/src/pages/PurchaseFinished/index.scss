@@ -240,6 +240,46 @@
       font-size: 1rem;
     }
   }
+
+  &--embed {
+    min-height: 0;
+  }
+
+  &--tc-glass {
+    background: transparent;
+    color: #f0f6fc;
+    -webkit-font-smoothing: antialiased;
+
+    .purchase-finished__content {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: saturate(185%) blur(28px);
+      -webkit-backdrop-filter: saturate(185%) blur(28px);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      box-shadow:
+        0 16px 48px rgba(0, 0, 0, 0.22),
+        inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    }
+
+    .purchase-finished__icon-svg circle {
+      fill: rgba(255, 255, 255, 0.14);
+    }
+
+    .purchase-finished__title {
+      color: #f8fbff;
+      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    }
+
+    .purchase-finished__processing,
+    .purchase-finished__summary,
+    .purchase-finished__info {
+      color: rgba(236, 243, 252, 0.94);
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    }
+
+    .purchase-finished__summary strong {
+      color: #eef6fc;
+    }
+  }
 }
 
 // Animación para el icono de éxito

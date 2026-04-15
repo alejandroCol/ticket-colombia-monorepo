@@ -19,16 +19,22 @@ service firebase.storage {
         );
     }
 
+    function isSuperAdminStorage() {
+      return request.auth != null &&
+        firestore.exists(userDocPath()) &&
+        firestore.get(userDocPath()).data.role == 'SUPER_ADMIN';
+    }
+
     // Event cover images - anyone can read, only authenticated admins can write
     match /event-covers/{fileName} {
       allow read: if true;
       allow write: if isPanelAdmin();
     }
 
-    // Home page banners - anyone can read, only admins can write
+    // Home page banners - anyone can read, solo super admin escribe (alineado con panel Banners)
     match /banners/{fileName} {
       allow read: if true;
-      allow write: if isPanelAdmin();
+      allow write: if isSuperAdminStorage();
     }
 
     // Event ticket boleto (background) images - anyone can read, only admins can write

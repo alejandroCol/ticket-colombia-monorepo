@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
 import {
   getEventBySlug,
   getEventAvailability,
@@ -21,6 +21,7 @@ import Loader from '../../components/Loader';
 import VenueMapInteractive from '../../components/VenueMapInteractive';
 import WhatsAppButton from '../../components/WhatsAppButton';
 import './index.scss';
+import { isTcGlassUi } from '../../utils/tcEmbedUi';
 
 function displayAvailable(remaining: number, capacity: number): number {
   if (capacity <= 0) return 0;
@@ -89,6 +90,13 @@ const EventDetailScreen: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const isTcEmbed = searchParams.get('tc_embed') === '1';
+  const isTcGlass = isTcGlassUi(searchParams);
+  const eventScreenClass =
+    `event-detail-screen${isTcEmbed ? ' event-detail-screen--embed' : ''}${
+      isTcGlass ? ' event-detail-screen--tc-glass' : ''
+    }`;
 
   const sections = event?.sections && event.sections.length > 0 ? event.sections : null;
   /** En palco multipersona dividido, `price` en Firestore es el total del palco (incluye las N personas). */
@@ -331,6 +339,12 @@ const EventDetailScreen: React.FC = () => {
         }
       }
     }
+    if (isTcEmbed) {
+      params.set('tc_embed', '1');
+    }
+    if (isTcGlass) {
+      params.set('tc_ui', 'glass');
+    }
     navigate(`/compra/${eventSlug}?${params.toString()}`);
   };
 
@@ -424,8 +438,8 @@ const EventDetailScreen: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="event-detail-screen">
-        <TopNavBar logoOnly={true} />
+      <div className={eventScreenClass}>
+        {!isTcEmbed ? <TopNavBar logoOnly={true} /> : null}
         <div className="loading-container">
           <Loader size="large" color="accent" />
         </div>
@@ -435,13 +449,24 @@ const EventDetailScreen: React.FC = () => {
 
   if (error || !event) {
     return (
-      <div className="event-detail-screen">
-        <TopNavBar logoOnly={true} />
+      <div className={eventScreenClass}>
+        {!isTcEmbed ? <TopNavBar logoOnly={true} /> : null}
         <div className="error-container">
           <h2>Error</h2>
           <p>{error || 'No se pudo cargar el evento'}</p>
-          <SecondaryButton onClick={() => navigate('/')}>
-            Volver al inicio
+          <SecondaryButton
+            onClick={() => {
+              if (!isTcEmbed || !slug) {
+                navigate('/');
+                return;
+              }
+              const p = new URLSearchParams();
+              p.set('tc_embed', '1');
+              if (isTcGlass) p.set('tc_ui', 'glass');
+              navigate(`/evento/${slug}?${p.toString()}`);
+            }}
+          >
+            {isTcEmbed ? 'Reintentar' : 'Volver al inicio'}
           </SecondaryButton>
         </div>
       </div>
@@ -449,11 +474,11 @@ const EventDetailScreen: React.FC = () => {
   }
 
   return (
-    <div className="event-detail-screen">
-      <TopNavBar logoOnly={true} />
+    <div className={eventScreenClass}>
+      {!isTcEmbed ? <TopNavBar logoOnly={true} /> : null}
 
       <div className="event-content">
-        <div className="event-image-container">
+        <div className="event-cover-wrap">
           <div className="event-image">
             <img
               src={event.cover_image_url}
@@ -462,78 +487,6 @@ const EventDetailScreen: React.FC = () => {
                 console.error('Error loading image:', event.cover_image_url);
               }}
             />
-          </div>
-
-          <div className="event-hero-panel">
-            <h1 className="event-hero-panel__title">{event.name}</h1>
-
-            <div className="event-hero-panel__meta">
-              <div className="event-hero-panel__meta-row">
-                <span className="event-hero-panel__meta-icon event-hero-panel__meta-icon--date" aria-hidden />
-                <div className="event-hero-panel__meta-text">
-                  <span className="event-hero-panel__meta-label">Fecha y hora</span>
-                  <span className="event-hero-panel__meta-value">
-                    {formatDate(event.date)} · {event.time}
-                  </span>
-                </div>
-              </div>
-              <div className="event-hero-panel__meta-row">
-                <span className="event-hero-panel__meta-icon event-hero-panel__meta-icon--place" aria-hidden />
-                <div className="event-hero-panel__meta-text">
-                  <span className="event-hero-panel__meta-label">Ubicación</span>
-                  <span className="event-hero-panel__meta-value">
-                    {event.venue?.name || 'Por confirmar'}
-                    <span className="event-hero-panel__meta-sep">·</span>
-                    {event.city}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {displayLabels.length > 0 && (
-              <div className="event-hero-panel__chips">
-                {displayLabels.map((label) => (
-                  <Chip key={label} label={label} color="accent" size="small" />
-                ))}
-              </div>
-            )}
-
-            {showEventWhatsappSupport && (
-              <div className="event-hero-panel__support">
-                <WhatsAppButton
-                  phoneOverride={eventSupportWhatsapp}
-                  message={`Hola, tengo una consulta sobre el evento «${event.name}».`}
-                  eventName={event.name}
-                  trackingLabel="event-support-whatsapp"
-                  className="button-style"
-                >
-                  Soporte WhatsApp
-                </WhatsAppButton>
-                <p className="event-hero-panel__support-hint">
-                  ¿Dudas sobre entradas o el evento? Abre WhatsApp y envíanos un mensaje.
-                </p>
-              </div>
-            )}
-
-            <section className="event-hero-panel__section" aria-labelledby="hero-about-heading">
-              <h2 id="hero-about-heading" className="event-hero-panel__section-title">
-                Acerca del evento
-              </h2>
-              <p className="event-hero-panel__section-body">{event.description}</p>
-            </section>
-
-            {event.venue && (
-              <section className="event-hero-panel__venue-card" aria-labelledby="hero-venue-heading">
-                <h2 id="hero-venue-heading" className="event-hero-panel__section-title">
-                  Lugar
-                </h2>
-                <p className="event-hero-panel__venue-name">{event.venue.name}</p>
-                <p className="event-hero-panel__venue-address">
-                  {event.venue.address}
-                  <span className="event-hero-panel__venue-city">, {event.city}</span>
-                </p>
-              </section>
-            )}
           </div>
         </div>
 
@@ -627,7 +580,7 @@ const EventDetailScreen: React.FC = () => {
                             </span>
                           ) : (
                             <span className="event-section-card__badge">
-                              {palcoGrid ? `${shown} palcos disponibles` : `~${shown} disponibles`}
+                              {palcoGrid ? `${shown} palcos disponibles` : `${shown} disponibles`}
                             </span>
                           )}
                         </button>
@@ -639,7 +592,7 @@ const EventDetailScreen: React.FC = () => {
               {!sections && (
                 <p className="availability-pill availability-pill--solo">
                   <span className="availability-pill__dot" aria-hidden />
-                  Quedan ~{showAvailable} entradas
+                  Quedan {showAvailable} entradas
                 </p>
               )}
               {sections &&
@@ -649,7 +602,7 @@ const EventDetailScreen: React.FC = () => {
                   <span className="availability-pill__dot" aria-hidden />
                   {selectedIsPalcoGrid
                     ? `${showAvailable} palcos disponibles`
-                    : `~${showAvailable} en `}
+                    : `${showAvailable} en `}
                   {!selectedIsPalcoGrid ? (
                     <>
                       <strong>{selectedSection.name}</strong>
@@ -751,13 +704,84 @@ const EventDetailScreen: React.FC = () => {
               {buyButtonText()}
             </PrimaryButton>
             
-            <SecondaryButton 
-              fullWidth
-              onClick={() => navigate('/')}
-            >
-              Volver al inicio
-            </SecondaryButton>
+            {!isTcEmbed ? (
+              <SecondaryButton fullWidth onClick={() => navigate('/')}>
+                Volver al inicio
+              </SecondaryButton>
+            ) : null}
           </div>
+        </div>
+
+        <div className="event-hero-panel">
+          <h1 className="event-hero-panel__title">{event.name}</h1>
+
+          <div className="event-hero-panel__meta">
+            <div className="event-hero-panel__meta-row">
+              <span className="event-hero-panel__meta-icon event-hero-panel__meta-icon--date" aria-hidden />
+              <div className="event-hero-panel__meta-text">
+                <span className="event-hero-panel__meta-label">Fecha y hora</span>
+                <span className="event-hero-panel__meta-value">
+                  {formatDate(event.date)} · {event.time}
+                </span>
+              </div>
+            </div>
+            <div className="event-hero-panel__meta-row">
+              <span className="event-hero-panel__meta-icon event-hero-panel__meta-icon--place" aria-hidden />
+              <div className="event-hero-panel__meta-text">
+                <span className="event-hero-panel__meta-label">Ubicación</span>
+                <span className="event-hero-panel__meta-value">
+                  {event.venue?.name || 'Por confirmar'}
+                  <span className="event-hero-panel__meta-sep">·</span>
+                  {event.city}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {displayLabels.length > 0 && (
+            <div className="event-hero-panel__chips">
+              {displayLabels.map((label) => (
+                <Chip key={label} label={label} color="accent" size="small" />
+              ))}
+            </div>
+          )}
+
+          {showEventWhatsappSupport && (
+            <div className="event-hero-panel__support">
+              <WhatsAppButton
+                phoneOverride={eventSupportWhatsapp}
+                message={`Hola, tengo una consulta sobre el evento «${event.name}».`}
+                eventName={event.name}
+                trackingLabel="event-support-whatsapp"
+                className="button-style"
+              >
+                Soporte WhatsApp
+              </WhatsAppButton>
+              <p className="event-hero-panel__support-hint">
+                ¿Dudas sobre entradas o el evento? Abre WhatsApp y envíanos un mensaje.
+              </p>
+            </div>
+          )}
+
+          <section className="event-hero-panel__section" aria-labelledby="hero-about-heading">
+            <h2 id="hero-about-heading" className="event-hero-panel__section-title">
+              Acerca del evento
+            </h2>
+            <p className="event-hero-panel__section-body">{event.description}</p>
+          </section>
+
+          {event.venue && (
+            <section className="event-hero-panel__venue-card" aria-labelledby="hero-venue-heading">
+              <h2 id="hero-venue-heading" className="event-hero-panel__section-title">
+                Lugar
+              </h2>
+              <p className="event-hero-panel__venue-name">{event.venue.name}</p>
+              <p className="event-hero-panel__venue-address">
+                {event.venue.address}
+                <span className="event-hero-panel__venue-city">, {event.city}</span>
+              </p>
+            </section>
+          )}
         </div>
       </div>
     </div>

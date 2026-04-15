@@ -11,10 +11,111 @@
   }
 
   &--embed {
+    min-height: 0;
     padding-top: 0.5rem;
+
+    .loading-container {
+      height: auto;
+      min-height: 200px;
+      padding: 1.5rem 0;
+    }
 
     .checkout-content {
       padding-top: 0.25rem;
+    }
+  }
+
+  &--tc-glass {
+    background: transparent;
+    color: #f0f6fc;
+    -webkit-font-smoothing: antialiased;
+
+    .checkout-content {
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.34);
+    }
+
+    .checkout-header h1 {
+      color: #f8fbff;
+    }
+
+    .checkout-header p {
+      color: rgba(236, 243, 252, 0.94);
+    }
+
+    .checkout-summary {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: saturate(185%) blur(26px);
+      -webkit-backdrop-filter: saturate(185%) blur(26px);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      box-shadow:
+        0 12px 40px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+
+    .guest-checkout {
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+
+    .checkout-pay-plan {
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+
+    .checkout-reservation-chip {
+      background: rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
+
+    .payment-method-selection .payment-options .payment-option {
+      background: rgba(255, 255, 255, 0.07);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-color: rgba(255, 255, 255, 0.14);
+
+      &:hover {
+        background: rgba($color-accent, 0.12);
+      }
+
+      &.selected {
+        background: rgba($color-accent, 0.16);
+      }
+    }
+
+    .checkout-summary .event-info__title {
+      color: #f7fbfe;
+    }
+
+    .checkout-summary .event-meta__label {
+      color: rgba(228, 238, 248, 0.92);
+    }
+
+    .checkout-summary .event-meta__value {
+      color: #f2f8fc;
+    }
+
+    .checkout-summary .event-meta__city {
+      color: rgba(240, 246, 252, 0.94);
+    }
+
+    .checkout-reservation-chip__hint,
+    .checkout-reservation-chip__loading-text {
+      color: rgba(230, 240, 250, 0.92);
+    }
+
+    .guest-checkout h3,
+    .checkout-pay-plan h3 {
+      color: #f7fbfe;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    }
+
+    .guest-checkout__hint,
+    .checkout-pass-hint {
+      color: rgba(232, 240, 250, 0.92);
     }
   }
 }

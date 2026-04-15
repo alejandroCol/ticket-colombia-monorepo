@@ -39,6 +39,7 @@ import {
   IconCheckoutTimer,
 } from "../../components/CheckoutUserIcons";
 import "./index.scss";
+import { isTcGlassUi } from "../../utils/tcEmbedUi";
 
 const CheckoutScreen: React.FC = () => {
   const { whatsappPhone } = useContactConfig();
@@ -79,6 +80,11 @@ const CheckoutScreen: React.FC = () => {
   /** Palco en mapa: una sola línea de compra; la cantidad interna sigue siendo N para reserva y cobro. */
   const displayQuantity = palcoCheckout ? 1 : quantity;
   const isTcEmbed = searchParams.get("tc_embed") === "1";
+  const isTcGlass = isTcGlassUi(searchParams);
+  const checkoutScreenClass =
+    `checkout-screen${isTcEmbed ? " checkout-screen--embed" : ""}${
+      isTcGlass ? " checkout-screen--tc-glass" : ""
+    }`;
 
   const unitPrice = (() => {
     if (!event) return 0;
@@ -523,6 +529,12 @@ const CheckoutScreen: React.FC = () => {
       if (sectionName) {
         returnParams.set("section", sectionName);
       }
+      if (isTcEmbed) {
+        returnParams.set("tc_embed", "1");
+      }
+      if (isTcGlass) {
+        returnParams.set("tc_ui", "glass");
+      }
       const returnAbs = `${window.location.origin}/compra-finalizada?${returnParams.toString()}`;
       persistMercadoPagoReturnIntent(returnAbs);
 
@@ -607,12 +619,15 @@ const CheckoutScreen: React.FC = () => {
   };
 
   const handleGoBack = () => {
-    // Use the slug from params, or fallback to event slug if available
-    const eventSlug = slug || (event?.slug);
+    const eventSlug = slug || event?.slug;
     if (eventSlug) {
-      navigate(`/evento/${eventSlug}`);
+      const p = new URLSearchParams();
+      if (isTcEmbed) p.set("tc_embed", "1");
+      if (isTcGlass) p.set("tc_ui", "glass");
+      const qs = p.toString();
+      navigate(qs ? `/evento/${eventSlug}?${qs}` : `/evento/${eventSlug}`);
     } else {
-      navigate('/');
+      navigate("/");
     }
   };
 
@@ -664,7 +679,7 @@ const CheckoutScreen: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className={`checkout-screen${isTcEmbed ? " checkout-screen--embed" : ""}`}>
+      <div className={checkoutScreenClass}>
         {!isTcEmbed ? <TopNavBar logoOnly={true} /> : null}
         <div className="loading-container">
           <Loader size="large" color="accent" />
@@ -675,7 +690,7 @@ const CheckoutScreen: React.FC = () => {
 
   if (error || !event) {
     return (
-      <div className={`checkout-screen${isTcEmbed ? " checkout-screen--embed" : ""}`}>
+      <div className={checkoutScreenClass}>
         {!isTcEmbed ? <TopNavBar logoOnly={true} /> : null}
         <div className="error-container">
           <h2>Error</h2>
@@ -692,7 +707,7 @@ const CheckoutScreen: React.FC = () => {
     reservationLoading || Boolean(reservationId && reservationCountdown);
 
   return (
-    <div className={`checkout-screen${isTcEmbed ? " checkout-screen--embed" : ""}`}>
+    <div className={checkoutScreenClass}>
       {!isTcEmbed ? <TopNavBar logoOnly={true} /> : null}
 
       {showReservationFloat && (

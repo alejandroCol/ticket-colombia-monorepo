@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './index.scss';
 
@@ -34,6 +34,8 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  /** Menú hamburguesa solo en admin móvil (`logoOnly`). */
+  const [adminMobileMenuOpen, setAdminMobileMenuOpen] = useState(false);
   
   const isActive = (path: string): boolean => {
     return location.pathname === path;
@@ -47,11 +49,25 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
   const toggleMenu = () => {
     setMenuOpen(!menuOpen);
   };
+
+  const toggleAdminMobileMenu = () => {
+    setAdminMobileMenuOpen((o) => !o);
+  };
   
   const handleNavigation = (path: string) => {
     navigate(path);
     setMenuOpen(false);
+    setAdminMobileMenuOpen(false);
   };
+
+  const handleAdminLogoutClick = () => {
+    setAdminMobileMenuOpen(false);
+    onLogout?.();
+  };
+
+  useEffect(() => {
+    if (logoOnly) setAdminMobileMenuOpen(false);
+  }, [location.pathname, logoOnly]);
   
   const handleLoginClick = () => {
     navigate('/login');
@@ -67,26 +83,56 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
   if (logoOnly) {
     return (
       <div className={`top-nav-bar ${className} admin-nav`}>
-        {/* Mobile layout - Logo, config link and logout */}
+        {/* Mobile: logo + hamburguesa */}
         <div className="nav-container-mobile admin-mobile">
           <div className="logo-container-mobile" onClick={() => handleNavigation('/dashboard')}>
             <img src={logo} alt="Ticket Colombia" className="logo" />
           </div>
-          <div className="admin-nav-actions">
+          <button
+            type="button"
+            className="admin-nav-hamburger"
+            aria-expanded={adminMobileMenuOpen}
+            aria-controls="admin-mobile-nav-drawer"
+            aria-label={adminMobileMenuOpen ? 'Cerrar menú' : 'Abrir menú'}
+            onClick={toggleAdminMobileMenu}
+          >
+            <div className={`hamburger-icon ${adminMobileMenuOpen ? 'open' : ''}`}>
+              <span />
+              <span />
+              <span />
+            </div>
+          </button>
+        </div>
+
+        <button
+          type="button"
+          className={`admin-mobile-backdrop ${adminMobileMenuOpen ? 'is-visible' : ''}`}
+          aria-hidden={!adminMobileMenuOpen}
+          tabIndex={-1}
+          onClick={() => setAdminMobileMenuOpen(false)}
+        />
+
+        <div
+          className={`admin-mobile-drawer ${adminMobileMenuOpen ? 'open' : ''}`}
+          id="admin-mobile-nav-drawer"
+          role="navigation"
+          aria-hidden={!adminMobileMenuOpen}
+        >
+          <div className="admin-mobile-drawer-inner">
             {showScan && (
               <button
                 type="button"
-                className="admin-nav-link admin-nav-scan"
+                className="admin-mobile-drawer-link admin-mobile-drawer-link--scan"
                 onClick={() => handleNavigation('/scan-tickets')}
               >
-                <IconScanTickets size={18} />
+                <IconScanTickets size={20} />
                 Leer Boletos
               </button>
             )}
             {showTaquilla && (
               <button
                 type="button"
-                className="admin-nav-link admin-nav-taquilla"
+                className="admin-mobile-drawer-link"
                 onClick={() => handleNavigation('/taquilla')}
               >
                 Taquilla
@@ -95,7 +141,7 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
             {showConfig && (
               <button
                 type="button"
-                className="admin-nav-link"
+                className="admin-mobile-drawer-link"
                 onClick={() => handleNavigation('/config')}
               >
                 Configuración
@@ -103,13 +149,18 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
             )}
             <button
               type="button"
-              className="admin-nav-link"
+              className="admin-mobile-drawer-link"
               onClick={() => handleNavigation('/account/password')}
             >
               Cambiar contraseña
             </button>
             {showLogout && onLogout && (
-              <SecondaryButton className="admin-logout-btn" onClick={onLogout} size="small">
+              <SecondaryButton
+                className="admin-mobile-drawer-logout"
+                onClick={handleAdminLogoutClick}
+                size="small"
+                fullWidth
+              >
                 Cerrar sesión
               </SecondaryButton>
             )}

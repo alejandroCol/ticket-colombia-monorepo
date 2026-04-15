@@ -27,7 +27,8 @@
       src="/embed/tc-embed-widget.js"
       data-tc-base="http://localhost:5174"
       data-tc-slug="TU_SLUG_EVENTO"
-      data-tc-label="Comprar entradas"
+      data-tc-inline="1"
+      data-tc-frame="glass"
       defer
     ></script>
     <!-- Hasta aquí ↑ (ajusta src al dominio público del build) -->
@@ -38,6 +39,7 @@
         if (ev.origin !== new URL(base).origin) return;
         var d = ev.data;
         if (!d || d.source !== 'ticket-colombia-embed') return;
+        if (d.version !== 1) return;
         if (d.kind === 'purchase_finished') {
           console.log('Compra (embed):', d.status, d);
         }

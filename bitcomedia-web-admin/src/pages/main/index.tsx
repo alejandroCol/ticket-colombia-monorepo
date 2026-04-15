@@ -7,6 +7,7 @@ import {
   logoutUser, 
   hasAdminAccess,
   hasPanelAccess,
+  isSuperAdmin,
 } from '@services';
 import DashboardScreen from '@pages/dashboard';
 import EventFormScreen from '@pages/EventForm';
@@ -32,6 +33,7 @@ const MainLayout: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [fullAdmin, setFullAdmin] = useState<boolean>(false);
   const [panelOk, setPanelOk] = useState<boolean>(false);
+  const [superAdmin, setSuperAdmin] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
   
   useEffect(() => {
@@ -40,22 +42,26 @@ const MainLayout: React.FC = () => {
       setUser(authUser);
       
       if (authUser) {
-        const [adminAccess, panelAccess] = await Promise.all([
+        const [adminAccess, panelAccess, superA] = await Promise.all([
           hasAdminAccess(authUser.uid),
           hasPanelAccess(authUser.uid),
+          isSuperAdmin(authUser.uid),
         ]);
         setFullAdmin(adminAccess);
         setPanelOk(panelAccess);
+        setSuperAdmin(superA);
         
         if (!panelAccess) {
           await logoutUser();
           setUser(null);
           setFullAdmin(false);
           setPanelOk(false);
+          setSuperAdmin(false);
         }
       } else {
         setFullAdmin(false);
         setPanelOk(false);
+        setSuperAdmin(false);
       }
       
       setIsLoading(false);
@@ -250,11 +256,11 @@ const MainLayout: React.FC = () => {
           } 
         />
 
-        {/* Banners Route */}
+        {/* Banners: solo super admin (carrusel página principal) */}
         <Route 
           path="/banners" 
           element={
-            (user && fullAdmin) ? (
+            (user && superAdmin) ? (
               <BannersScreen />
             ) : (
               <Navigate to={user && panelOk ? '/dashboard' : '/login'} />

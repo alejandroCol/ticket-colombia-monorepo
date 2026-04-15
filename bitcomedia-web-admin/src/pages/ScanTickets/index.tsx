@@ -7,6 +7,7 @@ import { getTicketById, validateTicket } from '@services/ticketService';
 import {
   logoutUser,
   getCurrentUser,
+  hasAdminAccess,
   hasPanelAccess,
   isSuperAdmin,
   partnerCanValidateTicket,
@@ -186,6 +187,10 @@ const ScanTicketsScreen: React.FC = () => {
         setCanValidateEvent(true);
         return;
       }
+      if (await hasAdminAccess(user.uid)) {
+        setCanValidateEvent(true);
+        return;
+      }
       const ownerId = event?.organizer_id;
       if (ownerId && ownerId === user.uid) {
         setCanValidateEvent(true);
@@ -297,10 +302,12 @@ const ScanTicketsScreen: React.FC = () => {
     const user = getCurrentUser();
     if (!user) return;
     const superA = await isSuperAdmin(user.uid);
+    const roleAdmin = await hasAdminAccess(user.uid);
     const eventOwnerId = event?.organizer_id;
     const eid = ticket?.eventId;
     let mayValidate =
       superA ||
+      roleAdmin ||
       (eventOwnerId && eventOwnerId === user.uid) ||
       (!!eid && (await partnerCanValidateTicket(user.uid, eid)));
     if (!mayValidate) {

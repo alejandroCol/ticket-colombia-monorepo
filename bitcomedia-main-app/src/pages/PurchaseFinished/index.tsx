@@ -17,6 +17,7 @@ import {
   type EmbedPurchaseStatus,
 } from '../../utils/embedBridge';
 import './index.scss';
+import { isTcGlassUi } from '../../utils/tcEmbedUi';
 
 const PurchaseFinished: React.FC = () => {
   const navigate = useNavigate();
@@ -27,6 +28,8 @@ const PurchaseFinished: React.FC = () => {
   const eventName = searchParams.get('name') || '';
   const qty = searchParams.get('qty') || '1';
   const section = searchParams.get('section') || '';
+  const isTcGlass = isTcGlassUi(searchParams);
+  const isTcEmbed = searchParams.get('tc_embed') === '1';
 
   const mpUiState = useMemo(
     () => resolveMercadoPagoReturnUiState(searchParams),
@@ -126,7 +129,9 @@ const PurchaseFinished: React.FC = () => {
 
   return (
     <div
-      className={`purchase-finished purchase-finished--mp-${mpUiState}`}
+      className={`purchase-finished purchase-finished--mp-${mpUiState}${
+        isTcGlass ? ' purchase-finished--tc-glass' : ''
+      }${isTcEmbed ? ' purchase-finished--embed' : ''}`}
     >
       <div className="purchase-finished__container">
         <div className="purchase-finished__content">
