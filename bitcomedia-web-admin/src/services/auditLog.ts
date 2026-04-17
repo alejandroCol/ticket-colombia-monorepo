@@ -29,11 +29,13 @@ export type AuditLogKind =
   | 'config_contact'
   | 'config_payment_abono'
   | 'config_payment_provider'
+  | 'config_gateway_commission'
   | 'organizer_buyer_fee'
   | 'organizer_mp_seller'
   | 'event_organizer_transfer'
   | 'partner_grant_upsert'
-  | 'partner_grant_delete';
+  | 'partner_grant_delete'
+  | 'admin_user_create';
 
 export type AuditLogRow = {
   id: string;
@@ -139,4 +141,5 @@ export const AUDIT_KIND_LABELS: Record<string, string> = {
   event_organizer_transfer: 'Config · traspaso de evento',
   partner_grant_upsert: 'Partner · permisos guardados',
   partner_grant_delete: 'Partner · permisos eliminados',
+  admin_user_create: 'Administrador · cuenta creada',
 };

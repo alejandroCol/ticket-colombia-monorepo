@@ -29,6 +29,8 @@ export interface CreateTicketRequest {
     mapZoneLabel?: string;
     /** Cédula u otro documento del comprador (opcional); se guarda y muestra en PDF. */
     buyerIdNumber?: string;
+    /** Teléfono del comprador (ej. E.164); invitados lo envían desde checkout. */
+    buyerPhone?: string;
   };
 }
 
@@ -66,6 +68,7 @@ export interface Ticket {
     eventName: string;
     seatNumber: string;
     buyerIdNumber?: string;
+    buyerPhone?: string;
   };
   /** Set when Checkout Pro se creó con token del organizador y split marketplace */
   mpSplitOrganizerId?: string;

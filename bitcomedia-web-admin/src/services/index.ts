@@ -28,6 +28,7 @@ export {
   getEventOrRecurringById,
   getPaymentConfig,
   updatePaymentProviderConfig,
+  updateGatewayCommissionConfig,
   getOrganizerBuyerFee,
   setOrganizerBuyerFee,
   getOrganizerMpSellerConfigured,
@@ -75,6 +76,7 @@ export {
 } from './firebase';
 
 export { createPartnerUserAccount } from './createPartnerUserAccount';
+export { createAdminUserAccount } from './createAdminUserAccount';
 
 export {
   appendAuditLog,

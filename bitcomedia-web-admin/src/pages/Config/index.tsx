@@ -10,6 +10,7 @@ import {
   updateContactConfig,
   getPaymentConfig,
   updatePaymentProviderConfig,
+  updateGatewayCommissionConfig,
   logoutUser,
   getCurrentUser,
   isSuperAdmin,
@@ -23,6 +24,7 @@ import {
   fetchOrganizerEventsIndex,
   setEventOrganizerId,
   appendAuditLog,
+  createAdminUserAccount,
 } from '@services';
 import type { Event } from '@services/types';
 import type { OrganizerEventsIndex } from '@services';
@@ -38,6 +40,7 @@ import {
   IconHubChevronRight,
 } from '@components/ConfigHubIcons';
 import { getOnePayWebhookUrl } from '../../config/cloudFunctionsPublic';
+import { normalizeGatewayCommissionConfig, GATEWAY_IVA_DEFAULT_PERCENT } from '@utils/revenueBreakdown';
 import './index.scss';
 
 type TransferTarget = {
@@ -50,6 +53,16 @@ type TransferTarget = {
 function eventRowMeta(e: Event): string {
   const parts = [e.date, e.city].filter(Boolean);
   return parts.length ? parts.join(' · ') : '—';
+}
+
+function firebaseErrorMessage(err: unknown): string {
+  const code = (err as { code?: string })?.code;
+  if (code === 'auth/email-already-in-use') {
+    return 'Ese correo ya está registrado. Usa otro correo o recupera la contraseña.';
+  }
+  if (code === 'auth/invalid-email') return 'El correo no es válido.';
+  if (code === 'auth/weak-password') return 'La contraseña es demasiado débil.';
+  return err instanceof Error ? err.message : 'Ocurrió un error. Intenta de nuevo.';
 }
 
 const ConfigScreen: React.FC = () => {
@@ -77,6 +90,16 @@ const ConfigScreen: React.FC = () => {
   const [mpSellerSaving, setMpSellerSaving] = useState<string | null>(null);
   const [paymentProvider, setPaymentProvider] = useState<'mercadopago' | 'onepay'>('mercadopago');
   const [paymentProviderSaving, setPaymentProviderSaving] = useState(false);
+  const [gatewayPct, setGatewayPct] = useState('');
+  const [gatewayFixed, setGatewayFixed] = useState('');
+  const [gatewayIva, setGatewayIva] = useState(String(GATEWAY_IVA_DEFAULT_PERCENT));
+  const [gatewaySaving, setGatewaySaving] = useState(false);
+  const [showCreateAdmin, setShowCreateAdmin] = useState(false);
+  const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [newAdminPassword, setNewAdminPassword] = useState('');
+  const [newAdminName, setNewAdminName] = useState('');
+  const [newAdminPhone, setNewAdminPhone] = useState('');
+  const [createAdminSaving, setCreateAdminSaving] = useState(false);
 
   const adminSelectOptions = useMemo(
     () =>
@@ -181,11 +204,14 @@ const ConfigScreen: React.FC = () => {
     void (async () => {
       try {
         const c = await getPaymentConfig();
-        if (!cancelled && c) {
-          setPaymentProvider(c.payment_provider);
-        }
+        if (cancelled || !c) return;
+        setPaymentProvider(c.payment_provider);
+        const g = normalizeGatewayCommissionConfig(c);
+        setGatewayPct(String(g.gateway_commission_percent));
+        setGatewayFixed(String(g.gateway_commission_fixed_cop));
+        setGatewayIva(String(g.gateway_commission_iva_percent));
       } catch {
-        // keep default provider
+        // keep defaults
       }
     })();
     return () => {
@@ -346,6 +372,41 @@ const ConfigScreen: React.FC = () => {
     }
   };
 
+  const handleCreateAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = newAdminName.trim();
+    if (!name) {
+      alert('Ingresa el nombre del administrador.');
+      return;
+    }
+    setCreateAdminSaving(true);
+    try {
+      const { uid, email } = await createAdminUserAccount({
+        email: newAdminEmail,
+        password: newAdminPassword,
+        name,
+        phone: newAdminPhone.trim() || undefined,
+      });
+      void appendAuditLog({
+        kind: 'admin_user_create',
+        entityType: 'users',
+        entityId: uid,
+        summary: `Administrador creado: ${email}`,
+      }).catch(() => undefined);
+      setAdmins(await getAdminUsersList());
+      setNewAdminEmail('');
+      setNewAdminPassword('');
+      setNewAdminName('');
+      setNewAdminPhone('');
+      setShowCreateAdmin(false);
+      alert('Administrador creado. Puede iniciar sesión con el correo y la contraseña indicados.');
+    } catch (err) {
+      alert(firebaseErrorMessage(err));
+    } finally {
+      setCreateAdminSaving(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -386,6 +447,35 @@ const ConfigScreen: React.FC = () => {
       alert(err instanceof Error ? err.message : 'No se pudo guardar la pasarela.');
     } finally {
       setPaymentProviderSaving(false);
+    }
+  };
+
+  const handleSaveGatewayCommission = async () => {
+    const pct = Number(String(gatewayPct).replace(',', '.'));
+    const fix = Number(String(gatewayFixed).replace(/\s/g, ''));
+    const iva = Number(String(gatewayIva).replace(',', '.'));
+    if (Number.isNaN(pct) || pct < 0 || Number.isNaN(fix) || fix < 0 || Number.isNaN(iva) || iva < 0) {
+      alert('Revisa los números: porcentajes e IVA deben ser ≥ 0.');
+      return;
+    }
+    setGatewaySaving(true);
+    try {
+      await updateGatewayCommissionConfig({
+        gateway_commission_percent: pct,
+        gateway_commission_fixed_cop: Math.round(fix),
+        gateway_commission_iva_percent: iva,
+      });
+      void appendAuditLog({
+        kind: 'config_gateway_commission',
+        entityType: 'configurations',
+        entityId: 'payments_config',
+        summary: `Comisión pasarela: ${pct}% + ${Math.round(fix)} COP + IVA ${iva}%`,
+      }).catch(() => undefined);
+      alert('Comisión de pasarela guardada.');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'No se pudo guardar.');
+    } finally {
+      setGatewaySaving(false);
     }
   };
 
@@ -570,6 +660,47 @@ const ConfigScreen: React.FC = () => {
                 </PrimaryButton>
               </div>
             </div>
+
+            <div className="config-module config-module--surface" style={{ marginTop: '1.25rem' }}>
+              <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.05rem' }}>Comisión de pasarela (estimada en balances)</h3>
+              <p className="helper-text" style={{ marginBottom: '1rem' }}>
+                Se usa para mostrar a los organizadores el NETO por entradas y el desglose. La pasarela cobra por{' '}
+                <strong>transacción</strong> de pago en línea: base = (% sobre el subtotal de esa compra) + (COP fijos una
+                vez por transacción); luego IVA sobre esa base (por defecto 19%). Un palco de 6 personas en una sola
+                compra cuenta como una transacción (ej. 3,45% + $800 + IVA sobre el total de esa compra).
+              </p>
+              <div className="config-form" style={{ gap: '0.75rem' }}>
+                <CustomInput
+                  type="text"
+                  label="Porcentaje sobre subtotal de entradas (%)"
+                  value={gatewayPct}
+                  onChange={(e) => setGatewayPct(e.target.value)}
+                  placeholder="3.49"
+                />
+                <CustomInput
+                  type="text"
+                  label="Valor fijo por transacción (COP)"
+                  value={gatewayFixed}
+                  onChange={(e) => setGatewayFixed(e.target.value)}
+                  placeholder="800"
+                />
+                <CustomInput
+                  type="text"
+                  label="IVA sobre la base pasarela (%)"
+                  value={gatewayIva}
+                  onChange={(e) => setGatewayIva(e.target.value)}
+                  placeholder="19"
+                />
+                <PrimaryButton
+                  type="button"
+                  disabled={gatewaySaving}
+                  loading={gatewaySaving}
+                  onClick={() => void handleSaveGatewayCommission()}
+                >
+                  Guardar comisión pasarela
+                </PrimaryButton>
+              </div>
+            </div>
           </section>
         )}
 
@@ -629,6 +760,70 @@ const ConfigScreen: React.FC = () => {
               </p>
             </div>
             <div className="config-card config-card--super">
+            <div className="config-admin-create">
+              <PrimaryButton
+                type="button"
+                onClick={() => setShowCreateAdmin((v) => !v)}
+                aria-expanded={showCreateAdmin}
+              >
+                {showCreateAdmin ? 'Ocultar formulario' : 'Crear administrador'}
+              </PrimaryButton>
+            </div>
+            {showCreateAdmin && (
+              <form className="config-form config-admin-create-form" onSubmit={handleCreateAdmin}>
+                <CustomInput
+                  type="email"
+                  label="Correo"
+                  value={newAdminEmail}
+                  onChange={(e) => setNewAdminEmail(e.target.value)}
+                  placeholder="admin@ejemplo.com"
+                  autoComplete="off"
+                  required
+                />
+                <CustomInput
+                  type="password"
+                  label="Contraseña"
+                  value={newAdminPassword}
+                  onChange={(e) => setNewAdminPassword(e.target.value)}
+                  placeholder="Mínimo 6 caracteres"
+                  autoComplete="new-password"
+                  required
+                />
+                <CustomInput
+                  type="text"
+                  label="Nombre"
+                  value={newAdminName}
+                  onChange={(e) => setNewAdminName(e.target.value)}
+                  placeholder="Nombre visible"
+                  required
+                />
+                <CustomInput
+                  type="tel"
+                  label="Teléfono (opcional)"
+                  value={newAdminPhone}
+                  onChange={(e) => setNewAdminPhone(e.target.value)}
+                  placeholder=""
+                />
+                <div className="config-actions">
+                  <PrimaryButton type="submit" disabled={createAdminSaving} loading={createAdminSaving}>
+                    Crear cuenta de administrador
+                  </PrimaryButton>
+                  <SecondaryButton
+                    type="button"
+                    disabled={createAdminSaving}
+                    onClick={() => {
+                      setShowCreateAdmin(false);
+                      setNewAdminEmail('');
+                      setNewAdminPassword('');
+                      setNewAdminName('');
+                      setNewAdminPhone('');
+                    }}
+                  >
+                    Cancelar
+                  </SecondaryButton>
+                </div>
+              </form>
+            )}
             {adminsLoading ? (
               <p className="config-admin-muted">Cargando administradores…</p>
             ) : admins.length === 0 ? (

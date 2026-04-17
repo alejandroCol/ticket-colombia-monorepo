@@ -19,6 +19,12 @@ import {
   resolveEventCollection,
 } from '@services';
 import { validateTicket } from '@services/ticketService';
+import {
+  isTicketCourtesyRow,
+  ticketLineAmountCOP,
+  ticketListBuyerIdNumber,
+  ticketListBuyerName,
+} from '@utils/ticketListDisplay';
 import './index.scss';
 
 interface Ticket {
@@ -29,6 +35,7 @@ interface Ticket {
   buyerPhone?: string;
   buyerIdNumber?: string;
   price?: number;
+  amount?: number;
   status?: string;
   paymentMethod?: string;
   ticketStatus?: string;
@@ -37,8 +44,11 @@ interface Ticket {
   validatedAt?: Timestamp | null;
   validatedBy?: string | null;
   createdByAdmin?: string;
+  isCourtesy?: boolean;
   isGeneralCourtesy?: boolean;
   giftedBy?: string | null;
+  ticketKind?: string;
+  metadata?: { userName?: string; buyerIdNumber?: string };
 }
 
 const EventTicketsScreen: React.FC = () => {
@@ -194,8 +204,8 @@ const EventTicketsScreen: React.FC = () => {
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase().trim();
       filtered = filtered.filter(t => {
-        const id = (t.buyerIdNumber || '').toLowerCase();
-        const name = (t.buyerName || '').toLowerCase();
+        const id = ticketListBuyerIdNumber(t).toLowerCase();
+        const name = ticketListBuyerName(t).toLowerCase();
         const email = (t.buyerEmail || '').toLowerCase();
         return id.includes(term) || name.includes(term) || email.includes(term);
       });
@@ -203,13 +213,17 @@ const EventTicketsScreen: React.FC = () => {
     if (filterLocalidad) filtered = filtered.filter(t => (t.sectionName || 'General') === filterLocalidad);
     if (filterValidado === 'validated') filtered = filtered.filter(t => t.validatedAt);
     else if (filterValidado === 'pending') filtered = filtered.filter(t => !t.validatedAt);
-    if (filterCortesias === 'only') filtered = filtered.filter(t => (t.price || 0) === 0);
+    if (filterCortesias === 'only') filtered = filtered.filter(t => isTicketCourtesyRow(t));
     setFilteredTickets(filtered);
   }, [searchTerm, filterLocalidad, filterValidado, filterCortesias, tickets]);
 
   const handleEdit = (t: Ticket) => {
     setEditingTicket(t);
-    setEditFormData({ buyerName: t.buyerName || '', buyerEmail: t.buyerEmail || '', buyerPhone: t.buyerPhone || '' });
+    setEditFormData({
+      buyerName: ticketListBuyerName(t),
+      buyerEmail: t.buyerEmail || '',
+      buyerPhone: t.buyerPhone || '',
+    });
   };
 
   const handleCancelEdit = () => {
@@ -237,7 +251,7 @@ const EventTicketsScreen: React.FC = () => {
 
   const handleDisable = async (t: Ticket) => {
     const isDisabled = t.ticketStatus === 'cancelled' || t.ticketStatus === 'disabled';
-    if (!window.confirm(`¿${isDisabled ? 'Habilitar' : 'Deshabilitar'} el boleto de ${t.buyerName || 'este comprador'}?`)) return;
+    if (!window.confirm(`¿${isDisabled ? 'Habilitar' : 'Deshabilitar'} el boleto de ${ticketListBuyerName(t) || 'este comprador'}?`)) return;
     setLoading(true);
     try {
       await updateDoc(doc(db, 'tickets', t.id), {
@@ -261,7 +275,7 @@ const EventTicketsScreen: React.FC = () => {
 
   const handleValidate = async (t: Ticket) => {
     if (!canValidate(t)) return;
-    if (!window.confirm(`¿Validar entrada del boleto de ${t.buyerName || t.buyerEmail || 'este comprador'}?`)) return;
+    if (!window.confirm(`¿Validar entrada del boleto de ${ticketListBuyerName(t) || t.buyerEmail || 'este comprador'}?`)) return;
     setLoading(true);
     try {
       await validateTicket(t.id);
@@ -296,8 +310,8 @@ const EventTicketsScreen: React.FC = () => {
 
   const isActive = (t: Ticket) => t.ticketStatus !== 'cancelled' && t.ticketStatus !== 'disabled';
   const activeTickets = tickets.filter(isActive);
-  const cortesias = activeTickets.filter(t => (t.price || 0) === 0);
-  const vendidos = activeTickets.filter(t => (t.price || 0) > 0);
+  const cortesias = activeTickets.filter(t => isTicketCourtesyRow(t));
+  const vendidos = activeTickets.filter(t => !isTicketCourtesyRow(t));
   const validados = tickets.filter(t => t.validatedAt).length;
 
   return (
@@ -448,10 +462,24 @@ const EventTicketsScreen: React.FC = () => {
                               )}
                             </td>
                             <td>{ticket.sectionName || 'General'}</td>
-                            <td>{ticket.buyerIdNumber || '—'}</td>
-                            <td>{ticket.buyerName || '—'}</td>
-                            <td>{(ticket.price || 0) === 0 ? <span className="badge cortesia">Cortesía</span> : `$${(ticket.price || 0).toLocaleString('es-CO')}`}</td>
-                            <td>{(ticket.price || 0) === 0 ? (ticket.isGeneralCourtesy ? 'Evento general' : ticket.giftedBy ? `Por: ${ticket.giftedBy}` : '—') : '—'}</td>
+                            <td>{ticketListBuyerIdNumber(ticket) || '—'}</td>
+                            <td>{ticketListBuyerName(ticket) || '—'}</td>
+                            <td>
+                              {isTicketCourtesyRow(ticket) ? (
+                                <span className="badge cortesia">Cortesía</span>
+                              ) : (
+                                `$${ticketLineAmountCOP(ticket).toLocaleString('es-CO')}`
+                              )}
+                            </td>
+                            <td>
+                              {isTicketCourtesyRow(ticket)
+                                ? ticket.isGeneralCourtesy
+                                  ? 'Evento general'
+                                  : ticket.giftedBy
+                                    ? `Por: ${ticket.giftedBy}`
+                                    : '—'
+                                : '—'}
+                            </td>
                             <td>{ticket.buyerEmail || '—'}</td>
                             <td>{ticket.buyerPhone || '—'}</td>
                             <td>{getStatusBadge(ticket.ticketStatus || ticket.status)}</td>

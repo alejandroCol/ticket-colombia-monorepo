@@ -201,6 +201,8 @@ export interface Ticket {
     eventName: string;
     seatNumber: string;
     userName: string;
+    buyerIdNumber?: string;
+    buyerPhone?: string;
   };
   paymentId?: string | number;
   paymentMethod: string;

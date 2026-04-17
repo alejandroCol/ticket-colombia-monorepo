@@ -15,6 +15,8 @@ import TicketValidationScreen from '@pages/TicketValidation';
 import ConfigScreen from '@pages/Config';
 import BannersScreen from '@pages/Banners';
 import EventStatsScreen from '@pages/EventStats';
+import EventReportsScreen from '@pages/EventReports';
+import EventBalanceScreen from '@pages/EventBalance';
 import EventTicketsScreen from '@pages/EventTickets';
 import EventPromotersScreen from '@pages/EventPromoters';
 import EventWidgetEmbedScreen from '@pages/EventWidgetEmbed';
@@ -230,6 +232,18 @@ const MainLayout: React.FC = () => {
               <Navigate to="/login" />
             )
           } 
+        />
+
+        <Route
+          path="/events/:eventId/reports"
+          element={
+            user && panelOk ? <EventReportsScreen /> : <Navigate to="/login" />
+          }
+        />
+
+        <Route
+          path="/events/:eventId/balance"
+          element={user && panelOk ? <EventBalanceScreen /> : <Navigate to="/login" />}
         />
 
         {/* Event Tickets Route */}

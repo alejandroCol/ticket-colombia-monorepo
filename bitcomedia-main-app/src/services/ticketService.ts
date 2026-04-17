@@ -48,6 +48,8 @@ export interface TicketData {
     mapZoneId?: string;
     mapZoneLabel?: string;
     buyerIdNumber?: string;
+    /** E.164, ej. +573001234567 (checkout invitado). */
+    buyerPhone?: string;
   };
 }
 

@@ -231,6 +231,13 @@ export type AdminPaymentConfig = {
   taxes: number;
   /** Checkout en línea: backend usará esta pasarela */
   payment_provider: 'mercadopago' | 'onepay';
+  /**
+   * Comisión estimada de la pasarela (cobro en línea), configurada por super admin.
+   * Base = % sobre subtotal de la transacción + COP fijos una vez por transacción; IVA = % sobre esa base.
+   */
+  gateway_commission_percent?: number;
+  gateway_commission_fixed_cop?: number;
+  gateway_commission_iva_percent?: number;
 };
 
 // Get payment configuration from Firestore
@@ -246,6 +253,12 @@ export const getPaymentConfig = async (): Promise<AdminPaymentConfig | null> => 
         fees: data.fees || 0,
         taxes: data.taxes || 0,
         payment_provider: rawProvider === 'onepay' ? 'onepay' : 'mercadopago',
+        gateway_commission_percent:
+          data.gateway_commission_percent != null ? Number(data.gateway_commission_percent) : undefined,
+        gateway_commission_fixed_cop:
+          data.gateway_commission_fixed_cop != null ? Number(data.gateway_commission_fixed_cop) : undefined,
+        gateway_commission_iva_percent:
+          data.gateway_commission_iva_percent != null ? Number(data.gateway_commission_iva_percent) : undefined,
       };
     }
     
@@ -274,6 +287,27 @@ export const updatePaymentProviderConfig = async (payment_provider: 'mercadopago
     {
       ...base,
       payment_provider: payment_provider === 'onepay' ? 'onepay' : 'mercadopago',
+    },
+    { merge: true }
+  );
+};
+
+/** Comisión pasarela (global): % sobre subtotal de la transacción + COP fijos por transacción + IVA sobre esa base. */
+export const updateGatewayCommissionConfig = async (payload: {
+  gateway_commission_percent: number;
+  gateway_commission_fixed_cop: number;
+  gateway_commission_iva_percent: number;
+}): Promise<void> => {
+  const ref = doc(db, 'configurations', 'payments_config');
+  const snap = await getDoc(ref);
+  const base = snap.exists() ? snap.data() : {};
+  await setDoc(
+    ref,
+    {
+      ...base,
+      gateway_commission_percent: Math.max(0, Number(payload.gateway_commission_percent) || 0),
+      gateway_commission_fixed_cop: Math.max(0, Math.round(Number(payload.gateway_commission_fixed_cop) || 0)),
+      gateway_commission_iva_percent: Math.max(0, Number(payload.gateway_commission_iva_percent) || 0),
     },
     { merge: true }
   );

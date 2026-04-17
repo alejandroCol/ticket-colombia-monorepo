@@ -271,11 +271,31 @@ export class MercadoPagoPaymentService implements PaymentService {
         if (!request.buyerEmail?.trim() || !request.metadata?.userName?.trim()) {
           throw new Error("Email y nombre completos son requeridos para compra sin cuenta");
         }
+        const guestDocDigits = String(
+          request.metadata?.buyerIdNumber ?? ""
+        ).replace(/\D/g, "");
+        if (guestDocDigits.length < 6 || guestDocDigits.length > 12) {
+          throw new Error(
+            "Cédula o documento inválido para compra sin cuenta"
+          );
+        }
+        const guestPhone = String(request.metadata?.buyerPhone ?? "").trim();
+        if (!/^\+[1-9]\d{6,14}$/.test(guestPhone)) {
+          throw new Error("Teléfono inválido para compra sin cuenta");
+        }
+        if (guestPhone.startsWith("+57")) {
+          const n = guestPhone.replace(/\D/g, "");
+          if (n.length !== 12) {
+            throw new Error(
+              "Teléfono colombiano: debe tener 10 dígitos además del +57"
+            );
+          }
+        }
         userData = {
           name: request.metadata.userName.trim(),
           email: request.buyerEmail.trim(),
           displayName: request.metadata.userName.trim(),
-          document: "12345678",
+          document: guestDocDigits,
         };
         console.log("[createTicketPreference] Compra invitado:", request.buyerEmail);
       } else {
@@ -360,6 +380,9 @@ export class MercadoPagoPaymentService implements PaymentService {
               eventData.name,
             seatNumber: ticketSeatDisplayFromRequest(request),
             ...(buyerIdNumMeta ? {buyerIdNumber: buyerIdNumMeta} : {}),
+            ...(String(request.metadata?.buyerPhone ?? "").trim() ?
+              {buyerPhone: String(request.metadata?.buyerPhone).trim()} :
+              {}),
           },
         };
 
@@ -559,6 +582,9 @@ export class MercadoPagoPaymentService implements PaymentService {
             eventData.name,
           seatNumber: ticketSeatDisplayFromRequest(request),
           ...(buyerIdNumPaid ? {buyerIdNumber: buyerIdNumPaid} : {}),
+          ...(String(request.metadata?.buyerPhone ?? "").trim() ?
+            {buyerPhone: String(request.metadata?.buyerPhone).trim()} :
+            {}),
         },
         ...(organizerUid && sellerAccessToken ?
           {mpSplitOrganizerId: organizerUid} :

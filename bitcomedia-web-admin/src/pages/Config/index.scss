@@ -364,6 +364,16 @@
   font-style: italic;
 }
 
+.config-admin-create {
+  margin-bottom: 0.75rem;
+}
+
+.config-admin-create-form {
+  margin-bottom: 1.25rem;
+  padding-bottom: 1.15rem;
+  border-bottom: 1px solid rgba($color-text-secondary, 0.14);
+}
+
 .config-admin-cards {
   list-style: none;
   padding: 0;

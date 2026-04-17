@@ -3,7 +3,7 @@ import type { ChangeEvent, FocusEvent } from 'react';
 import './index.scss';
 
 interface CustomInputProps {
-  type?: 'text' | 'password' | 'email' | 'number' | 'tel' | 'search' | 'url';
+  type?: 'text' | 'password' | 'email' | 'number' | 'tel' | 'search' | 'url' | 'date';
   name?: string;
   label?: string;
   value?: string | number;

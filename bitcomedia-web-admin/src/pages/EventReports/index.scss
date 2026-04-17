@@ -1,0 +1,165 @@
+@import '../../main.scss';
+
+.event-reports-screen {
+  min-height: 100vh;
+  background: linear-gradient(180deg, $color-primary 0%, darken($color-primary, 3%) 100%);
+}
+
+.event-reports-content {
+  padding: 1.5rem;
+  max-width: 960px;
+  margin: 0 auto;
+  padding-bottom: 3rem;
+  padding-top: 1.25rem;
+
+  &--center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 50vh;
+    gap: 1rem;
+  }
+}
+
+.event-reports-screen > .top-nav-bar + .event-reports-content {
+  padding-top: calc(50px + 0.75rem + 1rem + env(safe-area-inset-top, 0px));
+
+  @include respond-md {
+    padding-top: calc(60px + 1rem + 1rem + env(safe-area-inset-top, 0px));
+  }
+}
+
+.event-reports-muted {
+  color: $color-text-secondary;
+  font-size: 0.95rem;
+}
+
+.event-reports-hero {
+  margin-bottom: 1.5rem;
+
+  &__title {
+    font-family: 'Outfit', $font-family-primary;
+    font-size: 1.65rem;
+    font-weight: 700;
+    color: $color-text-primary;
+    margin: 0 0 0.35rem;
+    letter-spacing: -0.02em;
+  }
+
+  &__subtitle {
+    font-size: 0.92rem;
+    color: $color-text-secondary;
+    margin: 0;
+    line-height: 1.45;
+    max-width: 40rem;
+  }
+}
+
+.event-reports-busy {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  margin-bottom: 1rem;
+  border-radius: 12px;
+  background: rgba($color-accent, 0.12);
+  border: 1px solid rgba($color-accent, 0.25);
+  color: $color-text-primary;
+  font-size: 0.9rem;
+}
+
+.event-reports-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1.1rem;
+  // Misma altura en cada fila (ej. «Ventas hoy» alineada con la card de al lado que tiene pickers)
+  align-items: stretch;
+}
+
+.event-reports-card {
+  position: relative;
+  z-index: 1;
+  overflow: visible;
+  isolation: isolate;
+  background: $color-surface;
+  border-radius: 14px;
+  border: 1px solid rgba($color-accent, 0.15);
+  padding: 1.15rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.1);
+
+  &:focus-within {
+    z-index: 30;
+  }
+
+  &--wide {
+    grid-column: 1 / -1;
+  }
+
+  &__title {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: $font-weight-bold;
+    color: $color-text-primary;
+  }
+
+  &__desc {
+    margin: 0;
+    font-size: 0.85rem;
+    color: $color-text-secondary;
+    line-height: 1.4;
+  }
+
+  // Desde / Hasta y localidad + fechas: una columna para que no se salgan de la card
+  &__fields {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+    margin-bottom: 0.15rem;
+    max-width: 100%;
+
+    .custom-input-container,
+    .custom-selector-container {
+      margin-bottom: 0;
+      max-width: 100%;
+    }
+
+    .custom-input-label,
+    .custom-selector-label {
+      font-size: 0.9rem;
+      margin-bottom: 0.45rem;
+      line-height: 1.25;
+    }
+
+    .custom-input,
+    .custom-selector {
+      padding: 0.65rem 0.85rem;
+      font-size: 0.95rem;
+      border-radius: 8px;
+    }
+
+    input[type='date'].custom-input {
+      min-width: 0;
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      line-height: 1.35;
+    }
+
+    input[type='date'].custom-input::-webkit-calendar-picker-indicator {
+      cursor: pointer;
+      opacity: 0.88;
+      padding: 0.2rem;
+    }
+  }
+
+  .primary-button {
+    align-self: flex-start;
+    margin-top: auto;
+  }
+}

@@ -7,10 +7,14 @@ import {
   db,
   logoutUser,
   getCurrentUser,
-  isSuperAdmin
+  isSuperAdmin,
+  getPaymentConfig,
+  getOrganizerBuyerFee,
 } from '@services';
 import { getTicketsSince, isTicketValidForSalesStats } from '@services/ticketService';
 import { computePlatformCommissionCOP } from '@utils/platformCommission';
+import { aggregateEventRevenueBreakdown, normalizeGatewayCommissionConfig } from '@utils/revenueBreakdown';
+import type { OrganizerBuyerFeeInput } from '@utils/revenueBreakdown';
 import type { Event } from '@services/types';
 import type { Ticket } from '@services/types';
 import './index.scss';
@@ -23,6 +27,11 @@ const SuperAdminEarningsScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [eventsById, setEventsById] = useState<Record<string, Event>>({});
+  const [payoutCtx, setPayoutCtx] = useState<{
+    globalFees: number;
+    gateway: ReturnType<typeof normalizeGatewayCommissionConfig>;
+    orgFees: Record<string, OrganizerBuyerFeeInput>;
+  } | null>(null);
 
   useEffect(() => {
     const run = async () => {
@@ -61,9 +70,28 @@ const SuperAdminEarningsScreen: React.FC = () => {
         });
         setEventsById(map);
         setTickets(tix);
+
+        const pay = await getPaymentConfig();
+        const gateway = normalizeGatewayCommissionConfig(pay || undefined);
+        const globalFees = pay?.fees ?? 9;
+        const orgIds = new Set<string>();
+        for (const tk of tix) {
+          if (!isTicketValidForSalesStats(tk)) continue;
+          const oid = String(map[tk.eventId]?.organizer_id || '').trim();
+          if (oid) orgIds.add(oid);
+        }
+        const orgFees: Record<string, OrganizerBuyerFeeInput> = {};
+        await Promise.all(
+          [...orgIds].map(async (uid) => {
+            const doc = await getOrganizerBuyerFee(uid);
+            orgFees[uid] = doc ? { type: doc.fee_type, value: doc.fee_value } : null;
+          })
+        );
+        setPayoutCtx({ globalFees, gateway, orgFees });
       } catch (e) {
         console.error(e);
         setTickets([]);
+        setPayoutCtx(null);
       } finally {
         setLoading(false);
       }
@@ -86,6 +114,7 @@ const SuperAdminEarningsScreen: React.FC = () => {
       qty: number;
       commission: number;
       rule: string;
+      pasarela: number;
     }[] = [];
     byEvent.forEach((list, eventId) => {
       const ev = eventsById[eventId];
@@ -101,13 +130,26 @@ const SuperAdminEarningsScreen: React.FC = () => {
       if (t === 'percent_payer' && v != null) rule = `${v}% sobre ventas`;
       else if (t === 'fixed_per_ticket' && v != null)
         rule = `${new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(Number(v))} / boleto`;
-      out.push({ eventId, name, revenue, qty, commission, rule });
+      let pasarela = 0;
+      if (ev && payoutCtx) {
+        const oid = String(ev.organizer_id || '').trim();
+        const orgFee = payoutCtx.orgFees[oid] ?? null;
+        pasarela = aggregateEventRevenueBreakdown(
+          ev,
+          list,
+          payoutCtx.globalFees,
+          orgFee,
+          payoutCtx.gateway
+        ).pasarelaTotal;
+      }
+      out.push({ eventId, name, revenue, qty, commission, rule, pasarela });
     });
     out.sort((a, b) => b.commission - a.commission);
     return out;
-  }, [tickets, eventsById]);
+  }, [tickets, eventsById, payoutCtx]);
 
   const totalCommission = rows.reduce((s, r) => s + r.commission, 0);
+  const totalPasarela = rows.reduce((s, r) => s + r.pasarela, 0);
 
   const formatCOP = (n: number) =>
     new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n);
@@ -130,14 +172,18 @@ const SuperAdminEarningsScreen: React.FC = () => {
       <TopNavBar logoOnly showLogout onLogout={() => logoutUser()} />
       <div className="super-earnings-content">
         <div className="super-earnings-hero">
-          <h1>Comisiones tiquetera por evento</h1>
-          <p>Ingresos estimados según la regla configurada en cada evento (super administrador).</p>
+          <h1>Comisiones tiquetera y pasarela por evento</h1>
+          <p>
+            Tarifa al comprador (tiquetera) según regla del evento; ganancia estimada de pasarela según{' '}
+            <code>configurations/payments_config</code> (% + fijo + IVA). Configura la pasarela en Configuración →
+            Control de plataforma.
+          </p>
           <SecondaryButton onClick={() => navigate('/config')}>← Volver a configuración</SecondaryButton>
         </div>
         <p className="super-earnings-hint">
-          Solo se consideran boletos con estado de venta válido. El porcentaje se aplica sobre el monto cobrado
-          (total de <code>amount</code> de boletos). La tarifa fija se multiplica por la cantidad de entradas vendidas.
-          Datos desde 2020; ajusta reglas en el formulario de cada evento.
+          Solo boletos con estado de venta válido. La columna tiquetera usa la vista rápida histórica (porcentaje sobre
+          ventas totales o fijo × boletos). La pasarela usa el mismo modelo que el balance del organizador (subtotal de
+          entradas por compra en línea; % + COP fijo por transacción + IVA). Datos desde 2020.
         </p>
         {loading ? (
           <p>Cargando…</p>
@@ -150,10 +196,11 @@ const SuperAdminEarningsScreen: React.FC = () => {
                 <thead>
                   <tr>
                     <th>Evento</th>
-                    <th>Regla</th>
+                    <th>Regla tiquetera</th>
                     <th className="super-earnings-num">Boletos</th>
                     <th className="super-earnings-num">Ventas</th>
-                    <th className="super-earnings-num">Tu comisión</th>
+                    <th className="super-earnings-num">Comisión tiquetera</th>
+                    <th className="super-earnings-num">Ganancia pasarela</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -164,13 +211,16 @@ const SuperAdminEarningsScreen: React.FC = () => {
                       <td className="super-earnings-num">{r.qty}</td>
                       <td className="super-earnings-num">{formatCOP(r.revenue)}</td>
                       <td className="super-earnings-num">{formatCOP(r.commission)}</td>
+                      <td className="super-earnings-num">{formatCOP(r.pasarela)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
             <div className="super-earnings-total">
-              Total comisiones estimadas: {formatCOP(totalCommission)}
+              Total comisión tiquetera (vista rápida): {formatCOP(totalCommission)}
+              <br />
+              Total ganancia pasarela (estimada): {formatCOP(totalPasarela)}
             </div>
           </>
         )}

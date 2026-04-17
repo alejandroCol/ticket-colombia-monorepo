@@ -40,6 +40,14 @@ import {
 } from "../../components/CheckoutUserIcons";
 import "./index.scss";
 import { isTcGlassUi } from "../../utils/tcEmbedUi";
+import {
+  buildGuestPhoneE164,
+  DEFAULT_GUEST_PHONE_PREFIX,
+  GUEST_PHONE_PREFIX_OPTIONS,
+  guestPhoneDigitsLocal,
+  isValidGuestDocument,
+  isValidGuestPhone,
+} from "../../utils/checkoutGuestFields";
 
 const CheckoutScreen: React.FC = () => {
   const { whatsappPhone } = useContactConfig();
@@ -59,6 +67,8 @@ const CheckoutScreen: React.FC = () => {
   const [guestEmail, setGuestEmail] = useState("");
   const [guestName, setGuestName] = useState("");
   const [guestDocument, setGuestDocument] = useState("");
+  const [guestPhoneDial, setGuestPhoneDial] = useState(DEFAULT_GUEST_PHONE_PREFIX);
+  const [guestPhoneLocal, setGuestPhoneLocal] = useState("");
   const [reservationId, setReservationId] = useState<string | null>(null);
   const [reservationExpiresAt, setReservationExpiresAt] = useState<number | null>(null);
   const [reservationLoading, setReservationLoading] = useState(false);
@@ -460,9 +470,23 @@ const CheckoutScreen: React.FC = () => {
       return;
     }
     const useGuest = !isAuthenticated;
-    if (useGuest && (!guestEmail.trim() || !guestName.trim())) {
-      setError("Ingresa tu correo y nombre completo para continuar.");
-      return;
+    if (useGuest) {
+      if (!guestEmail.trim() || !guestName.trim()) {
+        setError("Ingresa tu correo y nombre completo para continuar.");
+        return;
+      }
+      if (!isValidGuestDocument(guestDocument)) {
+        setError("Ingresa tu cédula o documento (6 a 12 dígitos).");
+        return;
+      }
+      if (!isValidGuestPhone(guestPhoneDial, guestPhoneLocal)) {
+        setError(
+          guestPhoneDial === "+57"
+            ? "Ingresa un celular colombiano válido (10 dígitos, sin el indicativo)."
+            : "Ingresa un número de celular válido (solo números)."
+        );
+        return;
+      }
     }
     if (!useGuest && !userData) return;
 
@@ -486,8 +510,11 @@ const CheckoutScreen: React.FC = () => {
       const email = useGuest ? guestEmail.trim() : userData!.email;
       const displayName = useGuest ? guestName.trim() : (userData!.name || userData!.email);
       const buyerIdNumber = useGuest ?
-        guestDocument.trim() :
+        guestPhoneDigitsLocal(guestDocument) :
         String(userData!.document ?? "").trim();
+      const buyerPhoneE164 = useGuest ?
+        buildGuestPhoneE164(guestPhoneDial, guestPhoneLocal) :
+        "";
 
       const ticketData: TicketData = {
         userId: useGuest ? "guest" : userData!.uid,
@@ -510,6 +537,7 @@ const CheckoutScreen: React.FC = () => {
           ...(mapZoneId?.trim() ? { mapZoneId: mapZoneId.trim() } : {}),
           ...(mapZoneLabel?.trim() ? { mapZoneLabel: mapZoneLabel.trim() } : {}),
           ...(buyerIdNumber ? { buyerIdNumber } : {}),
+          ...(buyerPhoneE164 ? { buyerPhone: buyerPhoneE164 } : {}),
         },
       };
 
@@ -652,7 +680,10 @@ const CheckoutScreen: React.FC = () => {
     if (reservationExpiresAt && Date.now() > reservationExpiresAt) return true;
     if (canAbono && payPlan === "deposit" && !isAuthenticated) return true;
     if (isAuthenticated) return false;
-    return !guestEmail.trim() || !guestName.trim();
+    if (!guestEmail.trim() || !guestName.trim()) return true;
+    if (!isValidGuestDocument(guestDocument)) return true;
+    if (!isValidGuestPhone(guestPhoneDial, guestPhoneLocal)) return true;
+    return false;
   };
 
   const reservationCountdown = useMemo(() => {
@@ -1033,6 +1064,8 @@ const CheckoutScreen: React.FC = () => {
                 value={guestEmail}
                 onChange={(e) => setGuestEmail(e.target.value)}
                 placeholder="tu@correo.com"
+                required
+                autoComplete="email"
               />
               <CustomInput
                 type="text"
@@ -1040,14 +1073,52 @@ const CheckoutScreen: React.FC = () => {
                 value={guestName}
                 onChange={(e) => setGuestName(e.target.value)}
                 placeholder="Como aparece en tu documento"
+                required
+                autoComplete="name"
               />
               <CustomInput
                 type="text"
-                label="Cédula o documento (opcional)"
+                label="Cédula o documento"
                 value={guestDocument}
                 onChange={(e) => setGuestDocument(e.target.value)}
-                placeholder="Ej. 1234567890"
+                placeholder="Solo números, sin puntos"
+                required
+                autoComplete="off"
               />
+              <div className="guest-checkout__phone">
+                <span className="guest-checkout__phone-label">
+                  Celular<span className="required-mark">*</span>
+                </span>
+                <div className="guest-checkout__phone-row">
+                  <select
+                    className="guest-checkout__dial-select"
+                    aria-label="Indicativo de país"
+                    value={guestPhoneDial}
+                    onChange={(e) => setGuestPhoneDial(e.target.value)}
+                  >
+                    {GUEST_PHONE_PREFIX_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {`${opt.flag}  ${opt.value}`}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="tel"
+                    className="guest-checkout__phone-input"
+                    inputMode="numeric"
+                    autoComplete="tel-national"
+                    placeholder={guestPhoneDial === "+57" ? "300 123 4567" : "Número local"}
+                    value={guestPhoneLocal}
+                    onChange={(e) => setGuestPhoneLocal(e.target.value)}
+                    aria-label="Número de celular"
+                  />
+                </div>
+                <p className="guest-checkout__phone-hint">
+                  {guestPhoneDial === "+57"
+                    ? "Ingresa 10 dígitos (celular colombiano)."
+                    : "Ingresa el número local sin el indicativo del país."}
+                </p>
+              </div>
               <div className="guest-checkout__auth-links">
                 <SecondaryButton size="small" onClick={() => navigate("/iniciar-sesion")}>
                   Ya tengo cuenta

@@ -1,0 +1,100 @@
+@import '../../main.scss';
+
+.section-radar-chart {
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+
+  &--empty {
+    padding: 2rem 1rem;
+    text-align: center;
+    color: $color-text-secondary;
+    font-size: 0.9rem;
+  }
+
+  &--single {
+    .section-radar-chart__ring-track {
+      stroke: rgba($color-accent, 0.12);
+      stroke-width: 12;
+    }
+
+    .section-radar-chart__ring-progress {
+      stroke-width: 12;
+      stroke-linecap: round;
+      filter: drop-shadow(0 0 10px rgba(0, 212, 255, 0.4));
+    }
+
+    .section-radar-chart__single-pct {
+      font-size: 42px;
+      font-weight: $font-weight-bold;
+      fill: $color-text-primary;
+    }
+
+    .section-radar-chart__single-name {
+      font-size: 14px;
+      font-weight: $font-weight-semi-bold;
+      fill: $color-accent;
+    }
+
+    .section-radar-chart__single-sub {
+      font-size: 11px;
+      fill: $color-text-secondary;
+    }
+  }
+
+  &__svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+
+  &__grid {
+    fill: rgba($color-accent, 0.04);
+    stroke: rgba($color-accent, 0.14);
+    stroke-width: 1;
+  }
+
+  &__spoke {
+    stroke: rgba($color-accent, 0.12);
+    stroke-width: 1;
+  }
+
+  &__fill {
+    stroke: none;
+    filter: drop-shadow(0 0 14px rgba(0, 212, 255, 0.35));
+  }
+
+  &__stroke {
+    stroke: rgba($color-accent, 0.65);
+    stroke-width: 2;
+    stroke-linejoin: round;
+  }
+
+  &__vertex {
+    fill: $color-text-primary;
+    stroke: rgba($color-accent, 0.95);
+    stroke-width: 2;
+  }
+
+  &__label {
+    font-size: 10px;
+    font-weight: $font-weight-semi-bold;
+    fill: $color-text-primary;
+    pointer-events: none;
+  }
+
+  &__label-pct {
+    font-size: 9px;
+    font-weight: $font-weight-regular;
+    fill: $color-text-secondary;
+  }
+
+  &__caption {
+    margin: 0.75rem 0 0;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: $color-text-secondary;
+    text-align: center;
+  }
+}

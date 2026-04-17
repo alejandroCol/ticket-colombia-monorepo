@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import './index.scss';
 
-export type EventSubNavTab = 'edit' | 'tickets' | 'stats' | 'promoters' | 'widget';
+export type EventSubNavTab = 'edit' | 'tickets' | 'stats' | 'balance' | 'reports' | 'promoters' | 'widget';
 
 export type EventSubNavProps = {
   eventId: string;
@@ -31,6 +31,8 @@ const EventSubNav: React.FC<EventSubNavProps> = ({
     { id: 'edit', label: 'Editar', path: base },
     { id: 'tickets', label: 'Boletos', path: `/events/${eventId}/tickets` },
     { id: 'stats', label: 'Estadísticas', path: `/events/${eventId}/stats` },
+    { id: 'balance', label: 'Balance', path: `/events/${eventId}/balance`, organizerOnly: true },
+    { id: 'reports', label: 'Reportes', path: `/events/${eventId}/reports` },
     { id: 'promoters', label: 'Promotores', path: `${base}/promoters`, organizerOnly: true },
     { id: 'widget', label: 'Venta en web', path: `${base}/widget`, organizerOnly: true },
   ];

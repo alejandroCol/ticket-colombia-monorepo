@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import TopNavBar from '@containers/TopNavBar';
 import PrimaryButton from '@components/PrimaryButton';
@@ -16,7 +16,11 @@ import {
   deleteExpense,
   getAnyPartnerGrantForTicketEvent,
   resolveEventCollection,
+  getPaymentConfig,
+  getOrganizerBuyerFee,
 } from '@services';
+import { aggregateEventRevenueBreakdown, normalizeGatewayCommissionConfig } from '@utils/revenueBreakdown';
+import type { OrganizerBuyerFeeInput } from '@utils/revenueBreakdown';
 import { getTicketsByEventId } from '@services/ticketService';
 import {
   IconTickets,
@@ -31,6 +35,9 @@ import type { Event, EventSection } from '@services/types';
 import type { Ticket } from '@services/types';
 import type { Expense } from '@services/firestore';
 import { exportTicketsToExcel } from '@utils/exportTicketsExcel';
+import { buildDailySalesSeries, defaultLastNDaysRange } from '@utils/salesTimeSeries';
+import SalesCurveChart from '@components/SalesCurveChart';
+import SectionRadarChart from '@components/SectionRadarChart';
 import './index.scss';
 
 interface SectionStats {
@@ -65,6 +72,13 @@ const EventStatsScreen: React.FC = () => {
   const [canEditExpenses, setCanEditExpenses] = useState(false);
   const [eventCollection, setEventCollection] = useState<'events' | 'recurring_events' | null>(null);
   const [showOrganizerExtras, setShowOrganizerExtras] = useState(false);
+  const [moneyCtx, setMoneyCtx] = useState<{
+    globalFeesPercent: number;
+    gateway: ReturnType<typeof normalizeGatewayCommissionConfig>;
+    organizerFee: OrganizerBuyerFeeInput;
+  } | null>(null);
+  const [chartFrom, setChartFrom] = useState(() => defaultLastNDaysRange(15).from);
+  const [chartTo, setChartTo] = useState(() => defaultLastNDaysRange(15).to);
 
   useEffect(() => {
     const u = getCurrentUser();
@@ -76,6 +90,7 @@ const EventStatsScreen: React.FC = () => {
     if (!eventId) return;
     try {
       setLoading(true);
+      setMoneyCtx(null);
       const [eventData, ticketsData, expensesData, coll] = await Promise.all([
         getEventOrRecurringById(eventId),
         getTicketsByEventId(eventId),
@@ -86,6 +101,22 @@ const EventStatsScreen: React.FC = () => {
       setTickets(ticketsData || []);
       setExpenses(expensesData || []);
       setEventCollection(coll);
+      if (eventData?.organizer_id) {
+        const [pay, orgDoc] = await Promise.all([
+          getPaymentConfig(),
+          getOrganizerBuyerFee(eventData.organizer_id),
+        ]);
+        const orgFee: OrganizerBuyerFeeInput = orgDoc
+          ? { type: orgDoc.fee_type, value: orgDoc.fee_value }
+          : null;
+        setMoneyCtx({
+          globalFeesPercent: pay?.fees ?? 9,
+          gateway: normalizeGatewayCommissionConfig(pay || undefined),
+          organizerFee: orgFee,
+        });
+      } else {
+        setMoneyCtx(null);
+      }
     } catch (e) {
       setError('No se pudieron cargar los datos.');
     } finally {
@@ -141,7 +172,30 @@ const EventStatsScreen: React.FC = () => {
   const totalQuantity = validTickets.reduce((sum, t) => sum + (t.quantity || 1), 0);
   const uniqueBuyers = new Set(validTickets.map((t) => t.buyerEmail || t.metadata?.userName)).size;
   const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
-  const profit = totalRevenue - totalExpenses;
+
+  const moneyAggr = useMemo(() => {
+    if (!event || !moneyCtx) return null;
+    return aggregateEventRevenueBreakdown(
+      event,
+      validTickets,
+      moneyCtx.globalFeesPercent,
+      moneyCtx.organizerFee,
+      moneyCtx.gateway
+    );
+  }, [event, validTickets, moneyCtx]);
+
+  const profitNetoVsEgresos = moneyAggr ? moneyAggr.netoOrganizador - totalExpenses : null;
+
+  const chartRangeInvalid = chartFrom > chartTo;
+  const salesSeries = useMemo(() => {
+    if (chartFrom > chartTo) return [];
+    return buildDailySalesSeries(validTickets, chartFrom, chartTo);
+  }, [validTickets, chartFrom, chartTo]);
+
+  const salesInChartRange = useMemo(
+    () => salesSeries.reduce((s, p) => ({ rev: s.rev + p.revenue, units: s.units + p.ticketUnits }), { rev: 0, units: 0 }),
+    [salesSeries]
+  );
 
   const sections: EventSection[] = event?.sections || [];
   const hasSections = sections.length > 0;
@@ -183,6 +237,13 @@ const EventStatsScreen: React.FC = () => {
           revenue: totalRevenue
         }
       ];
+
+  const radarSectionData = sectionStats.map((s) => ({
+    name: s.sectionName,
+    percentSold: s.percentSold,
+    sold: s.sold,
+    capacity: s.capacity,
+  }));
 
   const emailDomainCount: Record<string, number> = {};
   validTickets.forEach((t) => {
@@ -311,8 +372,10 @@ const EventStatsScreen: React.FC = () => {
               <IconRevenue />
             </div>
             <div className="stat-kpi-content">
-              <span className="stat-kpi-value">{formatCOP(totalRevenue)}</span>
-              <span className="stat-kpi-label">Ingresos</span>
+              <span className="stat-kpi-value">
+                {formatCOP(moneyAggr?.netoOrganizador ?? totalRevenue)}
+              </span>
+              <span className="stat-kpi-label">Total neto</span>
             </div>
           </div>
           <div className="stat-kpi-card stat-kpi--users">
@@ -326,11 +389,113 @@ const EventStatsScreen: React.FC = () => {
           </div>
         </div>
 
+        <div className="event-stats-chart-section">
+          <div className="event-stats-chart-head">
+            <div className="section-header-title event-stats-chart-head__title">
+              <IconChart className="section-header-icon" />
+              <h3>Curva de ventas</h3>
+            </div>
+            <p className="event-stats-chart-intro">
+              Monto cobrado por día según la fecha de creación del boleto (ventas válidas). Por defecto: últimos 15 días.
+            </p>
+            <div className="event-stats-chart-filters">
+              <CustomInput
+                type="date"
+                label="Desde"
+                value={chartFrom}
+                onChange={(e) => setChartFrom(e.target.value)}
+              />
+              <CustomInput
+                type="date"
+                label="Hasta"
+                value={chartTo}
+                onChange={(e) => setChartTo(e.target.value)}
+              />
+              <SecondaryButton
+                type="button"
+                size="small"
+                onClick={() => {
+                  const r = defaultLastNDaysRange(15);
+                  setChartFrom(r.from);
+                  setChartTo(r.to);
+                }}
+              >
+                Últimos 15 días
+              </SecondaryButton>
+            </div>
+            {chartRangeInvalid ? (
+              <p className="event-stats-chart-warning">La fecha inicial no puede ser posterior a la final.</p>
+            ) : (
+              <p className="event-stats-chart-summary">
+                En el periodo: <strong>{formatCOP(salesInChartRange.rev)}</strong> ·{' '}
+                <strong>{salesInChartRange.units}</strong> entradas
+              </p>
+            )}
+          </div>
+          {!chartRangeInvalid && (
+            <SalesCurveChart points={salesSeries} formatCOP={formatCOP} />
+          )}
+        </div>
+
+        <div className="event-stats-radar-section">
+          <div className="event-stats-chart-head">
+            <div className="section-header-title event-stats-chart-head__title">
+              <IconSection className="section-header-icon" />
+              <h3>Ocupación por localidad (radar)</h3>
+            </div>
+            <p className="event-stats-chart-intro">
+              Vista poligonal: cada eje es una tribuna o sección; mientras más lejos del centro, mayor % de aforo
+              vendido. Hasta 12 secciones (prioridad por unidades vendidas).
+            </p>
+          </div>
+          <SectionRadarChart sections={radarSectionData} />
+        </div>
+
+        {moneyAggr && (
+          <div className="event-stats-money-deck">
+            <h3 className="event-stats-money-deck__title">Dinero y comisiones (estimado)</h3>
+            <ul className="event-stats-money-deck__list">
+              <li>
+                <span>Subtotal entradas (sin tarifa servicio)</span>
+                <strong>{formatCOP(moneyAggr.subtotalEntradas)}</strong>
+              </li>
+              <li>
+                <span>Tarifa servicio tiquetera (cobrada al comprador)</span>
+                <strong>{formatCOP(moneyAggr.tiqueteraFee)}</strong>
+              </li>
+              <li className="event-stats-money-deck__accent">
+                <span>Comisión pasarela (total con IVA)</span>
+                <strong>−{formatCOP(moneyAggr.pasarelaTotal)}</strong>
+              </li>
+              <li className="event-stats-money-deck__sub">
+                <span>Parte porcentaje</span>
+                <span>{formatCOP(moneyAggr.pasarelaPercentPart)}</span>
+              </li>
+              <li className="event-stats-money-deck__sub">
+                <span>Parte fija (por transacción)</span>
+                <span>{formatCOP(moneyAggr.pasarelaFixedPart)}</span>
+              </li>
+              <li className="event-stats-money-deck__sub">
+                <span>IVA sobre base pasarela</span>
+                <span>{formatCOP(moneyAggr.pasarelaIva)}</span>
+              </li>
+              <li className="event-stats-money-deck__neto">
+                <span>NETO por entradas (después de pasarela)</span>
+                <strong>{formatCOP(moneyAggr.netoOrganizador)}</strong>
+              </li>
+            </ul>
+            <p className="event-stats-money-deck__hint">
+              Ventas manuales / transferencia no incluyen comisión de pasarela en este cálculo. La tarifa tiquetera se
+              muestra aparte; el NETO es subtotal de entradas menos pasarela.
+            </p>
+          </div>
+        )}
+
         <div className="event-stats-balance">
           <div className="balance-header">
             <div className="balance-title">
               <IconProfit className="balance-title-icon" />
-              <h3>Balance y utilidad</h3>
+              <h3>Balance</h3>
             </div>
             {canEditExpenses && (!showAddExpense ? (
               <PrimaryButton onClick={() => setShowAddExpense(true)} size="small">
@@ -402,11 +567,17 @@ const EventStatsScreen: React.FC = () => {
                 ))}
               </div>
             )}
-            <div className={`balance-row balance-row--profit ${profit >= 0 ? 'positive' : 'negative'}`}>
-              <IconProfit className="balance-row-icon" />
-              <span className="balance-row-label">Utilidad real</span>
-              <span className="balance-row-value">{formatCOP(profit)}</span>
-            </div>
+            {profitNetoVsEgresos != null && (
+              <div
+                className={`balance-row balance-row--profit ${
+                  profitNetoVsEgresos >= 0 ? 'positive' : 'negative'
+                }`}
+              >
+                <IconProfit className="balance-row-icon" />
+                <span className="balance-row-label">Utilidad sobre NETO entradas − egresos</span>
+                <span className="balance-row-value">{formatCOP(profitNetoVsEgresos)}</span>
+              </div>
+            )}
           </div>
         </div>
 

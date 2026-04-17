@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import type { Timestamp } from 'firebase/firestore';
 import TopNavBar from '@containers/TopNavBar';
 import SecondaryButton from '@components/SecondaryButton';
 import CustomInput from '@components/CustomInput';
@@ -9,11 +8,16 @@ import {
   db,
   getCurrentUser,
   isSuperAdmin,
-  getExpensesByEventId,
+  getPaymentConfig,
   logoutUser,
 } from '@services';
-import { getTicketsByEventId } from '@services/ticketService';
-import type { Ticket } from '@services/types';
+import {
+  loadBalanceRows,
+  buildBalanceLoadContext,
+  eventDateSortMs,
+  type ListedEvent,
+  type EventBalanceRow,
+} from '@utils/eventBalanceLoad';
 import {
   IconTickets,
   IconRevenue,
@@ -21,38 +25,6 @@ import {
   IconCalendarEvent,
 } from '@components/EventStatsIcons';
 import './index.scss';
-
-interface ListedEvent {
-  id: string;
-  name: string;
-  city: string;
-  date: string;
-  sortMs: number;
-  isRecurring: boolean;
-}
-
-interface EventBalanceRow extends ListedEvent {
-  ticketsSold: number;
-  ingresos: number;
-  egresos: number;
-}
-
-function validTicketsForBalance(tickets: Ticket[]): Ticket[] {
-  return tickets.filter((t) => {
-    const status = t.ticketStatus as string;
-    const invalid =
-      ['cancelled', 'disabled'].includes(status) || (t as { transferredTo?: string }).transferredTo;
-    const valid = ['paid', 'reserved', 'used', 'redeemed'].includes(status);
-    if ((t as { ticketKind?: string }).ticketKind === 'purchase_pass') return false;
-    return valid && !invalid;
-  });
-}
-
-function eventDateSortMs(data: Record<string, unknown>): number {
-  const ed = data.event_date as Timestamp | undefined;
-  if (ed && typeof ed.toMillis === 'function') return ed.toMillis();
-  return 0;
-}
 
 async function fetchListedEvents(uid: string, superAdmin: boolean): Promise<ListedEvent[]> {
   const out: ListedEvent[] = [];
@@ -68,8 +40,9 @@ async function fetchListedEvents(uid: string, superAdmin: boolean): Promise<List
         name: (data.name as string) || 'Sin nombre',
         city: (data.city as string) || '',
         date: (data.date as string) || '',
-        sortMs: eventDateSortMs(data),
+        sortMs: eventDateSortMs(data as Record<string, unknown>),
         isRecurring: false,
+        organizer_id: String((data as { organizer_id?: string }).organizer_id || ''),
       });
     });
     rs.forEach((d) => {
@@ -79,8 +52,9 @@ async function fetchListedEvents(uid: string, superAdmin: boolean): Promise<List
         name: (data.name as string) || 'Sin nombre',
         city: (data.city as string) || '',
         date: (data.date as string) || '',
-        sortMs: eventDateSortMs(data),
+        sortMs: eventDateSortMs(data as Record<string, unknown>),
         isRecurring: true,
+        organizer_id: String((data as { organizer_id?: string }).organizer_id || ''),
       });
     });
   } else {
@@ -94,8 +68,9 @@ async function fetchListedEvents(uid: string, superAdmin: boolean): Promise<List
         name: (data.name as string) || 'Sin nombre',
         city: (data.city as string) || '',
         date: (data.date as string) || '',
-        sortMs: eventDateSortMs(data),
+        sortMs: eventDateSortMs(data as Record<string, unknown>),
         isRecurring: false,
+        organizer_id: String((data as { organizer_id?: string }).organizer_id || ''),
       });
     });
     rs.forEach((d) => {
@@ -105,8 +80,9 @@ async function fetchListedEvents(uid: string, superAdmin: boolean): Promise<List
         name: (data.name as string) || 'Sin nombre',
         city: (data.city as string) || '',
         date: (data.date as string) || '',
-        sortMs: eventDateSortMs(data),
+        sortMs: eventDateSortMs(data as Record<string, unknown>),
         isRecurring: true,
+        organizer_id: String((data as { organizer_id?: string }).organizer_id || ''),
       });
     });
   }
@@ -116,33 +92,6 @@ async function fetchListedEvents(uid: string, superAdmin: boolean): Promise<List
     return a.name.localeCompare(b.name, 'es');
   });
   return out;
-}
-
-async function loadBalanceRows(listed: ListedEvent[]): Promise<EventBalanceRow[]> {
-  const chunkSize = 6;
-  const rows: EventBalanceRow[] = [];
-  for (let i = 0; i < listed.length; i += chunkSize) {
-    const chunk = listed.slice(i, i + chunkSize);
-    const part = await Promise.all(
-      chunk.map(async (ev) => {
-        try {
-          const [tickets, expenses] = await Promise.all([
-            getTicketsByEventId(ev.id),
-            getExpensesByEventId(ev.id),
-          ]);
-          const valid = validTicketsForBalance(tickets);
-          const ticketsSold = valid.reduce((s, t) => s + (t.quantity || 1), 0);
-          const ingresos = valid.reduce((s, t) => s + (t.amount || 0), 0);
-          const egresos = expenses.reduce((s, e) => s + (e.amount || 0), 0);
-          return { ...ev, ticketsSold, ingresos, egresos };
-        } catch {
-          return { ...ev, ticketsSold: 0, ingresos: 0, egresos: 0 };
-        }
-      })
-    );
-    rows.push(...part);
-  }
-  return rows;
 }
 
 const BalanceScreen: React.FC = () => {
@@ -172,7 +121,9 @@ const BalanceScreen: React.FC = () => {
       try {
         const superA = await isSuperAdmin(user.uid);
         const listed = await fetchListedEvents(user.uid, superA);
-        const data = await loadBalanceRows(listed);
+        const pay = await getPaymentConfig();
+        const ctx = buildBalanceLoadContext(pay);
+        const data = await loadBalanceRows(listed, ctx);
         setRows(data);
       } catch {
         setRows([]);
@@ -216,7 +167,8 @@ const BalanceScreen: React.FC = () => {
             <div>
               <h1 className="balance-hero__title">Balance y ganancias</h1>
               <p className="balance-hero__subtitle">
-                Ingresos, egresos y boletas vendidas desglosados por cada evento.
+                Ingresos netos estimados (después de comisión de pasarela), tarifa de servicio (tiquetera), desglose de
+                pasarela y egresos por evento.
               </p>
             </div>
             <SecondaryButton onClick={() => navigate('/dashboard')} className="balance-hero__back">
@@ -285,8 +237,8 @@ const BalanceScreen: React.FC = () => {
                       <IconRevenue />
                     </div>
                     <div className="balance-kpi__body">
-                      <span className="balance-kpi__label">Total ingresos</span>
-                      <span className="balance-kpi__value">{formatCOP(ev.ingresos)}</span>
+                      <span className="balance-kpi__label">Total ingresos (neto estimado)</span>
+                      <span className="balance-kpi__value">{formatCOP(ev.netoOrganizador)}</span>
                     </div>
                   </div>
                   <div className="balance-kpi balance-kpi--expense">
@@ -297,6 +249,36 @@ const BalanceScreen: React.FC = () => {
                       <span className="balance-kpi__label">Total egresos</span>
                       <span className="balance-kpi__value">{formatCOP(ev.egresos)}</span>
                     </div>
+                  </div>
+                  <div className="balance-money-breakdown" aria-label="Desglose de dinero">
+                    <div className="balance-money-breakdown__row">
+                      <span>Subtotal entradas (sin tarifa servicio)</span>
+                      <span>{formatCOP(ev.subtotalEntradas)}</span>
+                    </div>
+                    <div className="balance-money-breakdown__row balance-money-breakdown__row--muted">
+                      <span>Tarifa servicio tiquetera</span>
+                      <span>{formatCOP(ev.tiqueteraFee)}</span>
+                    </div>
+                    <div className="balance-money-breakdown__row balance-money-breakdown__row--accent">
+                      <span>Comisión pasarela (estimada)</span>
+                      <span>−{formatCOP(ev.pasarelaTotal)}</span>
+                    </div>
+                    <div className="balance-money-breakdown__sub">
+                      <span>% variable</span>
+                      <span>{formatCOP(ev.pasarelaPct)}</span>
+                    </div>
+                    <div className="balance-money-breakdown__sub">
+                      <span>Valor fijo (por transacción)</span>
+                      <span>{formatCOP(ev.pasarelaFixed)}</span>
+                    </div>
+                    <div className="balance-money-breakdown__sub">
+                      <span>IVA sobre base pasarela</span>
+                      <span>{formatCOP(ev.pasarelaIva)}</span>
+                    </div>
+                    <p className="balance-money-breakdown__hint">
+                      El total cobrado al comprador es subtotal + tarifa tiquetera (desglose arriba). El neto resta la
+                      comisión de pasarela (estimada, solo ventas en línea) del subtotal de entradas.
+                    </p>
                   </div>
                 </div>
               </li>

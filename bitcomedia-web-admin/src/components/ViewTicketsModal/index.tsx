@@ -6,6 +6,12 @@ import PrimaryButton from '@components/PrimaryButton';
 import SecondaryButton from '@components/SecondaryButton';
 import CustomInput from '@components/CustomInput';
 import BulkUploadCortesiasModal from '@components/BulkUploadCortesiasModal';
+import {
+  isTicketCourtesyRow,
+  ticketLineAmountCOP,
+  ticketListBuyerIdNumber,
+  ticketListBuyerName,
+} from '@utils/ticketListDisplay';
 import './index.scss';
 
 interface ViewTicketsModalProps {
@@ -23,6 +29,7 @@ interface Ticket {
   buyerPhone?: string;
   buyerIdNumber?: string;
   price?: number;
+  amount?: number;
   status?: string;
   paymentMethod?: string;
   ticketStatus?: string;
@@ -31,8 +38,11 @@ interface Ticket {
   validatedAt?: Timestamp | null;
   validatedBy?: string | null;
   createdByAdmin?: string;
+  isCourtesy?: boolean;
   isGeneralCourtesy?: boolean;
   giftedBy?: string | null;
+  ticketKind?: string;
+  metadata?: { userName?: string; buyerIdNumber?: string };
 }
 
 const ViewTicketsModal: React.FC<ViewTicketsModalProps> = ({
@@ -82,8 +92,8 @@ const ViewTicketsModal: React.FC<ViewTicketsModalProps> = ({
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase().trim();
       filtered = filtered.filter(ticket => {
-        const idNumber = ticket.buyerIdNumber?.toLowerCase() || '';
-        const name = ticket.buyerName?.toLowerCase() || '';
+        const idNumber = ticketListBuyerIdNumber(ticket).toLowerCase();
+        const name = ticketListBuyerName(ticket).toLowerCase();
         const email = ticket.buyerEmail?.toLowerCase() || '';
         return idNumber.includes(term) || name.includes(term) || email.includes(term);
       });
@@ -103,7 +113,7 @@ const ViewTicketsModal: React.FC<ViewTicketsModalProps> = ({
 
     // Filtro solo cortesías
     if (filterCortesias === 'only') {
-      filtered = filtered.filter(t => (t.price || 0) === 0);
+      filtered = filtered.filter(t => isTicketCourtesyRow(t));
     }
 
     setFilteredTickets(filtered);
@@ -142,7 +152,7 @@ const ViewTicketsModal: React.FC<ViewTicketsModalProps> = ({
   const handleEdit = (ticket: Ticket) => {
     setEditingTicket(ticket);
     setEditFormData({
-      buyerName: ticket.buyerName || '',
+      buyerName: ticketListBuyerName(ticket),
       buyerEmail: ticket.buyerEmail || '',
       buyerPhone: ticket.buyerPhone || ''
     });
@@ -180,7 +190,7 @@ const ViewTicketsModal: React.FC<ViewTicketsModalProps> = ({
     const isDisabled = ticket.ticketStatus === 'cancelled' || ticket.ticketStatus === 'disabled';
     const action = isDisabled ? 'habilitar' : 'deshabilitar';
     const confirmAction = window.confirm(
-      `¿Estás seguro de que quieres ${action} el boleto de ${ticket.buyerName || 'este comprador'}?`
+      `¿Estás seguro de que quieres ${action} el boleto de ${ticketListBuyerName(ticket) || 'este comprador'}?`
     );
 
     if (!confirmAction) return;
@@ -309,8 +319,8 @@ const ViewTicketsModal: React.FC<ViewTicketsModalProps> = ({
                   const isActive = (t: Ticket) =>
                     t.ticketStatus !== 'cancelled' && t.ticketStatus !== 'disabled';
                   const activeTickets = tickets.filter(isActive);
-                  const cortesias = activeTickets.filter(t => (t.price || 0) === 0);
-                  const vendidos = activeTickets.filter(t => (t.price || 0) > 0);
+                  const cortesias = activeTickets.filter(t => isTicketCourtesyRow(t));
+                  const vendidos = activeTickets.filter(t => !isTicketCourtesyRow(t));
                   const validados = tickets.filter(t => t.validatedAt).length;
 
                   return (
@@ -484,19 +494,19 @@ const ViewTicketsModal: React.FC<ViewTicketsModalProps> = ({
                             </div>
                           </td>
                           <td>{ticket.sectionName || 'General'}</td>
-                          <td>{ticket.buyerIdNumber || 'N/A'}</td>
-                          <td>{ticket.buyerName || 'N/A'}</td>
+                          <td>{ticketListBuyerIdNumber(ticket) || 'N/A'}</td>
+                          <td>{ticketListBuyerName(ticket) || 'N/A'}</td>
                           <td>{ticket.buyerEmail || 'N/A'}</td>
                           <td>{ticket.buyerPhone || 'N/A'}</td>
                           <td>
-                            {(ticket.price || 0) === 0 ? (
+                            {isTicketCourtesyRow(ticket) ? (
                               <span className="cortesia-badge">Cortesía</span>
                             ) : (
-                              `$${(ticket.price || 0).toLocaleString('es-CO')}`
+                              `$${ticketLineAmountCOP(ticket).toLocaleString('es-CO')}`
                             )}
                           </td>
                           <td className="cortesia-info">
-                            {(ticket.price || 0) === 0 ? (
+                            {isTicketCourtesyRow(ticket) ? (
                               ticket.isGeneralCourtesy ? (
                                 <span className="cortesia-tag">Evento general</span>
                               ) : ticket.giftedBy ? (
@@ -566,7 +576,7 @@ const ViewTicketsModal: React.FC<ViewTicketsModalProps> = ({
                   <>
                     <div className="ticket-header">
                       <div className="ticket-info">
-                        <h4>{ticket.buyerName || 'Comprador sin nombre'}</h4>
+                        <h4>{ticketListBuyerName(ticket) || 'Comprador sin nombre'}</h4>
                         <p className="ticket-email">{ticket.buyerEmail || 'Sin email'}</p>
                         {ticket.buyerPhone && <p className="ticket-phone">📱 {ticket.buyerPhone}</p>}
                       </div>
@@ -586,10 +596,10 @@ const ViewTicketsModal: React.FC<ViewTicketsModalProps> = ({
                       <div className="detail-item">
                         <span className="detail-label">Precio:</span>
                         <span className="detail-value">
-                          {(ticket.price || 0) === 0 ? (
+                          {isTicketCourtesyRow(ticket) ? (
                             <span className="cortesia-badge">Cortesía</span>
                           ) : (
-                            `$${(ticket.price || 0).toLocaleString('es-CO')} COP`
+                            `$${ticketLineAmountCOP(ticket).toLocaleString('es-CO')} COP`
                           )}
                         </span>
                       </div>
