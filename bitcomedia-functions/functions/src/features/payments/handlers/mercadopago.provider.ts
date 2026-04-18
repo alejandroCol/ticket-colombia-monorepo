@@ -33,6 +33,27 @@ export class MercadoPagoProvider implements PaymentProvider {
    * @param {any} preferenceData - Datos de la preferencia
    * @return {Promise<any>} Respuesta de MercadoPago
    */
+  /**
+   * Crea un pago con la API de Pagos (token de tarjeta u otros medios).
+   * @param {Record<string, unknown>} body - Cuerpo según documentación MP
+   * @return {Promise<unknown>} Respuesta del pago creado
+   */
+  async createPayment(body: Record<string, unknown>): Promise<unknown> {
+    try {
+      console.log("Creating MercadoPago payment (API):", JSON.stringify(body, null, 2));
+      const created = await this.payment.create({body: body as any});
+      console.log("MercadoPago payment created:", {
+        id: (created as {id?: unknown})?.id,
+        status: (created as {status?: unknown})?.status,
+      });
+      return created;
+    } catch (error) {
+      console.error("Error creating MercadoPago payment:", error);
+      const errorMessage = `Failed to create payment: ${(error as Error).message}`;
+      throw new Error(errorMessage);
+    }
+  }
+
   async createPreference(preferenceData: any): Promise<any> {
     try {
       console.log("Creating MercadoPago preference:",

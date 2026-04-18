@@ -111,6 +111,13 @@ export interface PreferenceResponse {
   preferenceId: string;
   initPoint: string;
   sandboxInitPoint?: string;
+  /** Opcional: flujo Brick (API de Pagos) si el backend lo devolviera */
+  mpFlow?: "payments_api";
+  publicKey?: string;
+  amountCOP?: number;
+  applicationFeeCOP?: number;
+  payerEmail?: string;
+  paymentDescription?: string;
 }
 
 export interface WebhookNotification {
@@ -158,6 +165,16 @@ export type TicketStatus =
   | "used";
 
 // Interfaces de servicios
+export interface MercadoPagoCardPaymentRequest {
+  ticketId: string;
+  token: string;
+  paymentMethodId: string;
+  issuerId?: string;
+  installments?: number;
+  /** Compra invitado: mismo email que en el checkout (sin Firebase Auth). */
+  guestEmail?: string;
+}
+
 export interface PaymentService {
   createTicketPreference(
     request: CreateTicketRequest,
@@ -169,6 +186,17 @@ export interface PaymentService {
     ticketId: string,
     userId: string
   ): Promise<PreferenceResponse>;
+
+  /** API de Pagos: cobro con token de tarjeta (Brick). */
+  createMercadoPagoCardPayment(
+    request: MercadoPagoCardPaymentRequest,
+    userId: string | undefined,
+    guestEmail?: string
+  ): Promise<{
+    status: string;
+    paymentId?: string;
+    statusDetail?: string;
+  }>;
 
   processWebhookNotification(
     notification: WebhookNotification,
@@ -202,6 +230,7 @@ export interface TicketRepository {
 
 export interface PaymentProvider {
   createPreference(preferenceData: any): Promise<any>;
+  createPayment(body: Record<string, unknown>): Promise<unknown>;
   getPayment(paymentId: string): Promise<PaymentData>;
   getMerchantOrder(orderId: string): Promise<MerchantOrderData>;
   validateWebhookSignature(
@@ -223,6 +252,8 @@ export interface PaymentConfig {
   appUrl: string;
   isDevelopment: boolean;
   minAmount: number;
+  /** Public key de producción de la aplicación (cuando no hay vendedor OAuth). */
+  mercadopagoPublicKey?: string;
   /** API key OnePay (Bearer) cuando `payment_provider` es onepay */
   onepayApiKey?: string;
   /** Secreto HMAC de webhooks OnePay (wh_tok_...) */

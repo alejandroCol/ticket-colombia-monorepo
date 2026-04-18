@@ -139,6 +139,8 @@ export interface Event {
   abono_max_days_before_event?: number;
   /** Soporte WhatsApp del organizador (dígitos, código de país). Debe existir para nuevos eventos desde el panel. */
   support_whatsapp?: string;
+  /** Pasarela de checkout (sin valor → OnePay). */
+  payment_provider?: 'onepay' | 'mercadopago';
   [key: string]: string | number | boolean | Timestamp | Date | object | undefined;
 }
 

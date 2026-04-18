@@ -10,6 +10,7 @@ import {
   createBalanceInstallmentPreference,
 } from '../../services/ticketService';
 import { persistMercadoPagoReturnIntent } from '../../utils/mpCheckoutReturnIntent';
+import MercadoPagoCardPaymentStep from '../../components/MercadoPagoCardPaymentStep';
 import './index.scss';
 
 const CompletarAbonoScreen: React.FC = () => {
@@ -23,6 +24,13 @@ const CompletarAbonoScreen: React.FC = () => {
   );
   const [paying, setPaying] = useState(false);
   const [authed, setAuthed] = useState(false);
+  const [mpBalanceSession, setMpBalanceSession] = useState<{
+    ticketId: string;
+    publicKey: string;
+    amountCOP: number;
+    payerEmail: string;
+    returnPath: string;
+  } | null>(null);
 
   useEffect(() => {
     const u = getCurrentUser();
@@ -69,8 +77,27 @@ const CompletarAbonoScreen: React.FC = () => {
     setError(null);
     try {
       const result = await createBalanceInstallmentPreference(info.ticketId);
-      const returnAbs = `${window.location.origin}/compra-finalizada?abono_balance=1&ticket=${encodeURIComponent(info.ticketId)}`;
+      const returnParams = new URLSearchParams({
+        abono_balance: '1',
+        ticket: info.ticketId,
+      });
+      const returnPath = `/compra-finalizada?${returnParams.toString()}`;
+      const returnAbs = `${window.location.origin}${returnPath}`;
       persistMercadoPagoReturnIntent(returnAbs);
+      if (
+        result?.mpFlow === 'payments_api' &&
+        result.publicKey &&
+        result.ticketId
+      ) {
+        setMpBalanceSession({
+          ticketId: result.ticketId,
+          publicKey: result.publicKey,
+          amountCOP: Number(result.amountCOP ?? info.balanceCOP),
+          payerEmail: result.payerEmail || info.buyerEmail || '',
+          returnPath,
+        });
+        return;
+      }
       const url = result?.initPoint || (result as { sandboxInitPoint?: string })?.sandboxInitPoint;
       if (url) {
         window.location.href = url;
@@ -128,10 +155,26 @@ const CompletarAbonoScreen: React.FC = () => {
             <p className="completar-abono__hint">
               Al completar el pago verás tus entradas con código QR en «Mis entradas».
             </p>
+            {mpBalanceSession && (
+              <MercadoPagoCardPaymentStep
+                session={{
+                  ticketId: mpBalanceSession.ticketId,
+                  publicKey: mpBalanceSession.publicKey,
+                  amountCOP: mpBalanceSession.amountCOP,
+                  payerEmail: mpBalanceSession.payerEmail || info.buyerEmail || '',
+                }}
+                useGuest={false}
+                guestEmail=""
+                onBack={() => setMpBalanceSession(null)}
+                onPaid={() => navigate(mpBalanceSession.returnPath)}
+              />
+            )}
             <div className="completar-abono__actions">
-              <PrimaryButton type="button" onClick={() => void handlePay()} disabled={paying} loading={paying}>
-                {authed ? 'Pagar saldo con Mercado Pago' : 'Iniciar sesión y pagar'}
-              </PrimaryButton>
+              {!mpBalanceSession && (
+                <PrimaryButton type="button" onClick={() => void handlePay()} disabled={paying} loading={paying}>
+                  {authed ? 'Pagar saldo en línea' : 'Iniciar sesión y pagar'}
+                </PrimaryButton>
+              )}
               <SecondaryButton type="button" onClick={() => navigate('/')}>
                 Volver al inicio
               </SecondaryButton>

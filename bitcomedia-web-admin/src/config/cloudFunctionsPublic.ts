@@ -13,3 +13,15 @@ export function getOnePayWebhookUrl(): string {
   }
   return `https://${DEFAULT_REGION}-${DEFAULT_PROJECT_ID}.cloudfunctions.net/onepayWebhook`;
 }
+
+/**
+ * URL exacta para pegar en Mercado Pago → Tu aplicación → Configuración → Redirect URL (OAuth).
+ * Debe coincidir carácter por carácter con la que usa la Cloud Function al intercambiar el `code`.
+ */
+export function getMercadoPagoOAuthCallbackUrl(): string {
+  const fromEnv = import.meta.env.VITE_MP_OAUTH_REDIRECT_URL?.trim();
+  if (fromEnv) {
+    return fromEnv;
+  }
+  return `https://${DEFAULT_REGION}-${DEFAULT_PROJECT_ID}.cloudfunctions.net/mercadopagoOAuthCallback`;
+}

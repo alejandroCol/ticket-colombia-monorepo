@@ -78,6 +78,8 @@ export {
 export { createPartnerUserAccount } from './createPartnerUserAccount';
 export { createAdminUserAccount } from './createAdminUserAccount';
 
+export { fetchMercadoPagoSellerOAuthUrl } from './mercadopagoOAuth';
+
 export {
   appendAuditLog,
   fetchAuditLogsPage,

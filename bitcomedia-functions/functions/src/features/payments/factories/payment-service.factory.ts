@@ -49,7 +49,8 @@ export class PaymentServiceFactory {
       apiKey?: string;
       webhookSecret?: string;
       webhookToken?: string;
-    }
+    },
+    mercadopagoPublicKey?: string
   ): PaymentConfig {
     return {
       accessToken,
@@ -61,6 +62,7 @@ export class PaymentServiceFactory {
       onepayApiKey: onepay?.apiKey,
       onepayWebhookSecret: onepay?.webhookSecret,
       onepayWebhookToken: onepay?.webhookToken,
+      mercadopagoPublicKey,
     };
   }
 }

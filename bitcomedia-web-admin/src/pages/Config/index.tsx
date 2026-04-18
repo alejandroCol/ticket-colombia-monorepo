@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import TopNavBar from '@containers/TopNavBar';
 import PrimaryButton from '@components/PrimaryButton';
 import SecondaryButton from '@components/SecondaryButton';
@@ -19,12 +19,13 @@ import {
   getOrganizerBuyerFee,
   setOrganizerBuyerFee,
   getOrganizerMpSellerConfigured,
-  setOrganizerMpSellerAccessToken,
   clearOrganizerMpSellerAccessToken,
   fetchOrganizerEventsIndex,
   setEventOrganizerId,
   appendAuditLog,
   createAdminUserAccount,
+  fetchMercadoPagoSellerOAuthUrl,
+  getUserData,
 } from '@services';
 import type { Event } from '@services/types';
 import type { OrganizerEventsIndex } from '@services';
@@ -67,6 +68,7 @@ function firebaseErrorMessage(err: unknown): string {
 
 const ConfigScreen: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [whatsappPhone, setWhatsappPhone] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -86,8 +88,10 @@ const ConfigScreen: React.FC = () => {
   const [transferPickUid, setTransferPickUid] = useState('');
   const [transferSaving, setTransferSaving] = useState(false);
   const [mpSellerConfigured, setMpSellerConfigured] = useState<Record<string, boolean>>({});
-  const [mpSellerTokenInput, setMpSellerTokenInput] = useState<Record<string, string>>({});
   const [mpSellerSaving, setMpSellerSaving] = useState<string | null>(null);
+  const [mpOAuthLoading, setMpOAuthLoading] = useState<string | null>(null);
+  const [canConfigureMpOrganizer, setCanConfigureMpOrganizer] = useState(false);
+  const mpOAuthReturnHandled = useRef(false);
   const [paymentProvider, setPaymentProvider] = useState<'mercadopago' | 'onepay'>('mercadopago');
   const [paymentProviderSaving, setPaymentProviderSaving] = useState(false);
   const [gatewayPct, setGatewayPct] = useState('');
@@ -125,6 +129,31 @@ const ConfigScreen: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    const u = getCurrentUser();
+    if (!u) return;
+    void getOrganizerMpSellerConfigured(u.uid).then((ok) => {
+      setMpSellerConfigured((prev) => ({ ...prev, [u.uid]: ok }));
+    });
+  }, []);
+
+  useEffect(() => {
+    const u = getCurrentUser();
+    if (!u) return;
+    void (async () => {
+      try {
+        const d = await getUserData(u.uid);
+        const r = String(d?.role || '').trim();
+        const ru = r.toUpperCase();
+        setCanConfigureMpOrganizer(
+          ru === 'ADMIN' || ru === 'SUPER_ADMIN' || r === 'admin'
+        );
+      } catch {
+        setCanConfigureMpOrganizer(false);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
     const run = async () => {
       const u = getCurrentUser();
       if (!u) return;
@@ -153,6 +182,44 @@ const ConfigScreen: React.FC = () => {
     };
     void run();
   }, [superAdmin, admins]);
+
+  useEffect(() => {
+    const mp = searchParams.get('mp_oauth');
+    if (!mp) {
+      mpOAuthReturnHandled.current = false;
+      return;
+    }
+    if (mpOAuthReturnHandled.current) return;
+    mpOAuthReturnHandled.current = true;
+    const msg = searchParams.get('mp_oauth_msg') || '';
+    if (mp === 'success') {
+      alert('Mercado Pago vinculado correctamente para el organizador.');
+    } else {
+      alert(
+        `No se pudo vincular Mercado Pago: ${decodeURIComponent(msg).slice(0, 500) || 'error desconocido'}`
+      );
+    }
+    navigate('/config', { replace: true });
+    void (async () => {
+      try {
+        const u = getCurrentUser();
+        if (!u) return;
+        const isSuper = await isSuperAdmin(u.uid);
+        if (isSuper) {
+          const list = await getAdminUsersList();
+          const pairs = await Promise.all(
+            list.map(async (a) => [a.uid, await getOrganizerMpSellerConfigured(a.uid)] as const)
+          );
+          setMpSellerConfigured(Object.fromEntries(pairs));
+        } else {
+          const ok = await getOrganizerMpSellerConfigured(u.uid);
+          setMpSellerConfigured((prev) => ({ ...prev, [u.uid]: ok }));
+        }
+      } catch {
+        // ignore
+      }
+    })();
+  }, [searchParams, navigate]);
 
   useEffect(() => {
     if (!superAdmin || admins.length === 0) return;
@@ -303,28 +370,14 @@ const ConfigScreen: React.FC = () => {
     }
   };
 
-  const handleSaveMpSeller = async (uid: string) => {
-    const raw = (mpSellerTokenInput[uid] || '').trim();
-    if (!raw) {
-      alert('Pega el access token de producción del organizador (Mercado Pago).');
-      return;
-    }
-    setMpSellerSaving(uid);
+  const handleStartMpOAuth = async (uid: string) => {
+    setMpOAuthLoading(uid);
     try {
-      await setOrganizerMpSellerAccessToken(uid, raw);
-      setMpSellerTokenInput((prev) => ({ ...prev, [uid]: '' }));
-      setMpSellerConfigured((prev) => ({ ...prev, [uid]: true }));
-      void appendAuditLog({
-        kind: 'organizer_mp_seller',
-        action: 'set',
-        entityType: 'organizer_mp_seller',
-        entityId: uid,
-        summary: `Mercado Pago vendedor configurado para ${uid.slice(0, 8)}…`,
-      }).catch(() => undefined);
+      const url = await fetchMercadoPagoSellerOAuthUrl(uid);
+      window.location.assign(url);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'No se pudo guardar el token.');
-    } finally {
-      setMpSellerSaving(null);
+      alert(firebaseErrorMessage(err));
+      setMpOAuthLoading(null);
     }
   };
 
@@ -487,6 +540,8 @@ const ConfigScreen: React.FC = () => {
     }
   };
 
+  const mercadoPagoMeUid = getCurrentUser()?.uid ?? '';
+
   if (loading) {
     return (
       <div className="config-screen">
@@ -557,6 +612,56 @@ const ConfigScreen: React.FC = () => {
             </form>
           </div>
         </section>
+
+        {canConfigureMpOrganizer && mercadoPagoMeUid && (
+          <section className="config-hub__section" aria-labelledby="config-section-mp-org">
+            <div className="config-hub__section-head">
+              <h2 id="config-section-mp-org" className="config-hub__section-title">
+                <span className="config-hub__section-icon" aria-hidden>
+                  <IconHubWallet size={16} />
+                </span>
+                Mercado Pago
+              </h2>
+              <p className="config-hub__section-desc">
+                Vincula tu cuenta para cobros en línea cuando tus eventos te tienen como organizador.
+              </p>
+            </div>
+            <div className="config-module config-module--surface">
+              <div className="config-form" style={{ gap: '0.75rem', alignItems: 'flex-start' }}>
+                {mpSellerConfigured[mercadoPagoMeUid] ? (
+                  <span className="config-admin-chip config-admin-chip--ok">Cuenta vinculada</span>
+                ) : (
+                  <span className="config-admin-chip config-admin-chip--muted">Sin vincular</span>
+                )}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  <PrimaryButton
+                    type="button"
+                    size="small"
+                    disabled={
+                      mpSellerSaving === mercadoPagoMeUid || mpOAuthLoading === mercadoPagoMeUid
+                    }
+                    loading={mpOAuthLoading === mercadoPagoMeUid}
+                    onClick={() => void handleStartMpOAuth(mercadoPagoMeUid)}
+                  >
+                    Configurar Mercado Pago
+                  </PrimaryButton>
+                  {mpSellerConfigured[mercadoPagoMeUid] && (
+                    <SecondaryButton
+                      type="button"
+                      size="small"
+                      disabled={
+                        mpSellerSaving === mercadoPagoMeUid || mpOAuthLoading === mercadoPagoMeUid
+                      }
+                      onClick={() => void handleClearMpSeller(mercadoPagoMeUid)}
+                    >
+                      Quitar
+                    </SecondaryButton>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
 
         {superAdmin && (
           <section className="config-hub__section config-hub__section--super" aria-labelledby="config-section-super">
@@ -1073,58 +1178,6 @@ const ConfigScreen: React.FC = () => {
                           >
                             Guardar tarifa
                           </PrimaryButton>
-                        </div>
-                      </div>
-
-                      <div className="config-admin-fee config-admin-fee--card">
-                        <span className="config-admin-fee__label">Mercado Pago del organizador (split)</span>
-                        <p className="config-admin-muted" style={{ marginTop: 8, marginBottom: 8 }}>
-                          Si guardas el access token de producción del organizador y el evento tiene{' '}
-                          <code>organizer_id</code> apuntando a este usuario, el checkout usa ese vendedor.
-                          La parte de <strong>tarifa de servicio al comprador</strong> (la que ya configuras
-                          arriba o por evento) se envía como <code>marketplace_fee</code> para la tiquetera;
-                          el resto queda para el organizador (después de comisiones MP). Activa el producto{' '}
-                          Marketplace en tu aplicación de desarrolladores MP y vincula vendedores vía OAuth (o
-                          token del usuario vendedor si MP lo permite en tu modelo).
-                        </p>
-                        <div className="config-admin-fee__controls" style={{ flexWrap: 'wrap', gap: 8 }}>
-                          {mpSellerConfigured[a.uid] ? (
-                            <span className="config-admin-chip config-admin-chip--ok">Cuenta MP vinculada</span>
-                          ) : (
-                            <span className="config-admin-chip config-admin-chip--muted">
-                              Sin cuenta propia (solo credencial global de la función)
-                            </span>
-                          )}
-                          <input
-                            type="password"
-                            className="config-admin-fee__input"
-                            style={{ minWidth: 220, flex: 1 }}
-                            autoComplete="off"
-                            placeholder="ACCESS_TOKEN producción del organizador"
-                            value={mpSellerTokenInput[a.uid] ?? ''}
-                            onChange={(e) =>
-                              setMpSellerTokenInput((prev) => ({ ...prev, [a.uid]: e.target.value }))
-                            }
-                          />
-                          <PrimaryButton
-                            type="button"
-                            size="small"
-                            disabled={mpSellerSaving === a.uid}
-                            loading={mpSellerSaving === a.uid}
-                            onClick={() => void handleSaveMpSeller(a.uid)}
-                          >
-                            Guardar token
-                          </PrimaryButton>
-                          {mpSellerConfigured[a.uid] && (
-                            <SecondaryButton
-                              type="button"
-                              size="small"
-                              disabled={mpSellerSaving === a.uid}
-                              onClick={() => void handleClearMpSeller(a.uid)}
-                            >
-                              Quitar
-                            </SecondaryButton>
-                          )}
                         </div>
                       </div>
                     </li>

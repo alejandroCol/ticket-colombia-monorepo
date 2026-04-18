@@ -12,6 +12,7 @@ import {
   QRCodeGenerator,
   PaymentConfig,
   Ticket,
+  MercadoPagoCardPaymentRequest,
 } from "../types";
 import {finalizePaidTicketsWithBundle} from "../bundle-issuance";
 import {sendAbonoDepositConfirmedEmail} from "../abono-email";
@@ -37,6 +38,7 @@ import {
   type OrganizerBuyerFeeInput,
 } from "../pricing-from-event";
 import {MercadoPagoProvider} from "../handlers/mercadopago.provider";
+import {paymentProviderFromEventData} from "../payment-provider";
 import {
   onepayCreatePayment,
   onepayGetPayment,
@@ -207,6 +209,87 @@ export class MercadoPagoPaymentService implements PaymentService {
     this.config = config;
   }
 
+  /** Cliente MP para Checkout Pro: token del vendedor (split) o credencial de la plataforma. */
+  private mpPreferenceClient(sellerAccessToken: string | null): MercadoPagoProvider {
+    const t = String(sellerAccessToken || "").trim();
+    if (t) return new MercadoPagoProvider(t);
+    return this.paymentProvider as MercadoPagoProvider;
+  }
+
+  /**
+   * Checkout Pro: redirección a Mercado Pago con todos los medios habilitados en la cuenta.
+   */
+  private async createCheckoutProPreference(params: {
+    amountCOP: number;
+    ticketId: string;
+    payerEmail: string;
+    itemTitle: string;
+    itemDesc: string;
+    successUrl: string;
+    eventId: string;
+    sellerAccessToken: string | null;
+    marketplaceFeeCOP: number;
+  }): Promise<{id: string; initPoint: string; sandboxInitPoint: string}> {
+    const {
+      amountCOP,
+      ticketId,
+      payerEmail,
+      itemTitle,
+      itemDesc,
+      successUrl,
+      eventId,
+      sellerAccessToken,
+      marketplaceFeeCOP,
+    } = params;
+    const amount = Math.round(amountCOP);
+    if (amount < 1) {
+      throw new Error("Monto de preferencia inválido");
+    }
+    const body: Record<string, unknown> = {
+      items: [
+        {
+          title: itemTitle.slice(0, 256),
+          description: itemDesc.slice(0, 256),
+          quantity: 1,
+          unit_price: amount,
+          currency_id: "COP",
+        },
+      ],
+      payer: {email: payerEmail},
+      back_urls: {
+        success: successUrl,
+        failure: successUrl,
+        pending: successUrl,
+      },
+      auto_return: "approved",
+      external_reference: ticketId,
+      notification_url: mercadopagoNotificationUrl(),
+      metadata: {
+        ticket_id: ticketId,
+        event_id: eventId,
+      },
+    };
+    const fee = Math.round(marketplaceFeeCOP);
+    if (fee > 0 && sellerAccessToken) {
+      body.marketplace_fee = Math.min(fee, Math.max(0, amount - 1));
+    }
+    const client = this.mpPreferenceClient(sellerAccessToken);
+    const pref = await client.createPreference(body);
+    const id = String((pref as {id?: unknown})?.id ?? "").trim();
+    const initPoint = String((pref as {init_point?: unknown})?.init_point ?? "").trim();
+    const sandboxInitPoint = String(
+      (pref as {sandbox_init_point?: unknown})?.sandbox_init_point ?? ""
+    ).trim();
+    if (!id || !initPoint) {
+      throw new Error("Mercado Pago no devolvió id de preferencia o init_point");
+    }
+    return {
+      id,
+      initPoint,
+      sandboxInitPoint: sandboxInitPoint || initPoint,
+    };
+  }
+
   /**
    * Crea un ticket y una preferencia de pago
    * @param {CreateTicketRequest} request - Datos de la solicitud
@@ -246,6 +329,12 @@ export class MercadoPagoPaymentService implements PaymentService {
         Number(payCfgSnap.data()?.fees) :
         9;
       const globalFeesPercent = Number.isFinite(rawGlobalFees) ? rawGlobalFees : 9;
+
+      const paymentProvider = paymentProviderFromEventData(eventData);
+      console.log("[createTicketPreference] Pasarela por evento:", {
+        eventId: request.eventId,
+        paymentProvider,
+      });
 
       const unitPriceCOP = unitPriceFromEventData(
         eventData,
@@ -515,9 +604,6 @@ export class MercadoPagoPaymentService implements PaymentService {
 
       const organizerUid = String(eventData.organizer_id || "").trim();
       const sellerAccessToken = await loadOrganizerSellerAccessToken(db, organizerUid);
-      const mpProviderForPreference = sellerAccessToken ?
-        new MercadoPagoProvider(sellerAccessToken) :
-        this.paymentProvider;
       let marketplaceFeeCOP = 0;
       if (sellerAccessToken && priced.feeCOP > 0) {
         const rawFee = Math.round(priced.feeCOP);
@@ -602,10 +688,6 @@ export class MercadoPagoPaymentService implements PaymentService {
       }
       console.log("[createTicketPreference] Ticket creado:", paidTicketId);
 
-      const paymentProvider = String(
-        payCfgSnap.data()?.payment_provider || "mercadopago"
-      ).toLowerCase();
-
       const itemTitle =
         paymentMode === "deposit" ?
           `${this.config.isDevelopment ? "[DEV] " : ""}Abono · ${
@@ -687,99 +769,192 @@ export class MercadoPagoPaymentService implements PaymentService {
         };
       }
 
-      // Precio MP: cargo actual (total o solo abono)
-      const unitPrice = Math.round(chargeAmount / request.quantity);
-      console.log("[createTicketPreference] Creando preferencia MercadoPago:", {
-        quantity: request.quantity,
-        unitPrice,
+      console.log("[createTicketPreference] Checkout Pro Mercado Pago:", {
         amount: chargeAmount,
         paymentMode,
       });
-      const preferenceData = {
-        items: [
-          {
-            id: paidTicketId,
-            title: itemTitle,
-            description: `${this.config.isDevelopment ? "[DESARROLLO] " : ""}${itemDesc}`,
-            category_id: "tickets",
-            quantity: request.quantity,
-            currency_id: "COP",
-            unit_price: unitPrice,
-          },
-        ],
-
-        payer: {
-          name: (userData.name as string) || (userData.displayName as string) || "",
-          email: request.buyerEmail,
-          identification: {
-            type: "CC",
-            number: (userData.document as string) || "12345678",
-          },
-        },
-
-        back_urls: {
-          success: compraFinalizadaUrl,
-          failure: compraFinalizadaUrl,
-          pending: compraFinalizadaUrl,
-        },
-        auto_return: "approved",
-
-        external_reference: paidTicketId,
-
-        metadata: {ticket_id: paidTicketId},
-
-        payment_methods: {
-          excluded_payment_methods: [],
-          excluded_payment_types: [],
-          installments: 12,
-        },
-
-        notification_url: mercadopagoNotificationUrl(),
-
-        expires: true,
-        expiration_date_from: new Date().toISOString(),
-        expiration_date_to: new Date(Date.now() + 30 * 60 * 1000)
-          .toISOString(), // 30 minutos
-        ...(marketplaceFeeCOP > 0 ? {marketplace_fee: marketplaceFeeCOP} : {}),
-      };
-
-      // Crear la preferencia
-      let mpPreference;
       try {
-        mpPreference = await mpProviderForPreference.createPreference(preferenceData);
-        console.log("[createTicketPreference] Preferencia MP creada:", mpPreference?.id);
-      } catch (mpError) {
-        const e = mpError as Error;
-        console.error("[createTicketPreference] Error MercadoPago createPreference:", e.message, e.stack);
-        await this.ticketRepository.delete(paidTicketId).catch(() => undefined);
-        await restoreReservationActive(db, reservationId, RESERVATION_HOLD_MS);
-        throw mpError;
-      }
-
-      try {
-        await this.ticketRepository.update(paidTicketId, {
-          preferenceId: mpPreference.id || "",
-          initPoint: mpPreference.init_point || "",
+        const created = await this.createCheckoutProPreference({
+          amountCOP: chargeAmount,
+          ticketId: paidTicketId,
+          payerEmail: request.buyerEmail,
+          itemTitle,
+          itemDesc,
+          successUrl: compraFinalizadaUrl,
+          eventId: request.eventId,
+          sellerAccessToken,
+          marketplaceFeeCOP,
         });
-      } catch (updErr) {
+        await this.ticketRepository.update(paidTicketId, {
+          preferenceId: created.id,
+          initPoint: created.initPoint,
+        });
+        console.log(
+          `[createTicketPreference] Checkout Pro OK ticket=${paidTicketId} pref=${created.id}`
+        );
+        return {
+          ticketId: paidTicketId,
+          preferenceId: created.id,
+          initPoint: created.initPoint,
+          sandboxInitPoint: created.sandboxInitPoint,
+        };
+      } catch (mpErr) {
+        console.error("[createTicketPreference] Mercado Pago Checkout Pro:", mpErr);
         await this.ticketRepository.delete(paidTicketId).catch(() => undefined);
         await restoreReservationActive(db, reservationId, RESERVATION_HOLD_MS);
-        throw updErr;
+        throw mpErr;
       }
-
-      console.log(`Ticket created: ${paidTicketId} for user: ${userId}`);
-
-      return {
-        ticketId: paidTicketId,
-        preferenceId: mpPreference.id,
-        initPoint: mpPreference.init_point,
-        sandboxInitPoint: mpPreference.sandbox_init_point,
-      };
     } catch (error) {
       const e = error as Error;
       console.error("[createTicketPreference] Error en servicio:", e.message, e.stack);
       throw new Error(`Error al crear la preferencia de pago: ${e.message}`);
     }
+  }
+
+  /**
+   * API de Pagos: cobro con token de tarjeta (Brick en el cliente).
+   */
+  async createMercadoPagoCardPayment(
+    request: MercadoPagoCardPaymentRequest,
+    userId: string | undefined,
+    guestEmail?: string
+  ): Promise<{
+    status: string;
+    paymentId?: string;
+    statusDetail?: string;
+  }> {
+    const ticketId = String(request.ticketId || "").trim();
+    const token = String(request.token || "").trim();
+    const paymentMethodId = String(request.paymentMethodId || "").trim();
+    if (!ticketId || !token || !paymentMethodId) {
+      throw new Error("Faltan ticketId, token o paymentMethodId");
+    }
+
+    const guestFromReq = String(request.guestEmail || guestEmail || "").trim();
+
+    const ticket = await this.ticketRepository.findById(ticketId);
+    if (!ticket) {
+      throw new Error("Ticket no encontrado");
+    }
+    if (String(ticket.userId || "").startsWith("guest_")) {
+      const em = guestFromReq.toLowerCase();
+      const expected = String(ticket.buyerEmail || "").toLowerCase();
+      if (!em || em !== expected) {
+        throw new Error("Indica el mismo correo que usaste en el checkout (compra sin cuenta).");
+      }
+    } else {
+      if (!userId || ticket.userId !== userId) {
+        throw new Error("Este ticket no pertenece a tu cuenta");
+      }
+    }
+
+    const phase = ticket.installmentPhase || "none";
+    let chargeAmount = 0;
+    if (phase === "awaiting_deposit") {
+      chargeAmount = Math.round(Number(ticket.depositCOP) || 0);
+    } else if (phase === "awaiting_balance") {
+      chargeAmount = Math.round(Number(ticket.balanceCOP) || 0);
+    } else {
+      chargeAmount = Math.round(Number(ticket.amount) || 0);
+    }
+
+    if (chargeAmount < this.config.minAmount) {
+      throw new Error(`Monto inválido (${chargeAmount} COP)`);
+    }
+
+    const db = admin.firestore();
+    let eventDoc = await db.collection("events").doc(ticket.eventId).get();
+    if (!eventDoc.exists) {
+      eventDoc = await db.collection("recurring_events").doc(ticket.eventId).get();
+    }
+    if (!eventDoc.exists) {
+      throw new Error("Evento no encontrado");
+    }
+    const eventData = eventDoc.data()!;
+    if (paymentProviderFromEventData(eventData) !== "mercadopago") {
+      throw new Error("Este evento usa OnePay; el pago con tarjeta (Mercado Pago) no aplica.");
+    }
+
+    const organizerUid = String(eventData.organizer_id || "").trim();
+    const sellerAccessToken = await loadOrganizerSellerAccessToken(db, organizerUid);
+    const mpProvider = sellerAccessToken ?
+      new MercadoPagoProvider(sellerAccessToken) :
+      this.paymentProvider;
+
+    let applicationFee = 0;
+    if (
+      phase !== "awaiting_balance" &&
+      sellerAccessToken &&
+      ticket.mpMarketplaceFeeCOP &&
+      ticket.mpMarketplaceFeeCOP > 0
+    ) {
+      applicationFee = Math.min(
+        Math.round(ticket.mpMarketplaceFeeCOP),
+        Math.max(0, chargeAmount - 1)
+      );
+    }
+
+    const idNum =
+      String(ticket.metadata?.buyerIdNumber || "1234567890").replace(/\D/g, "") ||
+      "1234567890";
+
+    const body: Record<string, unknown> = {
+      transaction_amount: chargeAmount,
+      token,
+      description: `${this.config.isDevelopment ? "[DEV] " : ""}${
+        ticket.metadata?.eventName || "Ticket Colombia"
+      }`,
+      installments: Math.min(48, Math.max(1, Number(request.installments) || 1)),
+      payment_method_id: paymentMethodId,
+      payer: {
+        email: ticket.buyerEmail,
+        identification: {type: "CC", number: idNum.slice(0, 20)},
+      },
+      external_reference: ticketId,
+      metadata: {ticket_id: ticketId},
+      notification_url: mercadopagoNotificationUrl(),
+    };
+
+    const issuer = String(request.issuerId || "").trim();
+    if (issuer) {
+      body.issuer_id = issuer;
+    }
+
+    if (applicationFee > 0) {
+      body.application_fee = applicationFee;
+    }
+
+    let createdRaw: {id?: string | number; status?: string; status_detail?: string};
+    try {
+      createdRaw = (await mpProvider.createPayment(body)) as {
+        id?: string | number;
+        status?: string;
+        status_detail?: string;
+      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[createMercadoPagoCardPayment] createPayment:", msg);
+      throw new Error(msg);
+    }
+
+    const paymentId =
+      createdRaw?.id !== undefined && createdRaw?.id !== null ?
+        String(createdRaw.id) :
+        "";
+    if (!paymentId) {
+      throw new Error("Mercado Pago no devolvió id de pago");
+    }
+
+    const fullPayment = await mpProvider.getPayment(paymentId);
+    await this.updateTicketFromPayment(ticketId, fullPayment);
+
+    return {
+      status: String(fullPayment.status || createdRaw.status || ""),
+      paymentId,
+      statusDetail: createdRaw.status_detail ?
+        String(createdRaw.status_detail) :
+        undefined,
+    };
   }
 
   /**
@@ -1597,10 +1772,7 @@ export class MercadoPagoPaymentService implements PaymentService {
     }
     const eventData = eventDoc.data()!;
 
-    const payCfgSnap = await db.collection("configurations").doc("payments_config").get();
-    const paymentProvider = String(
-      payCfgSnap.data()?.payment_provider || "mercadopago"
-    ).toLowerCase();
+    const paymentProvider = paymentProviderFromEventData(eventData);
 
     const q = Math.max(1, Number(ticket.quantity) || 1);
     const balanceReturnUrl = (() => {
@@ -1665,65 +1837,34 @@ export class MercadoPagoPaymentService implements PaymentService {
 
     const organizerUid = String(eventData.organizer_id || "").trim();
     const sellerAccessToken = await loadOrganizerSellerAccessToken(db, organizerUid);
-    const mpProviderForPreference = sellerAccessToken ?
-      new MercadoPagoProvider(sellerAccessToken) :
-      this.paymentProvider;
 
-    const unitPrice = Math.round(balanceCOP / q);
-    const preferenceData = {
-      items: [
-        {
-          id: `${ticketId}_balance`,
-          title: `${this.config.isDevelopment ? "[DEV] " : ""}Saldo · ${
-            eventData.title || eventData.name}`,
-          description: `Pago pendiente — ${eventData.title || eventData.name}`,
-          category_id: "tickets",
-          quantity: q,
-          currency_id: "COP",
-          unit_price: unitPrice,
-        },
-      ],
-      payer: {
-        name: ticket.metadata?.userName || "",
-        email: ticket.buyerEmail,
-        identification: {type: "CC", number: "12345678"},
-      },
-      back_urls: {
-        success: balanceReturnUrl,
-        failure: balanceReturnUrl,
-        pending: balanceReturnUrl,
-      },
-      auto_return: "approved",
-      external_reference: ticketId,
-      metadata: {ticket_id: ticketId},
-      payment_methods: {
-        excluded_payment_methods: [],
-        excluded_payment_types: [],
-        installments: 12,
-      },
-      notification_url: mercadopagoNotificationUrl(),
-      expires: true,
-      expiration_date_from: new Date().toISOString(),
-      expiration_date_to: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-    };
-
+    const balanceTitle = `${this.config.isDevelopment ? "[DEV] " : ""}Saldo · ${
+      eventData.title || eventData.name}`;
+    const balanceDesc = `Pago pendiente — ${eventData.title || eventData.name}`;
     try {
-      const mpPreference = await mpProviderForPreference.createPreference(preferenceData);
-      await this.ticketRepository.update(ticketId, {
-        preferenceId: mpPreference.id || "",
-        initPoint: mpPreference.init_point || "",
+      const created = await this.createCheckoutProPreference({
+        amountCOP: balanceCOP,
+        ticketId,
+        payerEmail: ticket.buyerEmail,
+        itemTitle: balanceTitle,
+        itemDesc: balanceDesc,
+        successUrl: balanceReturnUrl,
+        eventId: ticket.eventId,
+        sellerAccessToken,
+        marketplaceFeeCOP: 0,
       });
-
+      await this.ticketRepository.update(ticketId, {
+        preferenceId: created.id,
+        initPoint: created.initPoint,
+      });
       return {
         ticketId,
-        preferenceId: mpPreference.id,
-        initPoint: mpPreference.init_point,
-        sandboxInitPoint: mpPreference.sandbox_init_point,
+        preferenceId: created.id,
+        initPoint: created.initPoint,
+        sandboxInitPoint: created.sandboxInitPoint,
       };
     } catch (e) {
-      await this.ticketRepository.update(ticketId, {
-        installmentPhase: "deposit_paid",
-      });
+      await this.ticketRepository.update(ticketId, {installmentPhase: "deposit_paid"});
       throw e;
     }
   }

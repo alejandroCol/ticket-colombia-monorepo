@@ -26,6 +26,7 @@ import {
 import { computeDepositSplit, getAbonoRulesFromEvent } from "../../utils/abonoPricing";
 import type { PaymentConfigDoc } from "../../services";
 import { persistMercadoPagoReturnIntent } from "../../utils/mpCheckoutReturnIntent";
+import MercadoPagoCardPaymentStep from "../../components/MercadoPagoCardPaymentStep";
 import { useContactConfig } from "../../contexts/ContactConfigContext";
 import TopNavBar from "../../containers/TopNavBar";
 import Loader from "../../components/Loader";
@@ -47,7 +48,16 @@ import {
   guestPhoneDigitsLocal,
   isValidGuestDocument,
   isValidGuestPhone,
+  guestPhoneValidationError,
 } from "../../utils/checkoutGuestFields";
+
+function eventCheckoutGateway(ev: Event | null): "onepay" | "mercadopago" {
+  if (!ev) return "onepay";
+  const raw = String((ev as { payment_provider?: string }).payment_provider ?? "")
+    .trim()
+    .toLowerCase();
+  return raw === "mercadopago" ? "mercadopago" : "onepay";
+}
 
 const CheckoutScreen: React.FC = () => {
   const { whatsappPhone } = useContactConfig();
@@ -61,6 +71,14 @@ const CheckoutScreen: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [paymentLoading, setPaymentLoading] = useState<boolean>(false);
+  /** Flujo API de Pagos (Brick) tras createTicket */
+  const [mpPaymentSession, setMpPaymentSession] = useState<{
+    ticketId: string;
+    publicKey: string;
+    amountCOP: number;
+    payerEmail: string;
+    returnPath: string;
+  } | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<
     "mercadopago" | "whatsapp"
   >("mercadopago");
@@ -95,6 +113,8 @@ const CheckoutScreen: React.FC = () => {
     `checkout-screen${isTcEmbed ? " checkout-screen--embed" : ""}${
       isTcGlass ? " checkout-screen--tc-glass" : ""
     }`;
+
+  const checkoutGateway = useMemo(() => eventCheckoutGateway(event), [event]);
 
   const unitPrice = (() => {
     if (!event) return 0;
@@ -480,11 +500,7 @@ const CheckoutScreen: React.FC = () => {
         return;
       }
       if (!isValidGuestPhone(guestPhoneDial, guestPhoneLocal)) {
-        setError(
-          guestPhoneDial === "+57"
-            ? "Ingresa un celular colombiano válido (10 dígitos, sin el indicativo)."
-            : "Ingresa un número de celular válido (solo números)."
-        );
+        setError(guestPhoneValidationError(guestPhoneDial, guestPhoneLocal));
         return;
       }
     }
@@ -541,7 +557,14 @@ const CheckoutScreen: React.FC = () => {
         },
       };
 
-      const result = (await createTicket(ticketData)) as { initPoint?: string };
+      const result = (await createTicket(ticketData)) as {
+        initPoint?: string;
+        mpFlow?: string;
+        publicKey?: string;
+        ticketId?: string;
+        amountCOP?: number;
+        payerEmail?: string;
+      };
 
       // Misma URL que el backend usa en back_urls; si MP devuelve a /tickets (prefs viejas),
       // /tickets redirige aquí usando sessionStorage.
@@ -566,7 +589,21 @@ const CheckoutScreen: React.FC = () => {
       const returnAbs = `${window.location.origin}/compra-finalizada?${returnParams.toString()}`;
       persistMercadoPagoReturnIntent(returnAbs);
 
-      // Redirigir a MercadoPago
+      if (
+        result.mpFlow === "payments_api" &&
+        result.publicKey &&
+        result.ticketId
+      ) {
+        setMpPaymentSession({
+          ticketId: result.ticketId,
+          publicKey: result.publicKey,
+          amountCOP: Number(result.amountCOP ?? chargeAmount),
+          payerEmail: email,
+          returnPath: `/compra-finalizada?${returnParams.toString()}`,
+        });
+        return;
+      }
+
       if (result.initPoint) {
         window.location.href = result.initPoint;
       } else {
@@ -680,9 +717,7 @@ const CheckoutScreen: React.FC = () => {
     if (reservationExpiresAt && Date.now() > reservationExpiresAt) return true;
     if (canAbono && payPlan === "deposit" && !isAuthenticated) return true;
     if (isAuthenticated) return false;
-    if (!guestEmail.trim() || !guestName.trim()) return true;
-    if (!isValidGuestDocument(guestDocument)) return true;
-    if (!isValidGuestPhone(guestPhoneDial, guestPhoneLocal)) return true;
+    // Datos de invitado: no deshabilitar el botón; al hacer clic se muestra el error explícito.
     return false;
   };
 
@@ -960,7 +995,7 @@ const CheckoutScreen: React.FC = () => {
             </div>
           </div>
 
-          {event && unitPrice > 0 && canAbono && (
+          {!mpPaymentSession && event && unitPrice > 0 && canAbono && (
             <div className="checkout-pay-plan">
               <h3>¿Cómo quieres pagar?</h3>
               <label className="checkout-pay-plan__option">
@@ -990,7 +1025,7 @@ const CheckoutScreen: React.FC = () => {
           )}
 
           {/* Payment Method Selection - Only show for paid events */}
-          {event && unitPrice > 0 && (
+          {!mpPaymentSession && event && unitPrice > 0 && (
             <div className="payment-method-selection">
               <h3>Método de pago</h3>
               <div className="payment-options">
@@ -1014,7 +1049,9 @@ const CheckoutScreen: React.FC = () => {
                       Pagar en línea
                     </span>
                     <span className="payment-option-description">
-                      Pago seguro con tarjeta de crédito/débito o PSE
+                      {checkoutGateway === "mercadopago"
+                        ? "Pago seguro con tarjeta (Mercado Pago)"
+                        : "Pago seguro en línea (OnePay)"}
                     </span>
                   </div>
                 </label>
@@ -1048,7 +1085,7 @@ const CheckoutScreen: React.FC = () => {
           {/* Error Message */}
           {error && <div className="error-message">{error}</div>}
 
-          {!isAuthenticated && (
+          {!mpPaymentSession && !isAuthenticated && (
             <div className="guest-checkout">
               <h3>Comprar sin cuenta</h3>
               <p className="guest-checkout__hint">
@@ -1126,10 +1163,28 @@ const CheckoutScreen: React.FC = () => {
               </div>
             </div>
           )}
+          {mpPaymentSession && (
+            <MercadoPagoCardPaymentStep
+              session={{
+                ticketId: mpPaymentSession.ticketId,
+                publicKey: mpPaymentSession.publicKey,
+                amountCOP: mpPaymentSession.amountCOP,
+                payerEmail: mpPaymentSession.payerEmail,
+              }}
+              useGuest={!isAuthenticated}
+              guestEmail={
+                !isAuthenticated ? guestEmail.trim() : (userData?.email || "")
+              }
+              onBack={() => setMpPaymentSession(null)}
+              onPaid={() => navigate(mpPaymentSession.returnPath)}
+            />
+          )}
           <div className="checkout-actions">
-          <PrimaryButton onClick={handlePayment} disabled={isButtonDisabled()}>
-            {getButtonText()}
-          </PrimaryButton>
+          {!mpPaymentSession && (
+            <PrimaryButton onClick={handlePayment} disabled={isButtonDisabled()}>
+              {getButtonText()}
+            </PrimaryButton>
+          )}
 
           <SecondaryButton onClick={handleGoBack}>
             Volver al evento

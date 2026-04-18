@@ -18,12 +18,36 @@ const getAbonoCheckoutPublicInfoFn = httpsCallable<
     totalCOP: number;
     balanceDueAtMs: number | null;
     phase: string;
+    buyerEmail: string;
   }
 >(functions, 'getAbonoCheckoutPublicInfo');
 const createBalanceInstallmentPreferenceFn = httpsCallable<
   { ticketId: string },
-  { ticketId: string; preferenceId: string; initPoint: string; sandboxInitPoint?: string }
+  {
+    ticketId: string;
+    preferenceId: string;
+    initPoint: string;
+    sandboxInitPoint?: string;
+    mpFlow?: 'payments_api';
+    publicKey?: string;
+    amountCOP?: number;
+    applicationFeeCOP?: number;
+    payerEmail?: string;
+    paymentDescription?: string;
+  }
 >(functions, 'createBalanceInstallmentPreference');
+
+const createMercadoPagoCardPaymentFn = httpsCallable<
+  {
+    ticketId: string;
+    token: string;
+    paymentMethodId: string;
+    issuerId?: string;
+    installments?: number;
+    guestEmail?: string;
+  },
+  { status: string; paymentId?: string; statusDetail?: string }
+>(functions, 'createMercadoPagoCardPayment');
 
 // Ticket data interface
 export interface TicketData {
@@ -121,6 +145,18 @@ export async function getAbonoCheckoutPublicInfo(token: string) {
 
 export async function createBalanceInstallmentPreference(ticketId: string) {
   const result = await createBalanceInstallmentPreferenceFn({ ticketId });
+  return result.data;
+}
+
+export async function createMercadoPagoCardPayment(params: {
+  ticketId: string;
+  token: string;
+  paymentMethodId: string;
+  issuerId?: string;
+  installments?: number;
+  guestEmail?: string;
+}) {
+  const result = await createMercadoPagoCardPaymentFn(params);
   return result.data;
 }
 

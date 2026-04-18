@@ -1,0 +1,27 @@
+.mp-card-payment-step {
+  margin-top: 1rem;
+
+  &__intro {
+    margin-bottom: 1rem;
+    font-size: 1rem;
+  }
+
+  &__error {
+    color: #c62828;
+    margin-bottom: 1rem;
+    font-size: 0.95rem;
+  }
+
+  &__loading {
+    margin: 1rem 0;
+    opacity: 0.85;
+  }
+
+  &__brick {
+    margin-bottom: 1.25rem;
+  }
+
+  &__actions {
+    margin-top: 1rem;
+  }
+}

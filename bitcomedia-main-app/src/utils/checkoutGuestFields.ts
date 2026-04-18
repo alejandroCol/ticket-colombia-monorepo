@@ -34,3 +34,21 @@ export function isValidGuestPhone(dial: string, localRaw: string): boolean {
   if (dial === "+57") return d.length === 10;
   return d.length <= 15;
 }
+
+/** Mensaje para mostrar al usuario si el celular no cumple la regla del país. */
+export function guestPhoneValidationError(dial: string, localRaw: string): string {
+  const d = guestPhoneDigitsLocal(localRaw);
+  if (dial === "+57") {
+    if (d.length === 0) {
+      return "Ingresa tu número de celular: en Colombia debe tener exactamente 10 dígitos (sin el indicativo +57).";
+    }
+    return `El número de celular en Colombia debe tener exactamente 10 dígitos (sin el indicativo). Llevas ${d.length} dígito${d.length === 1 ? "" : "s"}.`;
+  }
+  if (d.length < 7) {
+    return `Ingresa al menos 7 dígitos del número local (sin el indicativo). Llevas ${d.length}.`;
+  }
+  if (d.length > 15) {
+    return "El número no puede tener más de 15 dígitos (sin el indicativo).";
+  }
+  return "Ingresa un número de celular válido (solo números).";
+}

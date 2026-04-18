@@ -43,5 +43,6 @@ export const getAbonoCheckoutPublicInfo = functions.https.onCall(async (data: { 
     totalCOP: Math.round(Number(t.totalPurchaseCOP) || 0),
     balanceDueAtMs: due?.toMillis?.() ?? null,
     phase,
+    buyerEmail: String(t.buyerEmail || "").trim(),
   };
 });

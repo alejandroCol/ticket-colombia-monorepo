@@ -340,7 +340,7 @@ export const getOrganizerBuyerFee = async (
   }
 };
 
-/** Token de acceso del organizador en MP (marketplace / split). Solo super admin vía reglas. */
+/** Token de acceso del organizador en MP (marketplace / split). Lectura/escritura del propio doc o super admin. */
 export const getOrganizerMpSellerConfigured = async (organizerId: string): Promise<boolean> => {
   try {
     const id = String(organizerId || '').trim();

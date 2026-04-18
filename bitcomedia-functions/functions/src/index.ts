@@ -7,6 +7,8 @@ import {
   CreateTicketRequest,
   WebhookNotification,
   OnePayWebhookPayload,
+  type MercadoPagoCardPaymentRequest,
+  resolvePaymentProviderForEventId,
 } from "./features/payments";
 import {onePayWebhookInterestingHeaderKeys} from "./features/payments/handlers/onepay.api";
 import {defineSecret} from "firebase-functions/params";
@@ -19,6 +21,10 @@ import {cleanupExpiredReservations} from "./features/reservations/cleanup-expire
 import {manageEventPromoterGrant} from "./features/promoters/manage-event-promoter-grant";
 import {getAbonoCheckoutPublicInfo} from "./features/payments/abono-public-callable";
 import {expirePendingInstallments} from "./features/payments/expire-installments";
+import {
+  getMercadoPagoSellerOAuthUrl,
+  mercadopagoOAuthCallback,
+} from "./features/payments/mercadopago-oauth";
 
 admin.initializeApp();
 
@@ -32,18 +38,11 @@ const appUrlSecret = defineSecret("APP_URL");
 const resendApiKeySecret = defineSecret("RESEND_API_KEY");
 const senderEmailSecret = defineSecret("SENDER_EMAIL");
 const senderNameSecret = defineSecret("SENDER_NAME");
+/** Public key de producción (Checkout Bricks / tokenización). Misma app que MERCADOPAGO_ACCESS_TOKEN. */
+const mercadopagoPublicKeySecret = defineSecret("MERCADOPAGO_PUBLIC_KEY");
 
 // Configurar MercadoPago
 const isDevelopment = process.env.NODE_ENV !== "production";
-
-async function paymentsConfigProvider(): Promise<string> {
-  const snap = await admin
-    .firestore()
-    .collection("configurations")
-    .doc("payments_config")
-    .get();
-  return String(snap.data()?.payment_provider || "mercadopago").toLowerCase();
-}
 
 exports.createStandaloneEventsFromRecurring = functions.firestore
   .document("recurring_events/{eventId}")
@@ -93,6 +92,7 @@ exports.createTicketPreference = functions
     secrets: [
       mercadopagoAccessToken,
       mercadopagoWebhookSecret,
+      mercadopagoPublicKeySecret,
       onepayApiKeySecret,
       onepayWebhookSecret,
       onepayWebhookTokenSecret,
@@ -134,10 +134,11 @@ exports.createTicketPreference = functions
         );
       }
 
-      const provider = await paymentsConfigProvider();
+      const provider = await resolvePaymentProviderForEventId(payload.eventId);
       const accessToken = mercadopagoAccessToken.value();
       const webhookSecret = mercadopagoWebhookSecret.value();
       const appUrlValue = appUrlSecret.value();
+      const mpPublicKey = mercadopagoPublicKeySecret.value()?.trim() || "";
       const oneKey = onepayApiKeySecret.value();
       const oneWh = onepayWebhookSecret.value();
       const oneTok = onepayWebhookTokenSecret.value();
@@ -165,7 +166,8 @@ exports.createTicketPreference = functions
           apiKey: oneKey,
           webhookSecret: oneWh,
           webhookToken: oneTok,
-        }
+        },
+        provider === "onepay" ? undefined : mpPublicKey
       );
 
       const paymentService = PaymentServiceFactory.createPaymentService(config);
@@ -194,6 +196,7 @@ exports.mercadopagoWebhook = functions
     secrets: [
       mercadopagoWebhookSecret,
       mercadopagoAccessToken,
+      mercadopagoPublicKeySecret,
       appUrlSecret,
       resendApiKeySecret,
       senderEmailSecret,
@@ -217,6 +220,7 @@ exports.mercadopagoWebhook = functions
       const accessToken = mercadopagoAccessToken.value();
       const webhookSecret = mercadopagoWebhookSecret.value();
       const appUrlValue = appUrlSecret.value();
+      const mpPublicKey = mercadopagoPublicKeySecret.value()?.trim() || "";
 
       // Validar que los secretos estén configurados
       if (!accessToken || !webhookSecret || !appUrlValue) {
@@ -230,7 +234,9 @@ exports.mercadopagoWebhook = functions
         accessToken,
         webhookSecret,
         appUrlValue,
-        isDevelopment
+        isDevelopment,
+        undefined,
+        mpPublicKey
       );
       const rKey = resendApiKeySecret.value();
       const sEmail = senderEmailSecret.value();
@@ -268,6 +274,7 @@ exports.onepayWebhook = functions
       onepayWebhookTokenSecret,
       mercadopagoAccessToken,
       mercadopagoWebhookSecret,
+      mercadopagoPublicKeySecret,
       appUrlSecret,
       resendApiKeySecret,
       senderEmailSecret,
@@ -323,6 +330,7 @@ exports.onepayWebhook = functions
       const accessToken = mercadopagoAccessToken.value();
       const mpWh = mercadopagoWebhookSecret.value();
       const appUrlValue = appUrlSecret.value();
+      const mpPublicKey = mercadopagoPublicKeySecret.value()?.trim() || "";
       if (!appUrlValue) {
         console.error("APP_URL no configurada");
         res.status(500).send("Configuration error");
@@ -338,7 +346,8 @@ exports.onepayWebhook = functions
           apiKey: onepayApiKeySecret.value(),
           webhookSecret: onepayWebhookSecret.value(),
           webhookToken: onepayWebhookTokenSecret.value(),
-        }
+        },
+        mpPublicKey
       );
       const rKey = resendApiKeySecret.value();
       const sEmail = senderEmailSecret.value();
@@ -382,7 +391,12 @@ exports.onepayWebhook = functions
 // Función temporal de prueba para simular actualización de ticket
 exports.testTicketUpdate = functions
   .runWith({
-    secrets: [mercadopagoAccessToken, mercadopagoWebhookSecret, appUrlSecret],
+    secrets: [
+      mercadopagoAccessToken,
+      mercadopagoWebhookSecret,
+      mercadopagoPublicKeySecret,
+      appUrlSecret,
+    ],
   })
   .https.onCall(async (data, context) => {
     try {
@@ -406,13 +420,16 @@ exports.testTicketUpdate = functions
       const accessToken = mercadopagoAccessToken.value();
       const webhookSecret = mercadopagoWebhookSecret.value();
       const appUrlValue = appUrlSecret.value();
+      const mpPublicKey = mercadopagoPublicKeySecret.value()?.trim() || "";
 
       // Crear configuración y servicio de pagos
       const config = PaymentServiceFactory.createPaymentConfig(
         accessToken,
         webhookSecret,
         appUrlValue || "https://bitcomedia-main-app.web.app",
-        isDevelopment
+        isDevelopment,
+        undefined,
+        mpPublicKey
       );
 
       const paymentService = PaymentServiceFactory.createPaymentService(config);
@@ -463,6 +480,7 @@ exports.createBalanceInstallmentPreference = functions
     secrets: [
       mercadopagoAccessToken,
       mercadopagoWebhookSecret,
+      mercadopagoPublicKeySecret,
       onepayApiKeySecret,
       onepayWebhookSecret,
       onepayWebhookTokenSecret,
@@ -480,10 +498,20 @@ exports.createBalanceInstallmentPreference = functions
     if (!ticketId) {
       throw new functions.https.HttpsError("invalid-argument", "Falta ticketId");
     }
-    const provider = await paymentsConfigProvider();
+    const ticketSnap = await admin
+      .firestore()
+      .collection("tickets")
+      .doc(ticketId)
+      .get();
+    if (!ticketSnap.exists) {
+      throw new functions.https.HttpsError("not-found", "Compra no encontrada");
+    }
+    const eventIdFromTicket = String(ticketSnap.data()?.eventId || "");
+    const provider = await resolvePaymentProviderForEventId(eventIdFromTicket);
     const accessToken = mercadopagoAccessToken.value();
     const webhookSecret = mercadopagoWebhookSecret.value();
     const appUrlValue = appUrlSecret.value();
+    const mpPublicKey = mercadopagoPublicKeySecret.value()?.trim() || "";
     const oneKey = onepayApiKeySecret.value();
     const oneWh = onepayWebhookSecret.value();
     const oneTok = onepayWebhookTokenSecret.value();
@@ -504,7 +532,8 @@ exports.createBalanceInstallmentPreference = functions
         apiKey: oneKey,
         webhookSecret: oneWh,
         webhookToken: oneTok,
-      }
+      },
+      provider === "onepay" ? undefined : mpPublicKey
     );
     const paymentService = PaymentServiceFactory.createPaymentService(config);
     try {
@@ -518,4 +547,54 @@ exports.createBalanceInstallmentPreference = functions
     }
   });
 
+exports.createMercadoPagoCardPayment = functions
+  .runWith({
+    secrets: [
+      mercadopagoAccessToken,
+      mercadopagoWebhookSecret,
+      mercadopagoPublicKeySecret,
+      appUrlSecret,
+    ],
+  })
+  .https.onCall(async (data: MercadoPagoCardPaymentRequest, context) => {
+    const uid = context.auth?.uid;
+    const guestEmail = String(data?.guestEmail || "").trim();
+    if (!uid && !guestEmail) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "Inicia sesión o indica el correo de la compra (invitado)."
+      );
+    }
+    const accessToken = mercadopagoAccessToken.value();
+    const webhookSecret = mercadopagoWebhookSecret.value();
+    const appUrlValue = appUrlSecret.value();
+    const mpPublicKey = mercadopagoPublicKeySecret.value()?.trim() || "";
+    if (!accessToken || !webhookSecret || !appUrlValue) {
+      throw new functions.https.HttpsError("internal", "Pago no configurado");
+    }
+    const config = PaymentServiceFactory.createPaymentConfig(
+      accessToken,
+      webhookSecret,
+      appUrlValue,
+      isDevelopment,
+      undefined,
+      mpPublicKey
+    );
+    const paymentService = PaymentServiceFactory.createPaymentService(config);
+    try {
+      return await paymentService.createMercadoPagoCardPayment(
+        data,
+        uid,
+        guestEmail || undefined
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new functions.https.HttpsError("failed-precondition", msg);
+    }
+  });
+
 exports.manageEventPromoterGrant = manageEventPromoterGrant;
+
+/** OAuth Mercado Pago Connect: vincular cuenta del organizador (split / marketplace). */
+exports.getMercadoPagoSellerOAuthUrl = getMercadoPagoSellerOAuthUrl;
+exports.mercadopagoOAuthCallback = mercadopagoOAuthCallback;

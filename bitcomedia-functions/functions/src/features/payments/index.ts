@@ -16,3 +16,8 @@ export type {OnePayWebhookPayload} from "./handlers/onepay.api";
 
 // Factories
 export {PaymentServiceFactory} from "./factories/payment-service.factory";
+
+export {
+  paymentProviderFromEventData,
+  resolvePaymentProviderForEventId,
+} from "./payment-provider";

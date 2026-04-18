@@ -105,6 +105,11 @@ function parseTicketFlyerAccentHex(input: unknown): string {
   return parseTicketFlyerHex(input, TICKET_FLYER_ACCENT_DEFAULT);
 }
 
+function paymentProviderFromStored(raw: unknown): 'onepay' | 'mercadopago' {
+  const s = String(raw ?? '').trim().toLowerCase();
+  return s === 'mercadopago' ? 'mercadopago' : 'onepay';
+}
+
 /** Ajusta palco_multipersona y seats_per_unit según zonas del mapa por localidad. */
 function normalizeSectionsForSave(sections: EventSection[], zones: VenueMapZone[]): EventSection[] {
   return sections.map((s) => {
@@ -166,6 +171,8 @@ interface FormDataType {
   abono_max_days_before_event: string;
   /** WhatsApp soporte en ficha pública (solo dígitos, obligatorio). */
   support_whatsapp: string;
+  /** Pasarela para venta directa en la plataforma (eventos sin campo → OnePay en backend). */
+  payment_provider: 'onepay' | 'mercadopago';
 }
 
 interface EventFormScreenProps {
@@ -317,6 +324,7 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
     abono_min_amount_cop: '0',
     abono_max_days_before_event: '7',
     support_whatsapp: '',
+    payment_provider: 'onepay',
   });
 
   // Fetch event data from Firestore
@@ -450,6 +458,9 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
               ? String(Math.max(1, Math.round(Number(data.abono_max_days_before_event))))
               : '7',
           support_whatsapp: String(data.support_whatsapp ?? '').replace(/\D/g, ''),
+          payment_provider: paymentProviderFromStored(
+            (data as { payment_provider?: unknown }).payment_provider
+          ),
         });
         setOrganizerIdDraft(String(data.organizer_id || ''));
         setDocumentSlug(String(data.slug || '').trim());
@@ -781,6 +792,7 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
         ),
         ...abonoFieldsFromFormInputs(formData),
         support_whatsapp: supportWhatsappDigits,
+        payment_provider: formData.payment_provider,
       };
 
       if (isSuperAdminUser) {
@@ -1134,6 +1146,7 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
         creation_date: Timestamp.now(),
         ...abonoFieldsFromFormInputs(formData),
         support_whatsapp: dupSupportWhatsapp,
+        payment_provider: formData.payment_provider,
       };
 
       if (isRecurring) {
@@ -1445,6 +1458,25 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
                       placeholder="https://ejemplo.com/comprar-tickets"
                       required
                     />
+                  </div>
+                )}
+
+                {formData.event_type === 'bitcomedia_direct' && (
+                  <div className="form-group">
+                    <CustomSelector
+                      label="Pasarela de pago (checkout)"
+                      name="payment_provider"
+                      value={formData.payment_provider}
+                      onChange={handleInputChange}
+                      options={[
+                        { value: 'onepay', label: 'OnePay' },
+                        { value: 'mercadopago', label: 'Mercado Pago' },
+                      ]}
+                      required
+                    />
+                    <p className="helper-text" style={{ marginTop: '0.35rem' }}>
+                      Eventos antiguos sin este campo siguen usando OnePay. Solo aplica a venta directa en la plataforma.
+                    </p>
                   </div>
                 )}
               </div>
