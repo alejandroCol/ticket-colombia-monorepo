@@ -187,6 +187,14 @@ export interface Event {
   support_whatsapp?: string;
   /** Pasarela de checkout (sin valor → backend usa OnePay). */
   payment_provider?: 'onepay' | 'mercadopago';
+  /** Ocultar en la tienda el conteo de entradas o palcos disponibles. */
+  hide_public_remaining_count?: boolean;
+  /** Si true, la tienda muestra el número exacto de cupos disponibles. */
+  show_exact_ticket_count?: boolean;
+  /**
+   * Default true: tarifa aparte y cobro = lista + tarifa. Si false: cobro = solo precio de lista; la tarifa va del cobro en MP.
+   */
+  buyer_service_fee_shown_separately?: boolean;
   [key: string]: string | number | boolean | Timestamp | Date | object | undefined;
 }
 

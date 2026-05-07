@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { collection, query, where, getDocs, doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, getDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@services/firebase';
 import TopNavBar from '@containers/TopNavBar';
 import EventSubNav from '@components/EventSubNav';
@@ -18,12 +18,14 @@ import {
   getAnyPartnerGrantForTicketEvent,
   resolveEventCollection,
 } from '@services';
-import { validateTicket } from '@services/ticketService';
+import { validateTicket, resendTicketPdfEmail } from '@services/ticketService';
 import {
   isTicketCourtesyRow,
-  ticketLineAmountCOP,
   ticketListBuyerIdNumber,
   ticketListBuyerName,
+  isAdminTicketRowVisible,
+  buildParentBundleInfoMap,
+  ticketPerBoletoAmountCOP,
 } from '@utils/ticketListDisplay';
 import './index.scss';
 
@@ -48,7 +50,25 @@ interface Ticket {
   isGeneralCourtesy?: boolean;
   giftedBy?: string | null;
   ticketKind?: string;
-  metadata?: { userName?: string; buyerIdNumber?: string };
+  bundleParentTicketId?: string;
+  childTicketIds?: string[];
+  passCount?: number;
+  metadata?: { userName?: string; buyerIdNumber?: string; buyerPhone?: string };
+}
+
+async function collectBundleTicketIdsForEdit(t: Ticket): Promise<string[]> {
+  const ids = new Set<string>([t.id]);
+  if (t.ticketKind === 'purchase_bundle_parent') {
+    const ch = t.childTicketIds;
+    if (Array.isArray(ch)) ch.forEach((id) => ids.add(id));
+  } else if (t.ticketKind === 'purchase_pass' && t.bundleParentTicketId) {
+    ids.add(t.bundleParentTicketId);
+    const parentSnap = await getDoc(doc(db, 'tickets', t.bundleParentTicketId));
+    const parentData = parentSnap.data() as Ticket | undefined;
+    const ch = parentData?.childTicketIds;
+    if (Array.isArray(ch)) ch.forEach((id) => ids.add(id));
+  }
+  return [...ids];
 }
 
 const EventTicketsScreen: React.FC = () => {
@@ -65,6 +85,9 @@ const EventTicketsScreen: React.FC = () => {
   const [filterCortesias, setFilterCortesias] = useState<string>('all');
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
   const [editFormData, setEditFormData] = useState({ buyerName: '', buyerEmail: '', buyerPhone: '' });
+  const [editDialogSaved, setEditDialogSaved] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editSendLoading, setEditSendLoading] = useState(false);
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
   const [canEditRows, setCanEditRows] = useState(true);
   const [canBulkCourtesies, setCanBulkCourtesies] = useState(true);
@@ -77,6 +100,16 @@ const EventTicketsScreen: React.FC = () => {
   const [showTaquillaNav, setShowTaquillaNav] = useState(false);
   const [eventCollection, setEventCollection] = useState<'events' | 'recurring_events' | null>(null);
   const [showOrganizerExtras, setShowOrganizerExtras] = useState(false);
+
+  const visibleTickets = useMemo(
+    () => tickets.filter((t) => isAdminTicketRowVisible(t)),
+    [tickets]
+  );
+
+  const parentBundleMap = useMemo(
+    () => buildParentBundleInfoMap(tickets),
+    [tickets]
+  );
 
   const loadEvent = async () => {
     if (!eventId) return;
@@ -195,12 +228,12 @@ const EventTicketsScreen: React.FC = () => {
 
   const localidades = useMemo(() => {
     const set = new Set<string>();
-    tickets.forEach(t => set.add(t.sectionName || 'General'));
+    visibleTickets.forEach(t => set.add(t.sectionName || 'General'));
     return Array.from(set).sort();
-  }, [tickets]);
+  }, [visibleTickets]);
 
   useEffect(() => {
-    let filtered = tickets;
+    let filtered = visibleTickets;
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase().trim();
       filtered = filtered.filter(t => {
@@ -215,10 +248,11 @@ const EventTicketsScreen: React.FC = () => {
     else if (filterValidado === 'pending') filtered = filtered.filter(t => !t.validatedAt);
     if (filterCortesias === 'only') filtered = filtered.filter(t => isTicketCourtesyRow(t));
     setFilteredTickets(filtered);
-  }, [searchTerm, filterLocalidad, filterValidado, filterCortesias, tickets]);
+  }, [searchTerm, filterLocalidad, filterValidado, filterCortesias, visibleTickets]);
 
   const handleEdit = (t: Ticket) => {
     setEditingTicket(t);
+    setEditDialogSaved(false);
     setEditFormData({
       buyerName: ticketListBuyerName(t),
       buyerEmail: t.buyerEmail || '',
@@ -228,24 +262,64 @@ const EventTicketsScreen: React.FC = () => {
 
   const handleCancelEdit = () => {
     setEditingTicket(null);
+    setEditDialogSaved(false);
   };
 
   const handleSaveEdit = async () => {
     if (!editingTicket) return;
-    setLoading(true);
+    setSavingEdit(true);
     try {
-      await updateDoc(doc(db, 'tickets', editingTicket.id), {
+      const ids = await collectBundleTicketIdsForEdit(editingTicket);
+      const updates = {
         buyerName: editFormData.buyerName,
         buyerEmail: editFormData.buyerEmail,
-        buyerPhone: editFormData.buyerPhone || null
-      });
-      alert('✅ Boleto actualizado');
-      setEditingTicket(null);
+        buyerPhone: editFormData.buyerPhone || null,
+      };
+      const metaPatch = { userName: editFormData.buyerName };
+      await Promise.all(
+        ids.map(async (id) => {
+          const ref = doc(db, 'tickets', id);
+          const snap = await getDoc(ref);
+          const existing = (snap.data()?.metadata as Ticket['metadata']) || {};
+          await updateDoc(ref, {
+            ...updates,
+            metadata: { ...existing, ...metaPatch },
+            updatedAt: Timestamp.now(),
+          });
+        })
+      );
+      setEditDialogSaved(true);
       loadTickets();
     } catch (err) {
       alert('❌ Error al actualizar');
     } finally {
-      setLoading(false);
+      setSavingEdit(false);
+    }
+  };
+
+  const handleSendPdfFromEditDialog = async () => {
+    if (!editingTicket) return;
+    const email = editFormData.buyerEmail.trim();
+    if (!email) {
+      alert('Indica un correo de destino');
+      return;
+    }
+    setEditSendLoading(true);
+    try {
+      const r = await resendTicketPdfEmail({
+        ticketId: editingTicket.id,
+        recipientEmail: email,
+      });
+      alert(`✅ PDF enviado a ${r.sentTo}`);
+      loadTickets();
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message?: string }).message)
+          : 'Error al enviar';
+      alert(`❌ ${msg}`);
+    } finally {
+      setEditSendLoading(false);
     }
   };
 
@@ -309,10 +383,10 @@ const EventTicketsScreen: React.FC = () => {
   if (!eventId) return null;
 
   const isActive = (t: Ticket) => t.ticketStatus !== 'cancelled' && t.ticketStatus !== 'disabled';
-  const activeTickets = tickets.filter(isActive);
+  const activeTickets = visibleTickets.filter(isActive);
   const cortesias = activeTickets.filter(t => isTicketCourtesyRow(t));
   const vendidos = activeTickets.filter(t => !isTicketCourtesyRow(t));
-  const validados = tickets.filter(t => t.validatedAt).length;
+  const validados = visibleTickets.filter(t => t.validatedAt).length;
 
   return (
     <div className="event-tickets-screen">
@@ -414,7 +488,7 @@ const EventTicketsScreen: React.FC = () => {
                       <th>Localidad</th>
                       <th>Cédula</th>
                       <th>Nombre</th>
-                      <th>Precio</th>
+                      <th>Precio / boleto</th>
                       <th>Cortesía</th>
                       <th>Email</th>
                       <th>Teléfono</th>
@@ -424,68 +498,42 @@ const EventTicketsScreen: React.FC = () => {
                   </thead>
                   <tbody>
                     {filteredTickets.map(ticket => (
-                      <tr key={ticket.id} className={editingTicket?.id === ticket.id ? 'editing' : ''}>
-                        {editingTicket?.id === ticket.id ? (
-                          <td colSpan={11}>
-                            <div className="edit-form">
-                              <h4>Editar boleto</h4>
-                              <div className="form-row">
-                                <label>Nombre</label>
-                                <input value={editFormData.buyerName} onChange={e => setEditFormData(f => ({ ...f, buyerName: e.target.value }))} />
-                              </div>
-                              <div className="form-row">
-                                <label>Email</label>
-                                <input type="email" value={editFormData.buyerEmail} onChange={e => setEditFormData(f => ({ ...f, buyerEmail: e.target.value }))} />
-                              </div>
-                              <div className="form-row">
-                                <label>Teléfono</label>
-                                <input value={editFormData.buyerPhone} onChange={e => setEditFormData(f => ({ ...f, buyerPhone: e.target.value }))} />
-                              </div>
-                              <div className="edit-actions">
-                                <SecondaryButton onClick={handleCancelEdit}>Cancelar</SecondaryButton>
-                                <PrimaryButton onClick={handleSaveEdit}>Guardar</PrimaryButton>
-                              </div>
-                            </div>
-                          </td>
-                        ) : (
-                          <>
-                            <td>{ticket.validatedAt ? <span className="badge ok">✓ Validado</span> : <span className="badge pending">Pendiente</span>}</td>
-                            <td>
-                              {canValidateRow && canValidate(ticket) && (
-                                <button className="btn-icon validate" onClick={() => handleValidate(ticket)} title="Validar" disabled={loading}>✓</button>
-                              )}
-                              {canEditRows && (
-                                <button className="btn-icon edit" onClick={() => handleEdit(ticket)} title="Editar" disabled={loading}>✏️</button>
-                              )}
-                              {canDisableRow && (
-                                <button className={`btn-icon ${(ticket.ticketStatus === 'cancelled' || ticket.ticketStatus === 'disabled') ? 'enable' : 'disable'}`} onClick={() => handleDisable(ticket)} title={(ticket.ticketStatus === 'cancelled' || ticket.ticketStatus === 'disabled') ? 'Habilitar' : 'Deshabilitar'} disabled={loading}>{(ticket.ticketStatus === 'cancelled' || ticket.ticketStatus === 'disabled') ? '✓' : '✕'}</button>
-                              )}
-                            </td>
-                            <td>{ticket.sectionName || 'General'}</td>
-                            <td>{ticketListBuyerIdNumber(ticket) || '—'}</td>
-                            <td>{ticketListBuyerName(ticket) || '—'}</td>
-                            <td>
-                              {isTicketCourtesyRow(ticket) ? (
-                                <span className="badge cortesia">Cortesía</span>
-                              ) : (
-                                `$${ticketLineAmountCOP(ticket).toLocaleString('es-CO')}`
-                              )}
-                            </td>
-                            <td>
-                              {isTicketCourtesyRow(ticket)
-                                ? ticket.isGeneralCourtesy
-                                  ? 'Evento general'
-                                  : ticket.giftedBy
-                                    ? `Por: ${ticket.giftedBy}`
-                                    : '—'
-                                : '—'}
-                            </td>
-                            <td>{ticket.buyerEmail || '—'}</td>
-                            <td>{ticket.buyerPhone || '—'}</td>
-                            <td>{getStatusBadge(ticket.ticketStatus || ticket.status)}</td>
-                            <td>{getPaymentBadge(ticket.paymentMethod, ticket.createdByAdmin)}</td>
-                          </>
-                        )}
+                      <tr key={ticket.id}>
+                        <td>{ticket.validatedAt ? <span className="badge ok">✓ Validado</span> : <span className="badge pending">Pendiente</span>}</td>
+                        <td>
+                          {canValidateRow && canValidate(ticket) && (
+                            <button className="btn-icon validate" onClick={() => handleValidate(ticket)} title="Validar" disabled={loading}>✓</button>
+                          )}
+                          {canEditRows && (
+                            <button className="btn-icon edit" onClick={() => handleEdit(ticket)} title="Editar" disabled={loading}>✏️</button>
+                          )}
+                          {canDisableRow && (
+                            <button className={`btn-icon ${(ticket.ticketStatus === 'cancelled' || ticket.ticketStatus === 'disabled') ? 'enable' : 'disable'}`} onClick={() => handleDisable(ticket)} title={(ticket.ticketStatus === 'cancelled' || ticket.ticketStatus === 'disabled') ? 'Habilitar' : 'Deshabilitar'} disabled={loading}>{(ticket.ticketStatus === 'cancelled' || ticket.ticketStatus === 'disabled') ? '✓' : '✕'}</button>
+                          )}
+                        </td>
+                        <td>{ticket.sectionName || 'General'}</td>
+                        <td>{ticketListBuyerIdNumber(ticket) || '—'}</td>
+                        <td>{ticketListBuyerName(ticket) || '—'}</td>
+                        <td>
+                          {isTicketCourtesyRow(ticket) ? (
+                            <span className="badge cortesia">Cortesía</span>
+                          ) : (
+                            `$${ticketPerBoletoAmountCOP(ticket, parentBundleMap).toLocaleString('es-CO')}`
+                          )}
+                        </td>
+                        <td>
+                          {isTicketCourtesyRow(ticket)
+                            ? ticket.isGeneralCourtesy
+                              ? 'Evento general'
+                              : ticket.giftedBy
+                                ? `Por: ${ticket.giftedBy}`
+                                : '—'
+                            : '—'}
+                        </td>
+                        <td>{ticket.buyerEmail || '—'}</td>
+                        <td>{ticket.buyerPhone || '—'}</td>
+                        <td>{getStatusBadge(ticket.ticketStatus || ticket.status)}</td>
+                        <td>{getPaymentBadge(ticket.paymentMethod, ticket.createdByAdmin)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -495,6 +543,92 @@ const EventTicketsScreen: React.FC = () => {
           </>
         )}
       </div>
+
+      {editingTicket && canEditRows && (
+        <div
+          className="event-tickets-dialog-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-ticket-dialog-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) handleCancelEdit();
+          }}
+        >
+          <div className="event-tickets-edit-dialog" onClick={(e) => e.stopPropagation()}>
+            <h3 id="edit-ticket-dialog-title">Editar boleto</h3>
+            <p className="event-tickets-edit-dialog__locality">
+              {editingTicket.sectionName || 'General'}
+              {' · '}
+              <span className="event-tickets-edit-dialog__id">{editingTicket.id.slice(0, 8)}…</span>
+            </p>
+            <div className="event-tickets-edit-dialog__form">
+              <label className="event-tickets-edit-dialog__field">
+                Nombre
+                <input
+                  value={editFormData.buyerName}
+                  onChange={(e) => {
+                    setEditFormData((f) => ({ ...f, buyerName: e.target.value }));
+                    setEditDialogSaved(false);
+                  }}
+                  disabled={savingEdit}
+                  autoComplete="name"
+                />
+              </label>
+              <label className="event-tickets-edit-dialog__field">
+                Correo
+                <input
+                  type="email"
+                  value={editFormData.buyerEmail}
+                  onChange={(e) => {
+                    setEditFormData((f) => ({ ...f, buyerEmail: e.target.value }));
+                    setEditDialogSaved(false);
+                  }}
+                  disabled={savingEdit}
+                  autoComplete="email"
+                />
+              </label>
+              <label className="event-tickets-edit-dialog__field">
+                Teléfono
+                <input
+                  value={editFormData.buyerPhone}
+                  onChange={(e) => {
+                    setEditFormData((f) => ({ ...f, buyerPhone: e.target.value }));
+                    setEditDialogSaved(false);
+                  }}
+                  disabled={savingEdit}
+                  autoComplete="tel"
+                />
+              </label>
+            </div>
+            <div className="event-tickets-edit-dialog__actions">
+              <SecondaryButton onClick={handleCancelEdit} disabled={savingEdit || editSendLoading}>
+                Cerrar
+              </SecondaryButton>
+              <PrimaryButton onClick={handleSaveEdit} disabled={savingEdit || editSendLoading}>
+                {savingEdit ? 'Guardando…' : 'Guardar'}
+              </PrimaryButton>
+            </div>
+
+            <div className="event-tickets-edit-dialog__divider" />
+
+            <h4 className="event-tickets-edit-dialog__subtitle">Enviar entradas por correo</h4>
+            <p className="event-tickets-edit-dialog__hint">
+              {editDialogSaved
+                ? 'Se envía el PDF con los mismos códigos QR. El correo usado es el indicado arriba.'
+                : 'Guarda los cambios primero para poder enviar el PDF.'}
+            </p>
+            <div className="event-tickets-edit-dialog__send-row">
+              <PrimaryButton
+                type="button"
+                onClick={handleSendPdfFromEditDialog}
+                disabled={!editDialogSaved || savingEdit || editSendLoading}
+              >
+                {editSendLoading ? 'Enviando…' : 'Enviar PDF al correo'}
+              </PrimaryButton>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

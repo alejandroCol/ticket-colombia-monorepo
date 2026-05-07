@@ -713,6 +713,24 @@ const ConfigScreen: React.FC = () => {
                   <IconHubChevronRight size={20} />
                 </span>
               </button>
+              <button
+                type="button"
+                className="config-tile config-tile--accent"
+                onClick={() => navigate('/super-admin/conciliacion')}
+              >
+                <span className="config-tile__glyph" aria-hidden>
+                  <IconHubWallet size={24} />
+                </span>
+                <span className="config-tile__body">
+                  <span className="config-tile__name">Conciliación por evento</span>
+                  <span className="config-tile__hint">
+                    PDF: comisión tiquetera, todas las boletas, neto después de pasarela.
+                  </span>
+                </span>
+                <span className="config-tile__arrow" aria-hidden>
+                  <IconHubChevronRight size={20} />
+                </span>
+              </button>
             </div>
 
             <div className="config-module config-module--surface" style={{ marginTop: '1.25rem' }}>

@@ -11,6 +11,18 @@ import type { Ticket } from './types';
 const functions = getFunctions(app);
 const createTicketPreference = httpsCallable(functions, 'createTicketPreference');
 
+export async function resendTicketPdfEmail(params: {
+  ticketId: string;
+  recipientEmail?: string;
+}): Promise<{ success: boolean; sentTo: string; parentTicketId: string }> {
+  const fn = httpsCallable<
+    { ticketId: string; recipientEmail?: string },
+    { success: boolean; sentTo: string; parentTicketId: string }
+  >(functions, 'resendTicketPdfEmail');
+  const result = await fn(params);
+  return result.data;
+}
+
 export interface CreateReservationResult {
   reservationId: string;
   expiresAt: number;
@@ -83,11 +95,20 @@ export function ticketCreatedAtMs(t: Ticket): number {
   return 0;
 }
 
-/** Boletos válidos para métricas de ventas (misma lógica que EventStats) */
+/** Estados que representan venta con dinero cobrado (no reservas sin pago). */
+const REVENUE_COUNTING_STATUSES = ['paid', 'used', 'redeemed'] as const;
+
+/**
+ * Boletos que cuentan en ingresos / reportes de ventas: pagados o ya canjeados/usados.
+ * Excluye `reserved` (cupo retenido sin pago), cancelados, deshabilitados, transfers y pases hijo (`purchase_pass`).
+ * Misma regla en estadísticas, balance y PDFs de conciliación.
+ */
 export function isTicketValidForSalesStats(t: Ticket): boolean {
   const status = t.ticketStatus as string;
-  const invalid = ['cancelled', 'disabled'].includes(status) || (t as { transferredTo?: string }).transferredTo;
-  const valid = ['paid', 'reserved', 'used', 'redeemed'].includes(status);
+  const invalid =
+    ['cancelled', 'disabled'].includes(status) || (t as { transferredTo?: string }).transferredTo;
+  const valid = (REVENUE_COUNTING_STATUSES as readonly string[]).includes(status);
+  if ((t as { ticketKind?: string }).ticketKind === 'purchase_pass') return false;
   return valid && !invalid;
 }
 

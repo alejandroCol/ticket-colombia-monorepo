@@ -4,13 +4,25 @@ import logoUrl from '@assets/brand/ticket-colombia-lockup.png';
 import type { Event, Ticket } from '@services/types';
 import type { Expense } from '@services/firestore';
 import type { OrganizerBuyerFeeInput, GatewayCommissionConfig } from '@utils/revenueBreakdown';
-import { ticketNetOrganizerCOP } from '@utils/revenueBreakdown';
+import {
+  ticketNetOrganizerCOP,
+  ticketIsManualLike,
+  ticketIsGatewayOnlineSale,
+  buyerPaysServiceFeeOnTop,
+  inferSubtotalAndTiqueteraFee,
+  computePasarelaCommissionCOP,
+  computeServiceFeeCOP,
+  buyerFeeFixedUnitCountFromRequest,
+} from '@utils/revenueBreakdown';
+import { validTicketsForReportSales } from '@utils/eventReportFilters';
+import { isTicketCourtesyRow } from '@utils/ticketListDisplay';
 import {
   ticketLineAmountCOP,
   ticketListBuyerIdNumber,
   ticketListBuyerName,
   ticketListBuyerPhone,
 } from '@utils/ticketListDisplay';
+import { ticketCreatedAtMs } from '@services/ticketService';
 
 /** Contexto para montos netos por fila (deducciones de tiquetera y pasarela de pagos). */
 export type PdfVentasMoneyContext = {
@@ -462,3 +474,326 @@ export async function pdfVentasFiltradas(
   });
 }
 
+type ConciliacionMoneyCtx = {
+  event: Event;
+  globalFeesPercent: number;
+  organizerFee: OrganizerBuyerFeeInput;
+  gateway: GatewayCommissionConfig;
+};
+
+function filterComisionReportTickets(
+  tickets: Ticket[],
+  excludeCourtesy: boolean,
+  excludeManual: boolean
+): Ticket[] {
+  let list = tickets.filter(validTicketsForReportSales);
+  if (excludeCourtesy) list = list.filter((t) => !isTicketCourtesyRow(t));
+  if (excludeManual) list = list.filter((t) => !ticketIsManualLike(t));
+  return list;
+}
+
+/** Comisión tiquetera (tarifa al comprador en línea) por boleto; totales al pie. */
+export async function pdfConciliacionComisionTiquetera(
+  eventName: string,
+  tickets: Ticket[],
+  money: Pick<ConciliacionMoneyCtx, 'event' | 'globalFeesPercent' | 'organizerFee'>,
+  opts: {
+    excludeCourtesy: boolean;
+    excludeManual: boolean;
+    basename: string;
+  }
+): Promise<void> {
+  const filtered = filterComisionReportTickets(
+    tickets,
+    opts.excludeCourtesy,
+    opts.excludeManual
+  );
+  const periodLabel = `Evento completo · Excl. cortesías: ${opts.excludeCourtesy ? 'Sí' : 'No'} · Excl. manuales/taquilla: ${
+    opts.excludeManual ? 'Sí' : 'No'
+  }`;
+  const { doc, startY } = await docWithHeaderLandscape(
+    'Conciliación · Comisión tiquetera',
+    eventName,
+    periodLabel
+  );
+
+  let sumFee = 0;
+  let sumCobrado = 0;
+  const rows = filtered.map((t) => {
+    const qty = Math.max(1, Math.floor(Number(t.quantity) || 1));
+    const lineTotal = Math.round(ticketLineAmountCOP(t));
+    const manual = ticketIsManualLike(t);
+    const sid = (t as { sectionId?: string }).sectionId;
+    const mz = (t as { mapZoneId?: string }).mapZoneId;
+    let fee: number;
+    if (manual) {
+      const fixUnits = buyerFeeFixedUnitCountFromRequest(qty, money.event, sid, mz);
+      fee = computeServiceFeeCOP(
+        lineTotal,
+        qty,
+        money.event,
+        money.globalFeesPercent,
+        money.organizerFee,
+        fixUnits
+      ).feeCOP;
+    } else {
+      fee = inferSubtotalAndTiqueteraFee(
+        lineTotal,
+        qty,
+        money.event,
+        money.globalFeesPercent,
+        money.organizerFee,
+        sid,
+        mz,
+        false
+      ).tiqueteraFee;
+    }
+    sumFee += fee;
+    sumCobrado += lineTotal;
+    return [
+      formatTicketDate(t),
+      (t.buyerEmail || '').slice(0, 34),
+      (t.buyerName || t.metadata?.userName || '—').slice(0, 26),
+      (t.sectionName || t.metadata?.seatNumber || '—').slice(0, 18),
+      String(qty),
+      paymentMethodLabel(t),
+      formatCOP(lineTotal),
+      formatCOP(fee),
+    ];
+  });
+
+  if (rows.length === 0) {
+    doc.setFontSize(10);
+    doc.setTextColor(80, 88, 100);
+    doc.text('No hay boletos que coincidan con los filtros seleccionados.', 14, startY);
+    download(doc, opts.basename);
+    return;
+  }
+
+  autoTable(doc, {
+    startY,
+    head: [
+      ['Fecha', 'Email', 'Nombre', 'Localidad', 'Cant.', 'Pago', 'Cobrado', 'Com.tiquetera'],
+    ],
+    body: rows,
+    theme: 'striped',
+    headStyles: { fillColor: BRAND_BLUE, textColor: 255, fontStyle: 'bold' },
+    styles: { fontSize: 7, cellPadding: 1.6 },
+    columnStyles: { 6: { halign: 'right' }, 7: { halign: 'right' } },
+    margin: { left: 14, right: 14 },
+  });
+  const finalY =
+    (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? startY + 40;
+  drawTotalesSection(doc, finalY, [
+    `Registros: ${rows.length}`,
+    `Total cobrado (suma líneas): ${formatCOP(sumCobrado)}`,
+    `Total comisión tiquetera: ${formatCOP(sumFee)}`,
+  ]);
+  download(doc, opts.basename);
+}
+
+/** Listado completo de documentos de boleto en el evento. */
+export async function pdfConciliacionTodasLasBoletas(
+  eventName: string,
+  tickets: Ticket[],
+  opts: { basename: string }
+): Promise<void> {
+  const sorted = [...tickets].sort((a, b) => {
+    const ac = ticketCreatedAtMs(a);
+    const bc = ticketCreatedAtMs(b);
+    return bc - ac;
+  });
+  const periodLabel = 'Todos los registros de boletos en Firestore para este evento';
+  const { doc, startY } = await docWithHeaderLandscape(
+    'Conciliación · Todas las boletas',
+    eventName,
+    periodLabel
+  );
+
+  const rows = sorted.map((t) => {
+    const amt = Math.round(Number(t.amount) || Number(t.price) || 0);
+    const cort = isTicketCourtesyRow(t) ? 'Sí' : 'No';
+    const man = ticketIsManualLike(t) ? 'Sí' : 'No';
+    return [
+      formatTicketDate(t),
+      (t.id || '—').slice(0, 14),
+      (t.buyerEmail || '').slice(0, 30),
+      (t.buyerName || t.metadata?.userName || '—').slice(0, 22),
+      (t.sectionName || t.metadata?.seatNumber || '—').slice(0, 16),
+      String(t.quantity ?? 1),
+      paymentMethodLabel(t),
+      String(t.ticketStatus || '—'),
+      cort,
+      man,
+      formatCOP(amt),
+    ];
+  });
+
+  if (rows.length === 0) {
+    doc.setFontSize(10);
+    doc.setTextColor(80, 88, 100);
+    doc.text('No hay boletos para este evento.', 14, startY);
+    download(doc, opts.basename);
+    return;
+  }
+
+  autoTable(doc, {
+    startY,
+    head: [
+      [
+        'Fecha',
+        'ID',
+        'Email',
+        'Nombre',
+        'Localidad',
+        'Cant.',
+        'Pago',
+        'Estado',
+        'Cort.',
+        'Man.',
+        'Monto',
+      ],
+    ],
+    body: rows,
+    theme: 'striped',
+    headStyles: { fillColor: BRAND_BLUE, textColor: 255, fontStyle: 'bold' },
+    styles: { fontSize: 6.5, cellPadding: 1.4 },
+    columnStyles: { 10: { halign: 'right' } },
+    margin: { left: 14, right: 14 },
+  });
+  const sumAmt = sorted.reduce((s, t) => s + Math.round(Number(t.amount) || Number(t.price) || 0), 0);
+  const sumQty = sorted.reduce((s, t) => s + (Number(t.quantity) || 1), 0);
+  const finalY =
+    (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? startY + 40;
+  drawTotalesSection(doc, finalY, [
+    `Registros: ${rows.length}`,
+    `Suma cantidades: ${sumQty}`,
+    `Suma montos (amount/price por doc.): ${formatCOP(sumAmt)}`,
+  ]);
+  download(doc, opts.basename);
+}
+
+/**
+ * Solo cobros con pasarela (no manual).
+ * Si el evento cobra la tarifa tiquetera aparte (`buyer_service_fee_shown_separately`):
+ * total en pasarela = `amount` (lista + comisión pagada por el usuario); comisión pasarela sobre ese total; neto = amount − pasarela.
+ * Si la tarifa va incluida en el cobro de lista: mismo criterio que antes (subtotal inferido y `ticketNetOrganizerCOP`).
+ * Al pie: se resta la comisión tiquetera informada al generar el reporte (un total en COP).
+ */
+export async function pdfConciliacionPasarelaNeto(
+  eventName: string,
+  tickets: Ticket[],
+  money: ConciliacionMoneyCtx,
+  opts: { tiqueteraCommissionToSubtractCOP: number; basename: string }
+): Promise<void> {
+  const filtered = tickets
+    .filter(validTicketsForReportSales)
+    .filter((t) => ticketIsGatewayOnlineSale(t));
+  const feeOnTop = buyerPaysServiceFeeOnTop(money.event);
+  const tiqueteraSubtract = Math.max(0, Math.round(Number(opts.tiqueteraCommissionToSubtractCOP) || 0));
+  const periodLabel = feeOnTop
+    ? 'Tarifa tiquetera aparte: comisión pasarela calculada sobre el total cobrado (lista + tarifa). Config pasarela global.'
+    : 'Tarifa incluida en precio de lista: comisión pasarela sobre subtotal de entradas (estimado). Config pasarela global.';
+  const { doc, startY } = await docWithHeaderLandscape(
+    'Conciliación · Neto después de pasarela',
+    eventName,
+    periodLabel
+  );
+
+  let sumCobrado = 0;
+  let sumSubtotal = 0;
+  let sumPasarela = 0;
+  let sumNeto = 0;
+
+  const rows = filtered.map((t) => {
+    const qty = Math.max(1, Math.floor(Number(t.quantity) || 1));
+    const amount = Math.round(Number(t.amount) || 0);
+    const manual = ticketIsManualLike(t);
+    const sid = (t as { sectionId?: string }).sectionId;
+    const mz = (t as { mapZoneId?: string }).mapZoneId;
+    const { subtotal } = inferSubtotalAndTiqueteraFee(
+      amount,
+      qty,
+      money.event,
+      money.globalFeesPercent,
+      money.organizerFee,
+      sid,
+      mz,
+      manual
+    );
+    const pasarelaBase = feeOnTop ? amount : subtotal;
+    const pas = computePasarelaCommissionCOP(pasarelaBase, money.gateway);
+    const neto = feeOnTop
+      ? Math.max(0, amount - pas.total)
+      : ticketNetOrganizerCOP(
+          t,
+          money.event,
+          money.globalFeesPercent,
+          money.organizerFee,
+          money.gateway
+        );
+    sumCobrado += amount;
+    sumSubtotal += subtotal;
+    sumPasarela += pas.total;
+    sumNeto += neto;
+    return [
+      formatTicketDate(t),
+      (t.buyerEmail || '').slice(0, 28),
+      (t.buyerName || t.metadata?.userName || '—').slice(0, 20),
+      (t.sectionName || t.metadata?.seatNumber || '—').slice(0, 12),
+      String(qty),
+      formatCOP(subtotal),
+      formatCOP(amount),
+      formatCOP(pas.total),
+      formatCOP(neto),
+    ];
+  });
+
+  if (rows.length === 0) {
+    doc.setFontSize(10);
+    doc.setTextColor(80, 88, 100);
+    doc.text('No hay boletos vendidos con pasarela para este evento.', 14, startY);
+    download(doc, opts.basename);
+    return;
+  }
+
+  autoTable(doc, {
+    startY,
+    head: [
+      [
+        'Fecha',
+        'Email',
+        'Nombre',
+        'Loc.',
+        'Cant.',
+        'Entradas',
+        'Total cobrado usuario',
+        'Comisión pasarela',
+        'Neto',
+      ],
+    ],
+    body: rows,
+    theme: 'striped',
+    headStyles: { fillColor: BRAND_BLUE, textColor: 255, fontStyle: 'bold' },
+    styles: { fontSize: 6.5, cellPadding: 1.4 },
+    columnStyles: {
+      5: { halign: 'right' },
+      6: { halign: 'right' },
+      7: { halign: 'right' },
+      8: { halign: 'right' },
+    },
+    margin: { left: 14, right: 14 },
+  });
+  const finalY =
+    (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? startY + 40;
+  const totalEnCuenta = Math.max(0, sumNeto - tiqueteraSubtract);
+  drawTotalesSection(doc, finalY, [
+    `Registros: ${rows.length}`,
+    `Total subtotal entradas: ${formatCOP(sumSubtotal)}`,
+    `Suma total cobrado al usuario: ${formatCOP(sumCobrado)}`,
+    `Total comisión pasarela: ${formatCOP(sumPasarela)}`,
+    `Comisión tiquetera a descontar (informada al generar): ${formatCOP(tiqueteraSubtract)}`,
+    `Total neto en cuenta: ${formatCOP(totalEnCuenta)}`,
+  ]);
+  download(doc, opts.basename);
+}

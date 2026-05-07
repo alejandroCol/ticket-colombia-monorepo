@@ -1,7 +1,11 @@
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import {defineSecret} from "firebase-functions/params";
-import {capacityBucketAndCount} from "../reservations/availability";
+import {
+  assertEnoughCapacityForPurchase,
+  capacityBucketAndCount,
+  mapZonesForSection,
+} from "../reservations/availability";
 import {generateMultipleTicketsPdf} from "./pdf-generator-multiple";
 import {sendTicketEmail} from "./email-sender";
 import {randomUUID} from "crypto";
@@ -61,6 +65,8 @@ interface CreateManualTicketRequest {
   isGeneralCourtesy?: boolean;
   /** Quien regala la cortesía (cuando isGeneralCourtesy es false) */
   giftedBy?: string;
+  /** Celda/palco del mapa cuando la localidad tiene varias subdivisiones (>1 zona). Obligatorio en ese caso. */
+  mapZoneId?: string;
 }
 
 /**
@@ -93,7 +99,7 @@ export const createManualTicket = functions
       const adminUid = context.auth.uid;
 
       // 2. Validación de Datos de Entrada
-      const {eventId, buyerName, buyerEmail, buyerPhone, buyerIdNumber, quantity, sectionId, sectionName, isCourtesy, isGeneralCourtesy, giftedBy} = data;
+      const {eventId, buyerName, buyerEmail, buyerPhone, buyerIdNumber, quantity, sectionId, isCourtesy, isGeneralCourtesy, giftedBy} = data;
 
       if (!eventId || !buyerName || !buyerEmail || !quantity || quantity <= 0) {
         throw new functions.https.HttpsError(
@@ -121,29 +127,131 @@ export const createManualTicket = functions
       const eventData = eventDoc.data() as admin.firestore.DocumentData;
       console.log("[createManualTicket] Evento OK:", eventData?.name);
 
+      const sectionsRaw = Array.isArray(eventData.sections) ? (eventData.sections as Record<string, unknown>[]) : [];
+      const hasSections = sectionsRaw.length > 0;
+      const sidReq = String(sectionId || "").trim();
+
+      if (hasSections && !sidReq) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Este evento tiene localidades: debes indicar la localidad del boleto."
+        );
+      }
+
+      let resolvedSectionId: string | null = null;
+      let resolvedSectionName: string | null = null;
+      if (sidReq && hasSections) {
+        const sec = sectionsRaw.find((s) => String((s as {id?: string}).id || "").trim() === sidReq);
+        if (!sec) {
+          throw new functions.https.HttpsError(
+            "invalid-argument",
+            "La localidad indicada no existe en este evento."
+          );
+        }
+        resolvedSectionId = String((sec as {id?: string}).id || "").trim() || null;
+        resolvedSectionName = String((sec as {name?: string}).name || "").trim() || null;
+      }
+
+      let seatsPerUnit = 1;
+      if (resolvedSectionId) {
+        const sel = sectionsRaw.find((s) => String((s as {id?: string}).id || "") === resolvedSectionId);
+        if (sel) {
+          seatsPerUnit = Math.max(1, Number((sel as {seats_per_unit?: number}).seats_per_unit) || 1);
+        }
+      }
+
+      /** Localidad dividida en el mapa: más de una zona para esta sección → hay que elegir celda/palco. */
+      let resolvedMapZoneId = "";
+      let resolvedMapZoneLabel = "";
+      const mapCellsForSection = resolvedSectionId
+        ? mapZonesForSection(eventData, resolvedSectionId)
+        : [];
+      const requiresMapPick = mapCellsForSection.length > 1;
+      const mapZoneReq = String(data.mapZoneId || "").trim();
+
+      if (requiresMapPick && !mapZoneReq) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Esta localidad tiene varias celdas/palcos en el mapa: selecciona la mesa o palco número concreto."
+        );
+      }
+      if (!requiresMapPick && mapZoneReq) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Esta localidad no exige elegir celda en el mapa (no usar mapZoneId)."
+        );
+      }
+      if (mapZoneReq && requiresMapPick) {
+        const matches = mapCellsForSection.some((z) => z.id === mapZoneReq);
+        if (!matches) {
+          throw new functions.https.HttpsError(
+            "invalid-argument",
+            "La celda del mapa no corresponde a esta localidad."
+          );
+        }
+        resolvedMapZoneId = mapZoneReq;
+        const rawVm = eventData.venue_map as
+          | {zones?: Array<{id?: string; label?: string; palco_index?: number}>}
+          | undefined;
+        const zn = rawVm?.zones?.find((z) => z && String(z.id || "").trim() === mapZoneReq);
+        if (zn) {
+          const pi = zn.palco_index !== undefined ? String(zn.palco_index) : "";
+          resolvedMapZoneLabel = String(zn.label || (pi ? `Palco ${pi}` : "")).trim() || resolvedMapZoneId.slice(0, 16);
+        } else {
+          resolvedMapZoneLabel = mapZoneReq.slice(0, 32);
+        }
+      }
+
+      if (resolvedMapZoneId) {
+        if (quantity !== seatsPerUnit) {
+          throw new functions.https.HttpsError(
+            "invalid-argument",
+            `Para ocupar esa celda del mapa la cantidad debe ser exactamente ${seatsPerUnit} (venta completa del palco/mesa como en la tienda).`
+          );
+        }
+      }
+
+      try {
+        await assertEnoughCapacityForPurchase(
+          admin.firestore(),
+          eventId,
+          eventData,
+          resolvedMapZoneId ? seatsPerUnit : quantity,
+          resolvedSectionId || undefined,
+          resolvedSectionName || undefined,
+          resolvedMapZoneId || undefined
+        );
+      } catch (capErr: unknown) {
+        const msg = capErr instanceof Error ? capErr.message : "No hay cupo suficiente.";
+        throw new functions.https.HttpsError("failed-precondition", msg);
+      }
+
       // Determinar precio: cortesía = 0, sino basado en sección o precio por defecto
       let ticketPrice = eventData.ticket_price;
       if (isCourtesy) {
         ticketPrice = 0;
-      } else if (sectionId && eventData.sections && Array.isArray(eventData.sections)) {
-        const selectedSection = eventData.sections.find((s: any) => s.id === sectionId);
+      } else if (resolvedSectionId) {
+        const selectedSection = sectionsRaw.find(
+          (s) => String((s as {id?: string}).id || "") === resolvedSectionId
+        ) as {price?: number} | undefined;
         if (selectedSection) {
           ticketPrice = selectedSection.price;
         }
       }
 
-      let seatsPerUnit = 1;
-      if (sectionId && eventData.sections && Array.isArray(eventData.sections)) {
-        const sel = eventData.sections.find((s: any) => s.id === sectionId);
-        if (sel) {
-          seatsPerUnit = Math.max(1, Number(sel.seats_per_unit) || 1);
-        }
-      }
-      const totalPasses = quantity * seatsPerUnit;
+      /** Unidades «pack» (mesas/no map: varias ventas simultáneas; map: una celda por solicitud). */
+      const bundleGroups = resolvedMapZoneId ? 1 : quantity;
+      const totalPasses = bundleGroups * seatsPerUnit;
       const revenueTotal =
-        Number(ticketPrice) * quantity * (isCourtesy ? 0 : 1);
+        Number(ticketPrice) * bundleGroups * (isCourtesy ? 0 : 1);
       const isBundle = seatsPerUnit > 1;
       const bundleLeaderId = isBundle ? randomUUID() : "";
+
+      /** Texto ubicación PDF / UI (nombre de localidad + celda opcional). */
+      const sectionLabelForTickets =
+        resolvedMapZoneLabel && resolvedSectionName ?
+          `${resolvedSectionName} · ${resolvedMapZoneLabel}` :
+          resolvedSectionName || resolvedMapZoneLabel || null;
 
       const ticketsToCreate = [];
       for (let i = 0; i < totalPasses; i++) {
@@ -171,14 +279,14 @@ export const createManualTicket = functions
           buyerIdNumber: buyerIdNumber || null,
           price: isBundle ? (i === 0 ? ticketPrice : 0) : ticketPrice,
           currency: "COP",
-          status: "approved",
+          status: "paid",
           paymentMethod: "manual",
-          sectionId: sectionId || null,
-          sectionName: sectionName || null,
-          mapZoneId: "",
+          sectionId: resolvedSectionId,
+          sectionName: sectionLabelForTickets,
+          mapZoneId: resolvedMapZoneId || "",
           transferredTo: null,
           ticketStatus: "paid",
-          quantity: isBundle ? (i === 0 ? quantity : 1) : 1,
+          quantity: isBundle ? (i === 0 ? bundleGroups : 1) : 1,
           amount: lineAmount,
           purchaseAmount: lineAmount,
           ...(isBundle && i > 0 ? {bundleParentTicketId: bundleLeaderId} : {}),
@@ -190,10 +298,10 @@ export const createManualTicket = functions
             } :
             {ticketKind: "standard"}),
           ...capacityBucketAndCount({
-            mapZoneId: "",
-            sectionId: sectionId || null,
-            sectionName: sectionName || null,
-            quantity: isBundle ? (i === 0 ? quantity : 1) : 1,
+            mapZoneId: resolvedMapZoneId || null,
+            sectionId: resolvedSectionId,
+            sectionName: resolvedSectionName,
+            quantity: isBundle ? (i === 0 ? bundleGroups : 1) : 1,
             ticketKind: isBundle ?
               (i === 0 ? "purchase_bundle_parent" : "purchase_pass") :
               "standard",

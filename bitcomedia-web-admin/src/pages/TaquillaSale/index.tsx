@@ -15,8 +15,9 @@ import {
   listPartnerGrantsForUser,
   logoutUser,
   functions,
+  getEventAvailability,
 } from '@services';
-import type { EventSection } from '@services/types';
+import type { EventSection, VenueMapZone, VenueMapConfig } from '@services/types';
 import './index.scss';
 
 type TaquillaEventOption = {
@@ -25,7 +26,15 @@ type TaquillaEventOption = {
   isRecurring: boolean;
   ticket_price: number;
   sections: EventSection[];
+  venue_map?: VenueMapConfig | null;
 };
+
+function zonesForSectionOption(option: TaquillaEventOption | null, sectId: string): VenueMapZone[] {
+  if (!option || !sectId.trim()) return [];
+  return (option.venue_map?.zones ?? []).filter(
+    (z) => String(z.sectionId ?? '').trim() === String(sectId).trim()
+  );
+}
 
 function optionKey(o: TaquillaEventOption): string {
   return `${o.isRecurring ? '1' : '0'}:${o.id}`;
@@ -41,6 +50,7 @@ const TaquillaSaleScreen: React.FC = () => {
   const [events, setEvents] = useState<TaquillaEventOption[]>([]);
   const [selectedKey, setSelectedKey] = useState('');
   const [sectionId, setSectionId] = useState('');
+  const [mapZoneId, setMapZoneId] = useState('');
   const [buyerName, setBuyerName] = useState('');
   const [buyerEmail, setBuyerEmail] = useState('');
   const [buyerPhone, setBuyerPhone] = useState('');
@@ -59,6 +69,62 @@ const TaquillaSaleScreen: React.FC = () => {
     [events, selectedKey]
   );
 
+  const sectionZonesSorted = useMemo(() => {
+    if (!selected || !sectionId) return [];
+    return zonesForSectionOption(selected, sectionId).sort(
+      (a, b) => (Number(a.palco_index) || 0) - (Number(b.palco_index) || 0)
+    );
+  }, [selected, sectionId]);
+
+  const needsMapZonePick = sectionZonesSorted.length > 1;
+  const selSectionMeta = selected?.sections?.find((s) => s.id === sectionId);
+  const seatsPerUnitTaquilla = Math.max(1, Number(selSectionMeta?.seats_per_unit) || 1);
+
+  const [mapAvailLoading, setMapAvailLoading] = useState(false);
+  const [mapZoneOccupancy, setMapZoneOccupancy] = useState<Record<string, number> | null>(null);
+  const [availLoadFailed, setAvailLoadFailed] = useState(false);
+
+  useEffect(() => {
+    if (!needsMapZonePick || !selected?.id?.trim() || !sectionId) {
+      setMapZoneOccupancy(null);
+      setMapAvailLoading(false);
+      setAvailLoadFailed(false);
+      return;
+    }
+    let cancelled = false;
+    setMapAvailLoading(true);
+    setMapZoneOccupancy(null);
+    setAvailLoadFailed(false);
+    void getEventAvailability(selected.id)
+      .then((a) => {
+        if (!cancelled) setMapZoneOccupancy(a.byMapZone || {});
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setMapZoneOccupancy(null);
+          setAvailLoadFailed(true);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setMapAvailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [needsMapZonePick, selected?.id, sectionId]);
+
+  const availableTaquillaZones = useMemo(() => {
+    if (!needsMapZonePick || mapAvailLoading || availLoadFailed || mapZoneOccupancy === null) return [];
+    return sectionZonesSorted.filter((z) => (mapZoneOccupancy[z.id] ?? 0) < 1);
+  }, [needsMapZonePick, sectionZonesSorted, mapZoneOccupancy, mapAvailLoading, availLoadFailed]);
+
+  useEffect(() => {
+    if (!mapZoneId || mapAvailLoading || mapZoneOccupancy === null) return;
+    if (!availableTaquillaZones.some((z) => z.id === mapZoneId)) {
+      setMapZoneId('');
+    }
+  }, [mapZoneId, availableTaquillaZones, mapAvailLoading, mapZoneOccupancy]);
+
   const unitPrice = useMemo(() => {
     if (!selected) return 0;
     if (sectionId && selected.sections.length > 0) {
@@ -74,7 +140,25 @@ const TaquillaSaleScreen: React.FC = () => {
     return sec?.name;
   }, [selected, sectionId]);
 
-  const lineTotal = unitPrice * quantity;
+  const purchaseGroups = needsMapZonePick ? 1 : quantity;
+
+  const lineTotal = unitPrice * purchaseGroups;
+
+  useEffect(() => {
+    setMapZoneId('');
+  }, [sectionId]);
+
+  useEffect(() => {
+    if (!selected || !sectionId) return;
+    const z = zonesForSectionOption(selected, sectionId);
+    if (z.length > 1) {
+      const spu = Math.max(
+        1,
+        Number(selected.sections.find((s) => s.id === sectionId)?.seats_per_unit) || 1
+      );
+      setQuantity(spu);
+    }
+  }, [selected, sectionId]);
 
   const formatCop = (n: number) =>
     new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(n);
@@ -119,6 +203,7 @@ const TaquillaSaleScreen: React.FC = () => {
             isRecurring: false,
             ticket_price: Number(data.ticket_price) || 0,
             sections: (data.sections as EventSection[]) || [],
+            venue_map: (data as { venue_map?: VenueMapConfig }).venue_map ?? null,
           };
           byKey.set(optionKey(o), o);
         });
@@ -135,6 +220,7 @@ const TaquillaSaleScreen: React.FC = () => {
             isRecurring: true,
             ticket_price: Number(data.ticket_price) || 0,
             sections: (data.sections as EventSection[]) || [],
+            venue_map: (data as { venue_map?: VenueMapConfig }).venue_map ?? null,
           };
           byKey.set(optionKey(o), o);
         });
@@ -154,6 +240,7 @@ const TaquillaSaleScreen: React.FC = () => {
             isRecurring: col === 'recurring_events',
             ticket_price: Number(data.ticket_price) || 0,
             sections: (data.sections as EventSection[]) || [],
+            venue_map: (data as { venue_map?: VenueMapConfig }).venue_map ?? null,
           };
           byKey.set(optionKey(o), o);
         }
@@ -192,6 +279,7 @@ const TaquillaSaleScreen: React.FC = () => {
 
   useEffect(() => {
     setSectionId('');
+    setMapZoneId('');
   }, [selectedKey]);
 
   const createManualTicket = httpsCallable(functions, 'createManualTicket');
@@ -207,12 +295,37 @@ const TaquillaSaleScreen: React.FC = () => {
       setError('Nombre y correo son obligatorios.');
       return;
     }
-    if (quantity < 1 || quantity > 50) {
-      setError('Cantidad entre 1 y 50.');
-      return;
-    }
     if (selected.sections.length > 0 && !sectionId) {
       setError('Selecciona una localidad.');
+      return;
+    }
+    if (needsMapZonePick) {
+      if (mapAvailLoading) {
+        setError('Espera a que cargue la lista de mesas disponibles.');
+        return;
+      }
+      if (availLoadFailed) {
+        setError('No se pudo consultar disponibilidad de mesas. Reintenta.');
+        return;
+      }
+      if (!availableTaquillaZones.length) {
+        setError('No quedan celdas libres en esta localidad.');
+        return;
+      }
+      if (!mapZoneId.trim()) {
+        setError('Selecciona la mesa o palco disponible en el mapa.');
+        return;
+      }
+      if (!availableTaquillaZones.some((z) => z.id === mapZoneId)) {
+        setError('Esa celda ya no está disponible.');
+        return;
+      }
+      if (quantity !== seatsPerUnitTaquilla) {
+        setError(`Para localidad con mapa dividido la cantidad debe ser ${seatsPerUnitTaquilla}.`);
+        return;
+      }
+    } else if (quantity < 1 || quantity > 50) {
+      setError('Cantidad entre 1 y 50.');
       return;
     }
     setSaving(true);
@@ -226,11 +339,12 @@ const TaquillaSaleScreen: React.FC = () => {
         quantity,
         sectionId: sectionId || undefined,
         sectionName: sectionName || undefined,
+        mapZoneId: mapZoneId.trim() || undefined,
         isCourtesy: false,
         isGeneralCourtesy: false,
       });
       alert(
-        `✅ Venta registrada: ${quantity} entrada(s) · Total aprox. ${formatCop(lineTotal)}\n\nSe envió el correo con los boletos a ${buyerEmail.trim()}.`
+        `✅ Venta registrada: ${purchaseGroups} venta(s) · Total aprox. ${formatCop(lineTotal)}\n\nSe envió el correo con los boletos a ${buyerEmail.trim()}.`
       );
       setBuyerName('');
       setBuyerEmail('');
@@ -326,12 +440,58 @@ const TaquillaSaleScreen: React.FC = () => {
             />
           )}
 
+          {selected && selected.sections.length > 0 && sectionId && needsMapZonePick && availLoadFailed && (
+            <p className="taquilla-sale-muted" role="alert">
+              No se pudo consultar ocupación del mapa.
+            </p>
+          )}
+          {selected && selected.sections.length > 0 && sectionId && needsMapZonePick && mapAvailLoading && (
+            <p className="taquilla-sale-muted">Consultando celdas disponibles…</p>
+          )}
+          {selected &&
+            selected.sections.length > 0 &&
+            sectionId &&
+            needsMapZonePick &&
+            !mapAvailLoading &&
+            !availLoadFailed &&
+            mapZoneOccupancy !== null &&
+            !availableTaquillaZones.length && (
+              <p className="taquilla-sale-error" role="alert">
+                No hay mesas/palcos libres en esta localidad.
+              </p>
+            )}
+
+          {selected &&
+            selected.sections.length > 0 &&
+            sectionId &&
+            needsMapZonePick &&
+            !mapAvailLoading &&
+            !availLoadFailed &&
+            !!availableTaquillaZones.length && (
+              <CustomSelector
+                name="taquilla_map_zone"
+                label="Mesa / palco (mapa disponible)"
+                value={mapZoneId}
+                onChange={(ev) => setMapZoneId(String(ev.target.value))}
+                options={[
+                  { value: '', label: 'Elige una celda disponible' },
+                  ...availableTaquillaZones.map((z) => ({
+                    value: z.id,
+                    label:
+                      (z.label && z.label.trim()) ||
+                      (z.palco_index !== undefined ? `Número ${z.palco_index}` : z.id.slice(0, 10)),
+                  })),
+                ]}
+              />
+            )}
+
           {selected && (
             <div className="taquilla-sale-price-banner" aria-live="polite">
               <span className="taquilla-sale-price-label">Precio unitario</span>
               <span className="taquilla-sale-price-value">{formatCop(unitPrice)}</span>
               <span className="taquilla-sale-price-total">
-                Total ({quantity}): {formatCop(lineTotal)}
+                Total ({purchaseGroups}{' '}
+                {purchaseGroups === 1 ? 'venta' : 'ventas'}): {formatCop(lineTotal)}
               </span>
             </div>
           )}
@@ -339,12 +499,16 @@ const TaquillaSaleScreen: React.FC = () => {
           <div className="taquilla-sale-grid">
             <CustomInput
               name="qty"
-              label="Cantidad"
+              label={needsMapZonePick ? `Cantidad (fija: ${seatsPerUnitTaquilla} por celda)` : 'Cantidad'}
               type="number"
               min={1}
               max={50}
               value={quantity}
-              onChange={(ev) => setQuantity(Math.max(1, Math.min(50, Number(ev.target.value) || 1)))}
+              onChange={(ev) => {
+                if (needsMapZonePick) return;
+                setQuantity(Math.max(1, Math.min(50, Number(ev.target.value) || 1)));
+              }}
+              disabled={needsMapZonePick}
             />
             <CustomInput
               name="buyerName"
@@ -378,7 +542,20 @@ const TaquillaSaleScreen: React.FC = () => {
           </div>
 
           <div className="taquilla-sale-actions">
-            <PrimaryButton type="submit" fullWidth loading={saving} disabled={saving || !selected}>
+            <PrimaryButton
+              type="submit"
+              fullWidth
+              loading={saving}
+              disabled={
+                saving ||
+                !selected ||
+                (needsMapZonePick &&
+                  (availLoadFailed ||
+                    mapAvailLoading ||
+                    mapZoneOccupancy === null ||
+                    !availableTaquillaZones.length))
+              }
+            >
               Registrar venta y enviar boletos
             </PrimaryButton>
             <SecondaryButton type="button" onClick={() => navigate('/dashboard')} disabled={saving}>

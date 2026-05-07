@@ -141,6 +141,15 @@ export interface Event {
   support_whatsapp?: string;
   /** Pasarela de checkout (sin valor → OnePay). */
   payment_provider?: 'onepay' | 'mercadopago';
+  /** Si true, en la tienda no se muestra cuántas entradas/palcos quedan (solo agotado / pocas plazas). */
+  hide_public_remaining_count?: boolean;
+  /** Si true, en la tienda se muestra el número exacto de entradas/palcos libres (sin ocultamiento ~70%). */
+  show_exact_ticket_count?: boolean;
+  /**
+   * Si no es false (default): el comprador paga precio de lista + tarifa (desglose en tienda y cobro MP = suma).
+   * Si false: paga solo el precio de lista; la tarifa se retiene de ese cobro en MP (no se suma encima).
+   */
+  buyer_service_fee_shown_separately?: boolean;
   [key: string]: string | number | boolean | Timestamp | Date | object | undefined;
 }
 

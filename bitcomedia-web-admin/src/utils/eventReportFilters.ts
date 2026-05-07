@@ -1,12 +1,8 @@
 import type { Ticket } from '@services/types';
+import { isTicketValidForSalesStats } from '@services/ticketService';
 
 export function validTicketsForReportSales(t: Ticket): boolean {
-  const status = t.ticketStatus as string;
-  const invalid =
-    ['cancelled', 'disabled'].includes(status) || (t as { transferredTo?: string }).transferredTo;
-  const valid = ['paid', 'reserved', 'used', 'redeemed'].includes(status);
-  if ((t as { ticketKind?: string }).ticketKind === 'purchase_pass') return false;
-  return valid && !invalid;
+  return isTicketValidForSalesStats(t);
 }
 
 export function isCourtesyTicket(t: Ticket): boolean {

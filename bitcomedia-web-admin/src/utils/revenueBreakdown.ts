@@ -84,10 +84,26 @@ export function computeServiceFeeCOP(
   return { feeCOP: Math.round(subtotalCOP * (pct / 100)) };
 }
 
-function ticketIsManualLike(t: Ticket): boolean {
+export function ticketIsManualLike(t: Ticket): boolean {
   if ((t as { createdByAdmin?: string }).createdByAdmin) return true;
   const pm = String(t.paymentMethod || '').toLowerCase();
   return pm === 'manual' || pm === 'transfer' || pm === 'free';
+}
+
+/** Cobro en línea (pasarela): no manual/taquilla y con monto cobrado. */
+export function ticketIsGatewayOnlineSale(t: Ticket): boolean {
+  if (ticketIsManualLike(t)) return false;
+  return Math.round(Number(t.amount) || 0) > 0;
+}
+
+/**
+ * Si true (default), el comprador paga subtotal + tarifa tiquetera (total en pasarela = `amount`).
+ * Si false, paga solo lista; la tarifa se descuenta vía marketplace / split (misma convención que Functions / checkout).
+ */
+export function buyerPaysServiceFeeOnTop(
+  eventData: Pick<Event, 'buyer_service_fee_shown_separately'>
+): boolean {
+  return eventData.buyer_service_fee_shown_separately !== false;
 }
 
 /**

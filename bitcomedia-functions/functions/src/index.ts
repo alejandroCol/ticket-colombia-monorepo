@@ -13,6 +13,7 @@ import {
 import {onePayWebhookInterestingHeaderKeys} from "./features/payments/handlers/onepay.api";
 import {defineSecret} from "firebase-functions/params";
 import {createManualTicket} from "./features/manual-ticket/create-manual-ticket";
+import {resendTicketPdfEmail} from "./features/manual-ticket/resend-ticket-pdf-email";
 import {transferTicket} from "./features/ticket-transfer/transfer-ticket";
 import {getEventAvailability} from "./features/events/get-event-availability";
 import {createTicketReservation} from "./features/reservations/create-ticket-reservation";
@@ -459,6 +460,9 @@ exports.testTicketUpdate = functions
 
 // Función para crear tickets manuales (sin pago) - Solo para administradores
 exports.createManualTicket = createManualTicket;
+
+/** Reenvía el PDF con QRs existentes (mismo documento Firestore; opcional correo destino). */
+exports.resendTicketPdfEmail = resendTicketPdfEmail;
 
 // Función para transferir tickets a otra persona
 exports.transferTicket = transferTicket;

@@ -28,6 +28,18 @@ export function buyerFeeFixedUnitCount(
   return q * n;
 }
 
+/** Tarifa sobre el precio de lista cuando el evento no tiene localidades (solo `ticket_price`). */
+export function estimatedBuyerFeeForListPrice(
+  listPriceCOP: number,
+  event: Event,
+  globalFeesPercent: number,
+  organizerFee: OrganizerBuyerFeeDoc | null
+): number {
+  const sub = Math.max(0, Number(listPriceCOP) || 0);
+  if (sub <= 0) return 0;
+  return computeBuyerServiceFeeCOP(sub, 1, event, globalFeesPercent, organizerFee).feeCOP;
+}
+
 /** Tarifa de servicio al comprar **una** unidad de esta localidad (un palco total o una entrada). */
 export function estimatedBuyerFeeForOneLocalityUnit(
   section: EventSection,

@@ -264,6 +264,7 @@ const DashboardScreen: React.FC = () => {
               status: data.status,
               recurrence_pattern: data.recurrence_pattern,
               is_recurring: true,
+              venue_map: data.venue_map,
             });
           }
           recurringEventsData.sort((a, b) => a.name.localeCompare(b.name));
@@ -305,7 +306,8 @@ const DashboardScreen: React.FC = () => {
             organizer_id: data.organizer_id || '',
             status: data.status,
             recurrence_pattern: data.recurrence_pattern,
-            is_recurring: true
+            is_recurring: true,
+            venue_map: data.venue_map,
           });
         });
         
@@ -376,6 +378,7 @@ const DashboardScreen: React.FC = () => {
               organizer_id: data.organizer_id || '',
               status: data.status,
               is_recurring: false,
+              venue_map: data.venue_map,
             });
           }
           const now = Date.now();
@@ -423,7 +426,8 @@ const DashboardScreen: React.FC = () => {
             creation_date: data.creation_date,
             organizer_id: data.organizer_id || '',
             status: data.status,
-            is_recurring: false
+            is_recurring: false,
+            venue_map: data.venue_map,
           });
         });
         
@@ -649,6 +653,7 @@ const DashboardScreen: React.FC = () => {
         quantity: ticketData.quantity,
         sectionId: ticketData.sectionId || undefined,
         sectionName: ticketData.sectionName || undefined,
+        mapZoneId: ticketData.mapZoneId?.trim() || undefined,
         isCourtesy: ticketData.isCourtesy ?? false,
         isGeneralCourtesy: ticketData.isGeneralCourtesy ?? false,
         giftedBy: ticketData.giftedBy?.trim() || undefined

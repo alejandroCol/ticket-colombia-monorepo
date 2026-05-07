@@ -388,7 +388,12 @@ const CheckoutScreen: React.FC = () => {
                 orgFee,
                 { fixedFeeUnitCount: feeFixed0 }
               ).feeCOP;
-        metaPixel.trackInitiateCheckout(eventData.name, sub0 + fee0, q0);
+        const onTop = eventData.buyer_service_fee_shown_separately !== false;
+        metaPixel.trackInitiateCheckout(
+          eventData.name,
+          onTop ? sub0 + fee0 : sub0,
+          q0
+        );
       } catch (err) {
         console.error("Error al cargar los datos:", err);
         setError("Error al cargar los datos");
@@ -400,14 +405,18 @@ const CheckoutScreen: React.FC = () => {
     fetchData();
   }, [slug]);
 
-  // Format date for display
+  // Format date for display (calendar date from API YYYY-MM-DD — parse as local, not UTC midnight)
   const formatDate = (dateStr: string) => {
+    if (!dateStr) return "";
+    const [year, month, day] = dateStr.split("-").map(Number);
+    if (!year || !month || !day) return "";
+    const date = new Date(year, month - 1, day);
     const options: Intl.DateTimeFormatOptions = {
       year: "numeric",
       month: "long",
       day: "numeric",
     };
-    return new Date(dateStr).toLocaleDateString("es-ES", options);
+    return date.toLocaleDateString("es-ES", options);
   };
 
   // Format price
@@ -464,6 +473,12 @@ const CheckoutScreen: React.FC = () => {
 
   const calculateFees = () => serviceFeeBreakdown?.feeCOP ?? 0;
 
+  const buyerServiceFeeShownSeparately = event?.buyer_service_fee_shown_separately !== false;
+  const showServiceFeeLine =
+    buyerServiceFeeShownSeparately && calculateFees() > 0;
+  const showCombinedSubtotalInclFee =
+    !buyerServiceFeeShownSeparately && calculateFees() > 0;
+
   const feeLineDescription = () => {
     if (!event || !paymentConfig || !serviceFeeBreakdown) return "";
     if (serviceFeeBreakdown.feeCOP <= 0) return "";
@@ -475,13 +490,20 @@ const CheckoutScreen: React.FC = () => {
     );
   };
 
-  // Calculate final total (sin impuestos)
+  // Calculate final total (sin impuestos): con tarifa aparte = subtotal + fee; con tarifa incluida en el precio de lista = solo subtotal (el fee lo retiene MP del cobro).
   const calculateTotal = () => {
     if (!event || !paymentConfig) return 0;
     const subtotal = calculateSubtotal();
     const fees = calculateFees();
+    if (buyerServiceFeeShownSeparately === false) {
+      return subtotal;
+    }
     return subtotal + fees;
   };
+
+  /** Precio de lista en la línea (sin sumar tarifa aparte; si la tarifa va aparte, el desglose está abajo). */
+  const displayItemUnitOrLinePrice = () =>
+    palcoCheckout ? calculateSubtotal() : unitPrice;
 
   const handleMercadoPagoPayment = async () => {
     if (!event || quantity === 0) return;
@@ -644,6 +666,7 @@ const CheckoutScreen: React.FC = () => {
     const subtotalText = formatPrice(calculateSubtotal());
     const feesText = formatPrice(calculateFees());
     const totalText = formatPrice(calculateTotal());
+    const showFeeSeparateWa = buyerServiceFeeShownSeparately && calculateFees() > 0;
 
     let message =
       `Hola, quisiera confirmar mi reserva:\n\n` +
@@ -654,9 +677,11 @@ const CheckoutScreen: React.FC = () => {
       `💰 Desglose de costos:\n` +
       `• Subtotal: ${subtotalText}\n`;
 
-    // Only show fees if they apply
-    if (calculateFees() > 0) {
+    if (showFeeSeparateWa) {
       message += `• ${feeLineDescription()}: ${feesText}\n`;
+    } else if (calculateFees() > 0) {
+      message +=
+        `• La tarifa de servicio de la plataforma va incluida en el precio de lista (no se suma aparte).\n`;
     }
 
     message += `• Total: ${totalText}\n\n¡Espero su confirmación!`;
@@ -892,7 +917,7 @@ const CheckoutScreen: React.FC = () => {
                 <span className="item-quantity">x{displayQuantity}</span>
               </div>
               <span className="item-price">
-                {formatPrice(palcoCheckout ? calculateSubtotal() : unitPrice)}
+                {formatPrice(displayItemUnitOrLinePrice())}
               </span>
             </div>
 
@@ -950,13 +975,15 @@ const CheckoutScreen: React.FC = () => {
                 </div>
               </div>
 
-              <div className="total-line">
-                <span className="total-label">Subtotal:</span>
-                <span className="total-value">
-                  {formatPrice(calculateSubtotal())}
-                </span>
-              </div>
-              {calculateFees() > 0 && (
+              {!showCombinedSubtotalInclFee && (
+                <div className="total-line">
+                  <span className="total-label">Subtotal:</span>
+                  <span className="total-value">
+                    {formatPrice(calculateSubtotal())}
+                  </span>
+                </div>
+              )}
+              {showServiceFeeLine && (
                 <div className="total-line">
                   <span className="total-label">{feeLineDescription()}:</span>
                   <span className="total-value">
@@ -966,7 +993,11 @@ const CheckoutScreen: React.FC = () => {
               )}
               <div className="total-line final-total">
                 <span className="total-label">
-                  {canAbono && payPlan === "deposit" ? "Total del pedido:" : "Total:"}
+                  {showCombinedSubtotalInclFee
+                    ? "Total (incluye tarifa de servicio):"
+                    : canAbono && payPlan === "deposit"
+                      ? "Total del pedido:"
+                      : "Total:"}
                 </span>
                 <span className="total-value">
                   {formatPrice(calculateTotal())}

@@ -173,6 +173,12 @@ interface FormDataType {
   support_whatsapp: string;
   /** Pasarela para venta directa en la plataforma (eventos sin campo → OnePay en backend). */
   payment_provider: 'onepay' | 'mercadopago';
+  /** No mostrar en la tienda cuántas entradas/palcos quedan. */
+  hide_public_remaining_count: boolean;
+  /** Mostrar número exacto de cupos disponibles en la tienda (sin estrategia de ocultar ~70%). */
+  show_exact_ticket_count: boolean;
+  /** Mostrar tarifa de servicio como línea aparte (si false, precio mostrado incluye tarifa; el cobro MP igual). */
+  buyer_service_fee_shown_separately: boolean;
 }
 
 interface EventFormScreenProps {
@@ -325,6 +331,9 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
     abono_max_days_before_event: '7',
     support_whatsapp: '',
     payment_provider: 'onepay',
+    hide_public_remaining_count: false,
+    show_exact_ticket_count: false,
+    buyer_service_fee_shown_separately: true,
   });
 
   // Fetch event data from Firestore
@@ -461,6 +470,12 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
           payment_provider: paymentProviderFromStored(
             (data as { payment_provider?: unknown }).payment_provider
           ),
+          hide_public_remaining_count:
+            (data as { hide_public_remaining_count?: boolean }).hide_public_remaining_count === true,
+          show_exact_ticket_count:
+            (data as { show_exact_ticket_count?: boolean }).show_exact_ticket_count === true,
+          buyer_service_fee_shown_separately:
+            (data as { buyer_service_fee_shown_separately?: boolean }).buyer_service_fee_shown_separately !== false,
         });
         setOrganizerIdDraft(String(data.organizer_id || ''));
         setDocumentSlug(String(data.slug || '').trim());
@@ -793,6 +808,9 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
         ...abonoFieldsFromFormInputs(formData),
         support_whatsapp: supportWhatsappDigits,
         payment_provider: formData.payment_provider,
+        hide_public_remaining_count: formData.hide_public_remaining_count,
+        show_exact_ticket_count: formData.show_exact_ticket_count,
+        buyer_service_fee_shown_separately: formData.buyer_service_fee_shown_separately,
       };
 
       if (isSuperAdminUser) {
@@ -1147,6 +1165,9 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
         ...abonoFieldsFromFormInputs(formData),
         support_whatsapp: dupSupportWhatsapp,
         payment_provider: formData.payment_provider,
+        hide_public_remaining_count: formData.hide_public_remaining_count,
+        show_exact_ticket_count: formData.show_exact_ticket_count,
+        buyer_service_fee_shown_separately: formData.buyer_service_fee_shown_separately,
       };
 
       if (isRecurring) {
@@ -1402,6 +1423,73 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
                     botón de soporte por WhatsApp.
                   </p>
                 </div>
+              </div>
+
+              <div className="form-section">
+                  <h2>Vista en la tienda (comprador)</h2>
+                  <p className="helper-text">
+                    Opciones de la página pública. El total que paga el comprador depende de la casilla de tarifa (ver
+                    abajo).
+                  </p>
+                  <div className="form-group" style={{ marginTop: '0.75rem' }}>
+                    <label className="section-abono-check__label">
+                      <input
+                        type="checkbox"
+                        checked={formData.hide_public_remaining_count}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            hide_public_remaining_count: e.target.checked,
+                            show_exact_ticket_count: e.target.checked ? false : prev.show_exact_ticket_count,
+                          }))
+                        }
+                      />
+                      <span>
+                        Ocultar cuántas entradas o palcos quedan (no se mostrará el número en la ficha; sí «Agotada» o
+                        «Pocas plazas» cuando corresponda).
+                      </span>
+                    </label>
+                  </div>
+                  <div className="form-group">
+                    <label className="section-abono-check__label">
+                      <input
+                        type="checkbox"
+                        checked={formData.show_exact_ticket_count}
+                        disabled={formData.hide_public_remaining_count}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            show_exact_ticket_count: e.target.checked,
+                          }))
+                        }
+                      />
+                      <span>
+                        Mostrar la cantidad exacta de boletas disponibles (sin redondear u ocultar parte del cupo; siempre
+                        el número real de entradas o palcos libres).
+                      </span>
+                    </label>
+                  </div>
+                  <div className="form-group">
+                    <label className="section-abono-check__label">
+                      <input
+                        type="checkbox"
+                        checked={formData.buyer_service_fee_shown_separately}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            buyer_service_fee_shown_separately: e.target.checked,
+                          }))
+                        }
+                      />
+                      <span>
+                        <strong>Tarifa aparte (recomendado):</strong> si está marcada, en la tienda se ve el precio de
+                        lista y aparte la tarifa de servicio, y el comprador paga ambos (ej. 100.000 + 2.000 = 102.000).
+                        <br />
+                        <strong>Sin marcar:</strong> el comprador paga solo el precio de lista (ej. 100.000); la tarifa de
+                        servicio no se suma encima — se descuenta de ese cobro en Mercado Pago (comisión marketplace).
+                      </span>
+                    </label>
+                  </div>
               </div>
               
               <div className="form-section">
@@ -2293,10 +2381,10 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
                   <div className="form-group super-admin-commission-block">
                     <h2>Tarifa de servicio al comprador (este evento)</h2>
                     <p className="helper-text">
-                      Solo super administrador. En el checkout el usuario verá siempre el concepto{' '}
-                      <strong>Tarifa de servicio</strong>. Si eliges una regla aquí, tiene prioridad sobre la tarifa por
-                      defecto del organizador (Configuración → administradores) y sobre el porcentaje global de la
-                      plataforma.
+                      Solo super administrador. Puedes fijar aquí el monto o % de la tarifa; en «Vista en la tienda»
+                      eliges si se muestra desglosada o incluida en el precio. La regla de aquí tiene prioridad sobre la
+                      tarifa por defecto del organizador (Configuración → administradores) y sobre el porcentaje global de
+                      la plataforma.
                     </p>
                     <CustomSelector
                       label="Tipo de tarifa"

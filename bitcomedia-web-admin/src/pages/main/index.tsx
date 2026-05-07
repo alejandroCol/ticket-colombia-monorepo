@@ -27,6 +27,7 @@ import AccountChangePasswordScreen from '@pages/AccountChangePassword';
 import SuperAdminEarningsScreen from '@pages/SuperAdminEarnings';
 import SuperAdminPartnersScreen from '@pages/SuperAdminPartners';
 import SuperAdminAuditLogScreen from '@pages/SuperAdminAuditLog';
+import SuperAdminConciliationScreen from '@pages/SuperAdminConciliation';
 
 // Dashboard and other pages would be imported here
 // import Dashboard from '../dashboard';
@@ -309,6 +310,17 @@ const MainLayout: React.FC = () => {
           element={
             user && fullAdmin ? (
               <SuperAdminAuditLogScreen />
+            ) : (
+              <Navigate to={user && panelOk ? '/dashboard' : '/login'} />
+            )
+          }
+        />
+
+        <Route
+          path="/super-admin/conciliacion"
+          element={
+            user && superAdmin ? (
+              <SuperAdminConciliationScreen />
             ) : (
               <Navigate to={user && panelOk ? '/dashboard' : '/login'} />
             )

@@ -21,7 +21,7 @@ import {
 } from '@services';
 import { aggregateEventRevenueBreakdown, normalizeGatewayCommissionConfig } from '@utils/revenueBreakdown';
 import type { OrganizerBuyerFeeInput } from '@utils/revenueBreakdown';
-import { getTicketsByEventId } from '@services/ticketService';
+import { getTicketsByEventId, isTicketValidForSalesStats } from '@services/ticketService';
 import {
   IconTickets,
   IconRevenue,
@@ -160,13 +160,7 @@ const EventStatsScreen: React.FC = () => {
   const formatCOP = (amount: number) =>
     new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(amount);
 
-  const validTickets = tickets.filter((t) => {
-    const status = t.ticketStatus as string;
-    const invalid = ['cancelled', 'disabled'].includes(status) || (t as { transferredTo?: string }).transferredTo;
-    const valid = ['paid', 'reserved', 'used', 'redeemed'].includes(status);
-    if ((t as { ticketKind?: string }).ticketKind === 'purchase_pass') return false;
-    return valid && !invalid;
-  });
+  const validTickets = tickets.filter(isTicketValidForSalesStats);
 
   const totalRevenue = validTickets.reduce((sum, t) => sum + (t.amount || 0), 0);
   const totalQuantity = validTickets.reduce((sum, t) => sum + (t.quantity || 1), 0);

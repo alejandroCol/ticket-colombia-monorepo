@@ -175,3 +175,22 @@ export function expectedTotalCOP(
     feeSource: source,
   };
 }
+
+/**
+ * Si true (default), el comprador paga subtotal + tarifa (precio de lista + tarifa aparte).
+ * Si false, paga solo el subtotal (precio de lista); la tarifa se descuenta de ese monto en Mercado Pago (marketplace_fee).
+ */
+export function buyerPaysServiceFeeOnTop(eventData: DocumentData): boolean {
+  return eventData.buyer_service_fee_shown_separately !== false;
+}
+
+/** Total COP que debe pagar el comprador (pasarela / validación de `request.amount`). */
+export function totalChargedToBuyerFromPriced(
+  priced: { subtotal: number; feeCOP: number; total: number },
+  eventData: DocumentData
+): number {
+  if (buyerPaysServiceFeeOnTop(eventData)) {
+    return priced.total;
+  }
+  return Math.max(0, priced.subtotal);
+}

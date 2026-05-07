@@ -111,6 +111,11 @@ export type { BannerItem, OrganizerBuyerFeeDoc, OrganizerEventsIndex } from './f
 export type { TicketData, CreateReservationResult } from './ticketService';
 
 export {
+  getEventAvailability,
+} from './eventAvailability';
+export type { EventAvailabilityPayload } from './eventAvailability';
+
+export {
   partnerGrantDocId,
   DEFAULT_PARTNER_PERMISSIONS,
   getPartnerGrantForEvent,

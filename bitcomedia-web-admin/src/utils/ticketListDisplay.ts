@@ -51,3 +51,56 @@ export function ticketListBuyerPhone(t: TicketListDoc): string {
   const fromMeta = typeof meta === 'string' ? meta.trim() : '';
   return root || fromMeta;
 }
+
+/** Fila de listado admin: una entrada válida por QR (oculta el padre de bundle de pago). */
+export function isAdminTicketRowVisible(t: {
+  ticketKind?: string;
+}): boolean {
+  return t.ticketKind !== 'purchase_bundle_parent';
+}
+
+export type ParentBundleInfo = { amount: number; childCount: number };
+
+export function buildParentBundleInfoMap(
+  tickets: Array<
+    TicketListDoc & {
+      id?: string;
+      ticketKind?: string;
+      childTicketIds?: string[];
+    }
+  >
+): Map<string, ParentBundleInfo> {
+  const m = new Map<string, ParentBundleInfo>();
+  for (const t of tickets) {
+    if (t.ticketKind === 'purchase_bundle_parent' && t.id) {
+      const ids = t.childTicketIds;
+      const childCount = Array.isArray(ids) ? ids.length : 0;
+      m.set(t.id, { amount: ticketLineAmountCOP(t), childCount });
+    }
+  }
+  return m;
+}
+
+/**
+ * Precio mostrado por fila: en pases de bundle, total del padre / número de pases.
+ */
+export function ticketPerBoletoAmountCOP(
+  t: TicketListDoc & {
+    ticketKind?: string;
+    bundleParentTicketId?: string;
+    passCount?: number;
+  },
+  parentMap: Map<string, ParentBundleInfo>
+): number {
+  if (t.ticketKind === 'purchase_pass' && t.bundleParentTicketId) {
+    const p = parentMap.get(t.bundleParentTicketId);
+    if (p && p.childCount > 0) {
+      return Math.round(p.amount / p.childCount);
+    }
+    if (typeof t.passCount === 'number' && t.passCount > 0) {
+      const amt = parentMap.get(t.bundleParentTicketId)?.amount;
+      if (amt !== undefined) return Math.round(amt / t.passCount);
+    }
+  }
+  return ticketLineAmountCOP(t);
+}

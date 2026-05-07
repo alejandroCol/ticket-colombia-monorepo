@@ -10,7 +10,10 @@ import {
   type PaymentConfigDoc,
   type OrganizerBuyerFeeDoc,
 } from '../../services';
-import { estimatedBuyerFeeForOneLocalityUnit } from '../../utils/buyerServiceFee';
+import {
+  estimatedBuyerFeeForListPrice,
+  estimatedBuyerFeeForOneLocalityUnit,
+} from '../../utils/buyerServiceFee';
 import type { Event, EventSection, VenueMapZone } from '../../services/types';
 import Chip from '../../components/Chip';
 import CustomInput from '../../components/CustomInput';
@@ -98,6 +101,11 @@ const EventDetailScreen: React.FC = () => {
       isTcGlass ? ' event-detail-screen--tc-glass' : ''
     }`;
 
+  const hidePublicRemaining = event?.hide_public_remaining_count === true;
+  /** Si true: mostrar el número exacto de cupos (sin función displayAvailable ~70%). */
+  const showExactTicketCount = event?.show_exact_ticket_count === true && !hidePublicRemaining;
+  const buyerServiceFeeShownSeparately = event?.buyer_service_fee_shown_separately !== false;
+
   const sections = event?.sections && event.sections.length > 0 ? event.sections : null;
   /** En palco multipersona dividido, `price` en Firestore es el total del palco (incluye las N personas). */
   const price = selectedSection ? selectedSection.price : (event?.ticket_price ?? 0);
@@ -123,10 +131,11 @@ const EventDetailScreen: React.FC = () => {
   const selectedIsPalcoGrid = Boolean(
     event && selectedSection && isPalcoSectionEvent(event, selectedSection.id)
   );
-  /** Palcos divididos: número exacto de celdas libres; resto de localidades: umbral ~70% como antes. */
-  const showAvailable = selectedIsPalcoGrid
-    ? remaining
-    : displayAvailable(remaining, capacity);
+  /** Palcos divididos o opción organizador: número exacto; si no: umbral ~70% como antes. */
+  const showAvailable =
+    selectedIsPalcoGrid || showExactTicketCount
+      ? remaining
+      : displayAvailable(remaining, capacity);
   const palcoPickRequired = Boolean(
     event && selectedSection && isPalcoSectionEvent(event, selectedSection.id)
   );
@@ -387,17 +396,25 @@ const EventDetailScreen: React.FC = () => {
     }).format(n);
 
   const selectedSectionServiceFee = useMemo(() => {
-    if (!selectedSection || !event || !paymentConfigForFees || selectedSection.price <= 0) {
-      return null;
+    if (!event || !paymentConfigForFees || price <= 0) return null;
+    if (selectedSection) {
+      if (selectedSection.price <= 0) return null;
+      const fee = estimatedBuyerFeeForOneLocalityUnit(
+        selectedSection,
+        event,
+        paymentConfigForFees.fees ?? 9,
+        organizerFeeForFees
+      );
+      return fee > 0 ? fee : null;
     }
-    const fee = estimatedBuyerFeeForOneLocalityUnit(
-      selectedSection,
+    const fee = estimatedBuyerFeeForListPrice(
+      event.ticket_price ?? 0,
       event,
       paymentConfigForFees.fees ?? 9,
       organizerFeeForFees
     );
     return fee > 0 ? fee : null;
-  }, [selectedSection, event, paymentConfigForFees, organizerFeeForFees]);
+  }, [selectedSection, event, paymentConfigForFees, organizerFeeForFees, price]);
 
   // En el botón de compra, ajustar el texto
   const buyButtonText = () => {
@@ -544,7 +561,10 @@ const EventDetailScreen: React.FC = () => {
                     {sections.map((sec) => {
                       const rem = sectionEffectiveRemaining(sec, availability, mapZoneSold, event);
                       const palcoGrid = isPalcoSectionEvent(event, sec.id);
-                      const shown = palcoGrid ? rem : displayAvailable(rem, sec.available);
+                      const shown =
+                        palcoGrid || showExactTicketCount
+                          ? rem
+                          : displayAvailable(rem, sec.available);
                       const selected = selectedSection?.id === sec.id;
                       const soldOut = rem <= 0;
                       const low = rem > 0 && rem <= Math.max(1, Math.floor(sec.available * 0.15));
@@ -578,7 +598,7 @@ const EventDetailScreen: React.FC = () => {
                             <span className="event-section-card__badge event-section-card__badge--low">
                               Pocas plazas
                             </span>
-                          ) : (
+                          ) : hidePublicRemaining ? null : (
                             <span className="event-section-card__badge">
                               {palcoGrid ? `${shown} palcos disponibles` : `${shown} disponibles`}
                             </span>
@@ -589,7 +609,7 @@ const EventDetailScreen: React.FC = () => {
                   </div>
                 </div>
               )}
-              {!sections && (
+              {!sections && !hidePublicRemaining && (
                 <p className="availability-pill availability-pill--solo">
                   <span className="availability-pill__dot" aria-hidden />
                   Quedan {showAvailable} entradas
@@ -597,7 +617,8 @@ const EventDetailScreen: React.FC = () => {
               )}
               {sections &&
                 selectedSection &&
-                sectionEffectiveRemaining(selectedSection, availability, mapZoneSold, event) > 0 && (
+                sectionEffectiveRemaining(selectedSection, availability, mapZoneSold, event) > 0 &&
+                !hidePublicRemaining && (
                 <p className="availability-pill">
                   <span className="availability-pill__dot" aria-hidden />
                   {selectedIsPalcoGrid
@@ -635,9 +656,13 @@ const EventDetailScreen: React.FC = () => {
                 <span className="event-price-row__label">{priceLabelForBooking}</span>
                 <div className="event-price-row__col">
                   <span className="event-price-row__value">{formatPrice(price)}</span>
-                  {selectedSectionServiceFee != null && price > 0 ? (
+                  {buyerServiceFeeShownSeparately && selectedSectionServiceFee != null && price > 0 ? (
                     <span className="event-price-row__fee">
                       + {formatCopPlain(selectedSectionServiceFee)} tarifa de servicio
+                    </span>
+                  ) : !buyerServiceFeeShownSeparately && selectedSectionServiceFee != null && price > 0 ? (
+                    <span className="event-price-row__fee" style={{ opacity: 0.85 }}>
+                      Incluye tarifa de servicio en el precio
                     </span>
                   ) : null}
                 </div>

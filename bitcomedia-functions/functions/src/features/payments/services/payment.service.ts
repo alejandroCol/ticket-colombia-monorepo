@@ -18,7 +18,7 @@ import {finalizePaidTicketsWithBundle} from "../bundle-issuance";
 import {sendAbonoDepositConfirmedEmail} from "../abono-email";
 import {sendTicketEmail} from "../../manual-ticket/email-sender";
 import {generateMultipleTicketsPdf} from "../../manual-ticket/pdf-generator-multiple";
-import QRCode from "qrcode";
+import {buildPurchaseTicketsPdfPayload} from "../../manual-ticket/purchase-ticket-pdf-builder";
 import {
   loadAbonoConfigFromEvent,
   computeDepositAndBalance,
@@ -32,6 +32,7 @@ import {
 } from "../../reservations/availability";
 import {
   expectedTotalCOP,
+  totalChargedToBuyerFromPriced,
   buyerFeeFixedUnitCountFromRequest,
   unitPriceFromEventData,
   ticketLineSubtotalCOP,
@@ -541,6 +542,7 @@ export class MercadoPagoPaymentService implements PaymentService {
         organizerFee,
         feeFixedUnits
       );
+      const totalChargedToBuyer = totalChargedToBuyerFromPriced(priced, eventData);
       const {seatsPerUnit, abonoAllowed} = sectionPurchaseMeta(
         eventData,
         request.metadata?.sectionId
@@ -555,7 +557,7 @@ export class MercadoPagoPaymentService implements PaymentService {
         );
       }
 
-      let chargeAmount = priced.total;
+      let chargeAmount = totalChargedToBuyer;
       let depositCOP = 0;
       let balanceCOP = 0;
       let balanceDueAt: admin.firestore.Timestamp | undefined;
@@ -570,7 +572,7 @@ export class MercadoPagoPaymentService implements PaymentService {
             "Ya no es posible iniciar una compra con abono para este evento (plazo límite vencido)."
           );
         }
-        const split = computeDepositAndBalance(priced.total, abonoCfg);
+        const split = computeDepositAndBalance(totalChargedToBuyer, abonoCfg);
         depositCOP = split.depositCOP;
         balanceCOP = split.balanceCOP;
         chargeAmount = depositCOP;
@@ -582,16 +584,17 @@ export class MercadoPagoPaymentService implements PaymentService {
         balanceDueAt = admin.firestore.Timestamp.fromMillis(dueMs!);
         abonoToken = randomUUID().replace(/-/g, "");
         installmentPhase = "awaiting_deposit";
-      } else if (Math.abs(request.amount - priced.total) > 2) {
+      } else if (Math.abs(request.amount - totalChargedToBuyer) > 2) {
         throw new Error(
-          `El total no coincide con el precio vigente (${priced.total} COP). Recarga el checkout e intenta de nuevo.`
+          `El total no coincide con el precio vigente (${totalChargedToBuyer} COP). Recarga el checkout e intenta de nuevo.`
         );
       }
 
       console.log("[createTicketPreference] Precios:", {
         subtotalCOP,
         feeCOP: priced.feeCOP,
-        total: priced.total,
+        totalListPlusFee: priced.total,
+        totalChargedToBuyer,
         chargeAmount,
         paymentMode,
         feeSource: priced.feeSource,
@@ -628,7 +631,7 @@ export class MercadoPagoPaymentService implements PaymentService {
         paymentId: "",
         paymentStatus: "pending",
         paymentMethod: "",
-        amount: priced.total,
+        amount: totalChargedToBuyer,
         quantity: request.quantity,
         currency: "COP",
         ticketStatus: "reserved",
@@ -651,7 +654,7 @@ export class MercadoPagoPaymentService implements PaymentService {
         installmentPhase,
         ...(paymentMode === "deposit" && balanceDueAt && abonoToken ?
           {
-            totalPurchaseCOP: priced.total,
+            totalPurchaseCOP: totalChargedToBuyer,
             depositCOP,
             balanceCOP,
             balanceDueAt,
@@ -1532,151 +1535,14 @@ export class MercadoPagoPaymentService implements PaymentService {
     };
 
     try {
-      const parentSnap = await parentRef.get();
-      if (!parentSnap.exists) {
-        await releaseEmailIdem();
-        return;
-      }
-      const parent = parentSnap.data() as Record<string, unknown>;
-
-      const buyerEmail = String(parent.buyerEmail || "").trim();
-      if (!buyerEmail) {
-        console.warn("[ticket email] Sin buyerEmail", parentTicketId);
+      const built = await buildPurchaseTicketsPdfPayload(parentTicketId, db);
+      if (!built) {
+        console.warn("[ticket email] Sin datos para PDF", parentTicketId);
         await releaseEmailIdem();
         return;
       }
 
-      const eventId = String(parent.eventId || "");
-      let eventDoc = await db.collection("events").doc(eventId).get();
-      if (!eventDoc.exists) {
-        eventDoc = await db.collection("recurring_events").doc(eventId).get();
-      }
-      if (!eventDoc.exists) {
-        console.warn("[ticket email] Evento no encontrado", eventId);
-        await releaseEmailIdem();
-        return;
-      }
-      const eventData = eventDoc.data() as Record<string, unknown>;
-      const meta = parent.metadata as
-        | {eventName?: string; userName?: string; buyerIdNumber?: string}
-        | undefined;
-      const eventName =
-        String(meta?.eventName || "").trim() ||
-        String(eventData.title || eventData.name || "Evento");
-      const buyerName = String(meta?.userName || "").trim() || buyerEmail;
-
-      const eventDate = eventData.date ?? "";
-      const eventTime = String(eventData.time ?? "");
-      const venueName = String((eventData.venue as {name?: string})?.name || "");
-      const city = String(eventData.city || "");
-      const parentAmount = Math.round(Number(parent.amount) || 0);
-
-      const ticketsWithQR: Array<{
-        ticket: {
-          ticketId: string;
-          id: string;
-          eventName: string;
-          eventDate: unknown;
-          eventTime: string;
-          eventVenue: string;
-          city: string;
-          buyerName: string;
-          buyerEmail: string;
-          price: number;
-          sectionName?: string;
-          buyerIdNumber?: string;
-        };
-        qrCodeImage: string;
-      }> = [];
-
-      const childIds = parent.childTicketIds as string[] | undefined;
-      if (Array.isArray(childIds) && childIds.length > 0) {
-        const perPass = Math.max(
-          0,
-          Math.round(parentAmount / childIds.length)
-        );
-        for (const cid of childIds) {
-          const cs = await db.collection("tickets").doc(cid).get();
-          const cd = cs.data() as Record<string, unknown> | undefined;
-          if (!cd) continue;
-          const qrUrl = String(cd.qrCode || "").trim();
-          if (!qrUrl) continue;
-          const qrCodeImage = await QRCode.toDataURL(qrUrl, {
-            errorCorrectionLevel: "M",
-            width: 200,
-          });
-          const childMeta = cd.metadata as
-            | {seatNumber?: string; buyerIdNumber?: string}
-            | undefined;
-          const localityLine = String(
-            childMeta?.seatNumber ||
-              cd.sectionName ||
-              parent.sectionName ||
-              ""
-          ).trim();
-          const buyerIdDoc = String(
-            childMeta?.buyerIdNumber ?? meta?.buyerIdNumber ?? ""
-          ).trim();
-          ticketsWithQR.push({
-            ticket: {
-              ticketId: cid,
-              id: cid,
-              eventName,
-              eventDate,
-              eventTime,
-              eventVenue: venueName,
-              city,
-              buyerName,
-              buyerEmail,
-              price: perPass,
-              sectionName: localityLine,
-              ...(buyerIdDoc ? {buyerIdNumber: buyerIdDoc} : {}),
-            },
-            qrCodeImage,
-          });
-        }
-      } else {
-        const qrUrl = String(parent.qrCode || "").trim();
-        if (!qrUrl) {
-          console.warn("[ticket email] Sin QR en documento padre", parentTicketId);
-          await releaseEmailIdem();
-          return;
-        }
-        const qrCodeImage = await QRCode.toDataURL(qrUrl, {
-          errorCorrectionLevel: "M",
-          width: 200,
-        });
-        const parentMeta = parent.metadata as
-          | {seatNumber?: string; buyerIdNumber?: string}
-          | undefined;
-        const parentLocalityLine = String(
-          parentMeta?.seatNumber || parent.sectionName || ""
-        ).trim();
-        const parentBuyerId = String(parentMeta?.buyerIdNumber ?? "").trim();
-        ticketsWithQR.push({
-          ticket: {
-            ticketId: parentTicketId,
-            id: parentTicketId,
-            eventName,
-            eventDate,
-            eventTime,
-            eventVenue: venueName,
-            city,
-            buyerName,
-            buyerEmail,
-            price: parentAmount,
-            sectionName: parentLocalityLine,
-            ...(parentBuyerId ? {buyerIdNumber: parentBuyerId} : {}),
-          },
-          qrCodeImage,
-        });
-      }
-
-      if (ticketsWithQR.length === 0) {
-        console.warn("[ticket email] Sin filas para PDF", parentTicketId);
-        await releaseEmailIdem();
-        return;
-      }
+      const {ticketsWithQR, buyerEmail, buyerName, eventName, eventData} = built;
 
       const pdfBuffer = await generateMultipleTicketsPdf(ticketsWithQR, eventData);
       await sendTicketEmail(
