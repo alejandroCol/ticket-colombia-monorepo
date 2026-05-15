@@ -59,7 +59,8 @@ export {
   createTicket,
   getUserTickets,
   getCurrentUserTickets,
-  transferTicket
+  transferTicket,
+  previewEventDiscountCode,
 } from './ticketService';
 
 // Meta Pixel service exports
@@ -77,4 +78,4 @@ export type {
   VenueMapDecoration,
   VenueMapDecorationType,
 } from './types';
-export type { TicketData } from './ticketService'; 
+export type { TicketData, PreviewEventDiscountResult } from './ticketService'; 

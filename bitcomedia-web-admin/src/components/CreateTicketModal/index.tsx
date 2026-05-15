@@ -74,6 +74,11 @@ const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
         : [],
     [event, formData.sectionId]
   );
+
+  const bulkUploadEventSections = useMemo(
+    () => ({ sections: event.sections, venue_map: event.venue_map }),
+    [event.sections, event.venue_map]
+  );
   const needsMapZonePick = sectionZones.length > 1;
   const selectedSectionRow = event.sections?.find((s) => s.id === formData.sectionId);
   const seatsPerUnit = Math.max(1, Number(selectedSectionRow?.seats_per_unit) || 1);
@@ -536,6 +541,7 @@ const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
           }}
           eventId={event.id || ''}
           eventName={event.name || ''}
+          prefetchedEventSections={bulkUploadEventSections}
         />
       </div>
     </div>

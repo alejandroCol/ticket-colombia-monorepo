@@ -14,7 +14,7 @@
 .bulk-upload-modal-content {
   background: $color-secondary;
   border-radius: 16px;
-  max-width: 560px;
+  max-width: 600px;
   width: 100%;
   max-height: 90vh;
   overflow: hidden;
@@ -86,7 +86,55 @@
     color: $color-text-secondary;
   }
 
+  .bulk-upload-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0 0 1rem;
+  }
+
+  .bulk-upload-placement {
+    margin-bottom: 1.5rem;
+    padding: 1rem 1.1rem;
+    background: rgba($color-accent, 0.06);
+    border-radius: 10px;
+    border: 1px solid rgba($color-accent, 0.22);
+
+    .custom-selector-container {
+      margin-top: 0.75rem;
+    }
+  }
+
+  .bulk-upload-inline-warning {
+    margin: 0.75rem 0 0;
+    font-size: 0.88rem;
+    color: #ff8a80;
+  }
+
+  .bulk-upload-map-limit {
+    margin-top: 1rem;
+    padding: 0.65rem 0.75rem;
+    background: rgba($color-primary, 0.35);
+    border-radius: 8px;
+    border-left: 3px solid $color-accent;
+  }
+
+  .bulk-upload-file-hint {
+    margin-top: 0.5rem;
+  }
+
+  .preview-batch-summary {
+    margin: 0 0 0.75rem;
+    font-size: 0.9rem;
+    color: $color-text-secondary;
+
+    strong {
+      color: $color-text-primary;
+    }
+  }
+
   .file-input-label {
+    position: relative;
     display: inline-block;
     padding: 0.75rem 1.25rem;
     background: rgba($color-accent, 0.15);
@@ -94,17 +142,40 @@
     border-radius: 10px;
     cursor: pointer;
     transition: all 0.2s;
+    overflow: hidden;
 
     &:hover {
       background: rgba($color-accent, 0.25);
       border-color: $color-accent;
     }
 
-    input {
-      display: none;
+    /* No usar display:none en file inputs: Safari y algunos navegadores no abren el diálogo.
+       Cubrir el label con el input nativo invisible para que el clic llegue al control. */
+    .file-input-native {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      opacity: 0;
+      cursor: pointer;
+      font-size: 16px; /* evita zoom táctil iOS en focos extraños */
+    }
+
+    .file-input-native:disabled {
+      cursor: not-allowed;
+    }
+
+    &.is-disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
     }
 
     .file-input-text {
+      position: relative;
+      z-index: 0;
+      pointer-events: none;
       color: $color-accent;
       font-weight: 600;
     }

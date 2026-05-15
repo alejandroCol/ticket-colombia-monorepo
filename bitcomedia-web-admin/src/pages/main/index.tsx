@@ -28,6 +28,7 @@ import SuperAdminEarningsScreen from '@pages/SuperAdminEarnings';
 import SuperAdminPartnersScreen from '@pages/SuperAdminPartners';
 import SuperAdminAuditLogScreen from '@pages/SuperAdminAuditLog';
 import SuperAdminConciliationScreen from '@pages/SuperAdminConciliation';
+import EventDiscountCodesScreen from '@pages/EventDiscountCodes';
 
 // Dashboard and other pages would be imported here
 // import Dashboard from '../dashboard';
@@ -125,6 +126,15 @@ const MainLayout: React.FC = () => {
           element={
             user && panelOk ? <EventWidgetEmbedScreen /> : <Navigate to="/login" />
           }
+        />
+
+        <Route
+          path="/events/:eventId/discount-codes"
+          element={user && panelOk ? <EventDiscountCodesScreen /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/recurring-events/:eventId/discount-codes"
+          element={user && panelOk ? <EventDiscountCodesScreen /> : <Navigate to="/login" />}
         />
 
         {/* Recurring: promotores y widget embebible */}

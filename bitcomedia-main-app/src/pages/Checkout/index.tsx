@@ -10,6 +10,7 @@ import {
   releaseTicketReservation,
   metaPixel,
   onAuthStateChange,
+  previewEventDiscountCode,
 } from "../../services";
 import type {
   Event,
@@ -17,6 +18,7 @@ import type {
   UserData,
   TicketData,
   OrganizerBuyerFeeDoc,
+  PreviewEventDiscountResult,
 } from "../../services";
 import {
   computeBuyerServiceFeeCOP,
@@ -95,6 +97,10 @@ const CheckoutScreen: React.FC = () => {
   const [payPlan, setPayPlan] = useState<"full" | "deposit">("full");
   const reservationReleaseRef = useRef<string | null>(null);
   const prevAuthenticatedRef = useRef<boolean | null>(null);
+  const [couponInput, setCouponInput] = useState("");
+  const [couponApplied, setCouponApplied] = useState<PreviewEventDiscountResult | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
   const { slug } = useParams<{ slug: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -185,6 +191,11 @@ const CheckoutScreen: React.FC = () => {
     }
     setQuantity(Math.max(1, initialQuantity));
   }, [initialQuantity, mapZoneId, event, sectionId]);
+
+  useEffect(() => {
+    setCouponApplied(null);
+    setCouponError(null);
+  }, [quantity, sectionId, mapZoneId, event?.id]);
 
   useEffect(() => {
     const unsub = onAuthStateChange(async (user) => {
@@ -490,9 +501,47 @@ const CheckoutScreen: React.FC = () => {
     );
   };
 
+  const applyCoupon = async () => {
+    if (!event || unitPrice <= 0 || !couponInput.trim()) return;
+    setCouponLoading(true);
+    setCouponError(null);
+    try {
+      const data = await previewEventDiscountCode({
+        eventId: event.id,
+        code: couponInput.trim(),
+        quantity,
+        sectionId,
+        mapZoneId: mapZoneId?.trim(),
+      });
+      setCouponApplied(data);
+    } catch (err: unknown) {
+      setCouponApplied(null);
+      const raw =
+        err && typeof err === "object" && "message" in err
+          ? String((err as { message?: string }).message || "")
+          : String(err || "");
+      if (raw.includes("Cupón") || raw.includes("cupón") || raw.includes("entradas")) {
+        setCouponError(raw);
+      } else {
+        setCouponError("No se pudo aplicar el cupón. Revisa el código e intenta de nuevo.");
+      }
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const clearCoupon = () => {
+    setCouponApplied(null);
+    setCouponError(null);
+    setCouponInput("");
+  };
+
   // Calculate final total (sin impuestos): con tarifa aparte = subtotal + fee; con tarifa incluida en el precio de lista = solo subtotal (el fee lo retiene MP del cobro).
   const calculateTotal = () => {
     if (!event || !paymentConfig) return 0;
+    if (couponApplied && unitPrice > 0) {
+      return couponApplied.totalCOP;
+    }
     const subtotal = calculateSubtotal();
     const fees = calculateFees();
     if (buyerServiceFeeShownSeparately === false) {
@@ -563,6 +612,9 @@ const CheckoutScreen: React.FC = () => {
         reservationId,
         guestCheckout: useGuest,
         paymentMode: useDeposit ? "deposit" : "full",
+        ...(couponApplied && couponInput.trim() ?
+          { discountCode: couponInput.trim() } :
+          {}),
         metadata: {
           userName: displayName,
           eventName: event.name,
@@ -667,6 +719,7 @@ const CheckoutScreen: React.FC = () => {
     const feesText = formatPrice(calculateFees());
     const totalText = formatPrice(calculateTotal());
     const showFeeSeparateWa = buyerServiceFeeShownSeparately && calculateFees() > 0;
+    const disc = couponApplied?.discountCOP;
 
     let message =
       `Hola, quisiera confirmar mi reserva:\n\n` +
@@ -682,6 +735,10 @@ const CheckoutScreen: React.FC = () => {
     } else if (calculateFees() > 0) {
       message +=
         `• La tarifa de servicio de la plataforma va incluida en el precio de lista (no se suma aparte).\n`;
+    }
+
+    if (disc && disc > 0) {
+      message += `• Descuento (solo entradas): -${formatPrice(disc)}\n`;
     }
 
     message += `• Total: ${totalText}\n\n¡Espero su confirmación!`;
@@ -975,6 +1032,40 @@ const CheckoutScreen: React.FC = () => {
                 </div>
               </div>
 
+              {unitPrice > 0 && (
+                <div className="checkout-coupon">
+                  <span className="checkout-coupon__label">Código de descuento</span>
+                  <div className="checkout-coupon__row">
+                    <CustomInput
+                      value={couponInput}
+                      onChange={(e) => setCouponInput(e.target.value)}
+                      placeholder="Ej. VERANO25"
+                      disabled={couponLoading}
+                    />
+                    <PrimaryButton
+                      type="button"
+                      size="small"
+                      onClick={() => void applyCoupon()}
+                      disabled={couponLoading || !couponInput.trim()}
+                    >
+                      {couponLoading ? "…" : "Aplicar"}
+                    </PrimaryButton>
+                    {couponApplied ? (
+                      <SecondaryButton type="button" size="small" onClick={clearCoupon}>
+                        Quitar
+                      </SecondaryButton>
+                    ) : null}
+                  </div>
+                  {couponError ? <p className="checkout-coupon__err">{couponError}</p> : null}
+                  {couponApplied ? (
+                    <p className="checkout-coupon__ok">
+                      Cupón aplicado: −{formatPrice(couponApplied.discountCOP)} sobre entradas. La tarifa de
+                      servicio no se descuenta.
+                    </p>
+                  ) : null}
+                </div>
+              )}
+
               {!showCombinedSubtotalInclFee && (
                 <div className="total-line">
                   <span className="total-label">Subtotal:</span>
@@ -991,6 +1082,12 @@ const CheckoutScreen: React.FC = () => {
                   </span>
                 </div>
               )}
+              {couponApplied && unitPrice > 0 ? (
+                <div className="total-line total-line--discount">
+                  <span className="total-label">Descuento (entradas):</span>
+                  <span className="total-value">−{formatPrice(couponApplied.discountCOP)}</span>
+                </div>
+              ) : null}
               <div className="total-line final-total">
                 <span className="total-label">
                   {showCombinedSubtotalInclFee

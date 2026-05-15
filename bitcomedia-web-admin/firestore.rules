@@ -85,12 +85,26 @@ service cloud.firestore {
     match /events/{eventId} {
       allow read: if true; // Allow anyone to read event data
       allow create, update, delete: if request.auth != null; // Only authenticated users can write
+
+      match /discount_codes/{codeId} {
+        allow read, create, update, delete: if request.auth != null && (
+          isSuperAdminRole() ||
+          get(/databases/$(database)/documents/events/$(eventId)).data.organizer_id == request.auth.uid
+        );
+      }
     }
     
     // Recurring events collection - publicly readable, authenticated users can write
     match /recurring_events/{eventId} {
       allow read: if true; // Allow anyone to read recurring event data
       allow create, update, delete: if request.auth != null; // Only authenticated users can write
+
+      match /discount_codes/{codeId} {
+        allow read, create, update, delete: if request.auth != null && (
+          isSuperAdminRole() ||
+          get(/databases/$(database)/documents/recurring_events/$(eventId)).data.organizer_id == request.auth.uid
+        );
+      }
     }
     
     // Users: perfil propio; lectura para admins; solo SUPER_ADMIN puede crear/editar documentos de otros usuarios

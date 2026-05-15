@@ -1167,3 +1167,48 @@
   color: $color-text-secondary;
   margin: 0.35rem 0 0.5rem;
 }
+
+.checkout-coupon {
+  margin: 1rem 0 0;
+  padding: 1rem 0 0;
+  border-top: 1px solid rgba($color-accent, 0.12);
+
+  &__label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 0.45rem;
+  }
+
+  &__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+
+    .custom-input-wrapper,
+    .custom-input {
+      flex: 1;
+      min-width: 140px;
+    }
+  }
+
+  &__err {
+    color: #ffb4b4;
+    font-size: 0.85rem;
+    margin: 0.4rem 0 0;
+  }
+
+  &__ok {
+    font-size: 0.82rem;
+    color: rgba(180, 255, 200, 0.95);
+    margin: 0.45rem 0 0;
+    line-height: 1.4;
+  }
+}
+
+.total-line--discount {
+  .total-value {
+    color: rgba(180, 255, 200, 0.95);
+  }
+}

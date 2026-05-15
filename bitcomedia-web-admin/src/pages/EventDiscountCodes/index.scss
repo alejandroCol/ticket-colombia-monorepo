@@ -1,0 +1,122 @@
+.event-discount-codes__inner {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1rem 1.25rem 3rem;
+}
+
+.event-discount-codes__loading,
+.event-discount-codes__denied {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 40vh;
+  gap: 1rem;
+}
+
+.event-discount-codes__panel h1 {
+  margin: 0.5rem 0 0.25rem;
+  font-size: 1.35rem;
+}
+
+.event-discount-codes__intro {
+  color: #5a5a5a;
+  font-size: 0.95rem;
+  margin: 0 0 1.25rem;
+  line-height: 1.45;
+}
+
+.event-discount-codes__error {
+  background: #fdeaea;
+  color: #a40000;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  margin: 0 0 1rem;
+}
+
+.event-discount-codes__form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+  align-items: end;
+}
+
+.event-discount-codes__select-wrap label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+.event-discount-codes__select-wrap select {
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  font-size: 0.95rem;
+}
+
+.event-discount-codes__check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  padding-bottom: 0.35rem;
+}
+
+.event-discount-codes__form-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.event-discount-codes__table-wrap {
+  overflow-x: auto;
+  margin-top: 2rem;
+}
+
+.event-discount-codes__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.event-discount-codes__table th,
+.event-discount-codes__table td {
+  text-align: left;
+  padding: 0.6rem 0.5rem;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.event-discount-codes__table th {
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #666;
+}
+
+.event-discount-codes__empty {
+  color: #888;
+}
+
+.event-discount-codes__actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.event-discount-codes__actions button {
+  background: none;
+  border: none;
+  color: #2563eb;
+  cursor: pointer;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.event-discount-codes__actions button.danger {
+  color: #b42318;
+}

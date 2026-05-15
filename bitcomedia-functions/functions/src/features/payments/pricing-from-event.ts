@@ -194,3 +194,24 @@ export function totalChargedToBuyerFromPriced(
   }
   return Math.max(0, priced.subtotal);
 }
+
+/**
+ * Aplica un descuento solo sobre el **subtotal de boletos** (precio de lista).
+ * La tarifa tiquetera (`feeCOP`) se calcula siempre sobre el subtotal **sin** descuento
+ * y no se reduce cuando hay cupón.
+ */
+export function totalChargedWithTicketDiscount(
+  listSubtotalCOP: number,
+  feeCOP: number,
+  discountCOP: number,
+  eventData: DocumentData
+): { discountedSubtotalCOP: number; totalChargedCOP: number } {
+  const list = Math.max(0, Math.round(listSubtotalCOP));
+  const disc = Math.min(Math.max(0, Math.round(discountCOP)), list);
+  const dSub = list - disc;
+  const fee = Math.max(0, Math.round(feeCOP));
+  if (buyerPaysServiceFeeOnTop(eventData)) {
+    return { discountedSubtotalCOP: dSub, totalChargedCOP: dSub + fee };
+  }
+  return { discountedSubtotalCOP: dSub, totalChargedCOP: dSub };
+}

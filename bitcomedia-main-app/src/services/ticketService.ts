@@ -8,6 +8,22 @@ import type { Ticket } from './types';
 // Initialize Firebase Functions
 const functions = getFunctions(app);
 const createTicketPreference = httpsCallable(functions, 'createTicketPreference');
+const previewEventDiscountCodeFn = httpsCallable<
+  {
+    eventId: string;
+    code: string;
+    quantity: number;
+    sectionId?: string;
+    mapZoneId?: string;
+  },
+  {
+    discountCOP: number;
+    listSubtotalCOP: number;
+    discountedSubtotalCOP: number;
+    serviceFeeCOP: number;
+    totalCOP: number;
+  }
+>(functions, 'previewEventDiscountCode');
 const getAbonoCheckoutPublicInfoFn = httpsCallable<
   { token: string },
   {
@@ -58,6 +74,8 @@ export interface TicketData {
   buyerEmail: string;
   reservationId: string;
   guestCheckout?: boolean;
+  /** Código de descuento del organizador (validación en servidor). */
+  discountCode?: string;
   /** full (default) o deposit (abono; requiere sesión y localidad con abono). */
   paymentMode?: 'full' | 'deposit';
   metadata: {
@@ -75,6 +93,25 @@ export interface TicketData {
     /** E.164, ej. +573001234567 (checkout invitado). */
     buyerPhone?: string;
   };
+}
+
+export type PreviewEventDiscountResult = {
+  discountCOP: number;
+  listSubtotalCOP: number;
+  discountedSubtotalCOP: number;
+  serviceFeeCOP: number;
+  totalCOP: number;
+};
+
+export async function previewEventDiscountCode(params: {
+  eventId: string;
+  code: string;
+  quantity: number;
+  sectionId?: string;
+  mapZoneId?: string;
+}): Promise<PreviewEventDiscountResult> {
+  const result = await previewEventDiscountCodeFn(params);
+  return result.data as PreviewEventDiscountResult;
 }
 
 // Get user tickets from Firestore

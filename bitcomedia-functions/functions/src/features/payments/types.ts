@@ -13,6 +13,8 @@ export interface CreateTicketRequest {
   buyerEmail: string;
   /** Reserva de 10 min (callable createTicketReservation) obligatoria para compra pública */
   reservationId: string;
+  /** Código de descuento del organizador (se valida en servidor; solo reduce el subtotal de entradas). */
+  discountCode?: string;
   /** Compra sin cuenta: el backend genera userId guest_* */
   guestCheckout?: boolean;
   /** Por defecto full. deposit solo con login y localidad con abono_allowed. */
@@ -96,6 +98,16 @@ export interface Ticket {
   balanceCOP?: number;
   balanceDueAt?: Timestamp;
   abonoCompletionToken?: string;
+  /** Id del doc en `discount_codes` (mismo valor normalizado que el código). */
+  discountCodeDocId?: string;
+  /** Colección raíz del evento que contiene el cupón. */
+  discountEventCollection?: "events" | "recurring_events";
+  /** COP descontados solo de la línea de entradas (no de la tarifa tiquetera). */
+  ticketDiscountCOP?: number;
+  /** Subtotal de lista antes del cupón (auditoría / soporte). */
+  listSubtotalCOP?: number;
+  /** true luego de contabilizar uso del cupón al confirmar pago. */
+  discountRedemptionApplied?: boolean;
 }
 
 export interface PaymentData {

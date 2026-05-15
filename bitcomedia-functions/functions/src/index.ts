@@ -26,6 +26,7 @@ import {
   getMercadoPagoSellerOAuthUrl,
   mercadopagoOAuthCallback,
 } from "./features/payments/mercadopago-oauth";
+import {previewEventDiscountCode} from "./features/discount-codes/preview-event-discount-code";
 
 admin.initializeApp();
 
@@ -469,6 +470,9 @@ exports.transferTicket = transferTicket;
 
 // Obtener disponibilidad por sección (público; incluye reservas activas)
 exports.getEventAvailability = getEventAvailability;
+
+/** Vista previa de descuento en checkout (totales alineados con createTicketPreference). */
+exports.previewEventDiscountCode = previewEventDiscountCode;
 
 // Reserva de cupo 10 min (checkout)
 exports.createTicketReservation = createTicketReservation;

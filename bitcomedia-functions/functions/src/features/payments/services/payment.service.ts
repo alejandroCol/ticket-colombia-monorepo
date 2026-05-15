@@ -32,12 +32,18 @@ import {
 } from "../../reservations/availability";
 import {
   expectedTotalCOP,
-  totalChargedToBuyerFromPriced,
+  totalChargedWithTicketDiscount,
   buyerFeeFixedUnitCountFromRequest,
   unitPriceFromEventData,
   ticketLineSubtotalCOP,
   type OrganizerBuyerFeeInput,
 } from "../pricing-from-event";
+import {
+  loadEventDiscountCode,
+  computeDiscountAmountCOPFromDoc,
+  assertDiscountCodeSchedulable,
+  redeemEventDiscountOnPaidTicket,
+} from "../../discount-codes/discount-code-helpers";
 import {MercadoPagoProvider} from "../handlers/mercadopago.provider";
 import {paymentProviderFromEventData} from "../payment-provider";
 import {
@@ -534,6 +540,23 @@ export class MercadoPagoPaymentService implements PaymentService {
         request.metadata?.sectionId,
         request.metadata?.mapZoneId
       );
+
+      let discountCOP = 0;
+      let discountMeta: {root: "events" | "recurring_events"; codeDocId: string} | null = null;
+      const codeRaw = String(request.discountCode || "").trim();
+      if (codeRaw) {
+        const loaded = await loadEventDiscountCode(db, request.eventId, codeRaw);
+        if (!loaded) {
+          throw new Error("Cupón inválido.");
+        }
+        assertDiscountCodeSchedulable(loaded.data, Date.now());
+        discountCOP = computeDiscountAmountCOPFromDoc(subtotalCOP, loaded.data);
+        if (discountCOP <= 0) {
+          throw new Error("Este cupón no aplica a esta compra.");
+        }
+        discountMeta = {root: loaded.root, codeDocId: loaded.id};
+      }
+
       const priced = expectedTotalCOP(
         subtotalCOP,
         request.quantity,
@@ -542,7 +565,13 @@ export class MercadoPagoPaymentService implements PaymentService {
         organizerFee,
         feeFixedUnits
       );
-      const totalChargedToBuyer = totalChargedToBuyerFromPriced(priced, eventData);
+      const {totalChargedCOP: totalChargedToBuyer, discountedSubtotalCOP} =
+        totalChargedWithTicketDiscount(
+          subtotalCOP,
+          priced.feeCOP,
+          discountCOP,
+          eventData
+        );
       const {seatsPerUnit, abonoAllowed} = sectionPurchaseMeta(
         eventData,
         request.metadata?.sectionId
@@ -592,6 +621,8 @@ export class MercadoPagoPaymentService implements PaymentService {
 
       console.log("[createTicketPreference] Precios:", {
         subtotalCOP,
+        discountedSubtotalCOP,
+        ticketDiscountCOP: discountCOP,
         feeCOP: priced.feeCOP,
         totalListPlusFee: priced.total,
         totalChargedToBuyer,
@@ -679,6 +710,15 @@ export class MercadoPagoPaymentService implements PaymentService {
           {mpSplitOrganizerId: organizerUid} :
           {}),
         ...(marketplaceFeeCOP > 0 ? {mpMarketplaceFeeCOP: marketplaceFeeCOP} : {}),
+        ...(discountMeta && discountCOP > 0 ?
+          {
+            discountCodeDocId: discountMeta.codeDocId,
+            discountEventCollection: discountMeta.root,
+            ticketDiscountCOP: discountCOP,
+            listSubtotalCOP: subtotalCOP,
+            discountRedemptionApplied: false,
+          } :
+          {}),
       };
 
       console.log("[createTicketPreference] Creando ticket en Firestore...");
@@ -1411,6 +1451,12 @@ export class MercadoPagoPaymentService implements PaymentService {
             qrCode: "",
             initPoint: `${this.config.appUrl}/tickets`,
           });
+          const snapDep = await admin.firestore().collection("tickets").doc(ticketId).get();
+          await redeemEventDiscountOnPaidTicket(
+            admin.firestore(),
+            ticketId,
+            (snapDep.data() || {}) as Record<string, unknown>
+          );
           await this.sendDepositConfirmationIfPossible(ticketId, ticket);
           return;
         }
@@ -1448,6 +1494,11 @@ export class MercadoPagoPaymentService implements PaymentService {
           initPoint: `${this.config.appUrl}/tickets`,
         });
         const snapSingle = await admin.firestore().collection("tickets").doc(ticketId).get();
+        await redeemEventDiscountOnPaidTicket(
+          admin.firestore(),
+          ticketId,
+          (snapSingle.data() || {}) as Record<string, unknown>
+        );
         await finalizePaidTicketsWithBundle(
           admin.firestore(),
           ticketId,
