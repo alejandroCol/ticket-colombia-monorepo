@@ -31,6 +31,8 @@ export interface EventBalanceRow extends ListedEvent {
   pasarelaFixed: number;
   pasarelaIva: number;
   netoOrganizador: number;
+  showPasarelaCommission: boolean;
+  serviceFeeDeductedFromNeto: boolean;
 }
 
 export const emptyMoneyBreakdown = {
@@ -41,6 +43,8 @@ export const emptyMoneyBreakdown = {
   pasarelaFixed: 0,
   pasarelaIva: 0,
   netoOrganizador: 0,
+  showPasarelaCommission: true,
+  serviceFeeDeductedFromNeto: false,
 };
 
 export function validTicketsForBalance(tickets: Ticket[]): Ticket[] {
@@ -96,6 +100,8 @@ export async function loadEventBalanceRow(
       pasarelaFixed: agg.pasarelaFixedPart,
       pasarelaIva: agg.pasarelaIva,
       netoOrganizador: agg.netoOrganizador,
+      showPasarelaCommission: agg.showPasarelaCommission,
+      serviceFeeDeductedFromNeto: agg.serviceFeeDeductedFromNeto,
     };
   } catch {
     return {

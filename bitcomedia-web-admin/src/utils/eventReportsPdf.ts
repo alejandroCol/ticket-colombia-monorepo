@@ -9,6 +9,7 @@ import {
   ticketIsManualLike,
   ticketIsGatewayOnlineSale,
   buyerPaysServiceFeeOnTop,
+  eventUsesMercadoPago,
   inferSubtotalAndTiqueteraFee,
   computePasarelaCommissionCOP,
   computeServiceFeeCOP,
@@ -215,6 +216,21 @@ function montoCelda(t: Ticket, money: PdfVentasMoneyContext | undefined): number
   return ticketNetOrganizerCOP(t, money.event, money.globalFeesPercent, money.organizerFee, money.gateway);
 }
 
+function pdfVentasNetoFootnote(money: PdfVentasMoneyContext): string {
+  const mp = eventUsesMercadoPago(money.event);
+  const feeOnTop = buyerPaysServiceFeeOnTop(money.event);
+  if (mp && !feeOnTop) {
+    return 'Total neto COP: después de descontar tarifa de servicio (Mercado Pago, sin comisión pasarela estimada)';
+  }
+  if (mp) {
+    return 'Total neto COP: subtotal de entradas (Mercado Pago, sin comisión pasarela estimada)';
+  }
+  if (!feeOnTop) {
+    return 'Total neto COP: después de descontar tarifa de servicio y comisión pasarela (OnePay)';
+  }
+  return 'Total neto COP: después de deducciones de tiquetera y pasarela de pagos';
+}
+
 export async function pdfVentas(
   eventName: string,
   tickets: Ticket[],
@@ -267,10 +283,7 @@ export async function pdfVentas(
   const finalY =
     (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? startY + 40;
   const totalLines = money
-    ? [
-        `Total boletos: ${sumQty}`,
-        `Total neto COP: ${formatCOP(sumAmt)}, después de deducciones de tiquetera y pasarela de pagos`,
-      ]
+    ? [`Total boletos: ${sumQty}`, `${pdfVentasNetoFootnote(money)}: ${formatCOP(sumAmt)}`]
     : [`Total boletos: ${sumQty}`, `Total COP: ${formatCOP(sumAmt)}`];
   drawTotalesSection(doc, finalY, totalLines);
   download(doc, opts.basename);

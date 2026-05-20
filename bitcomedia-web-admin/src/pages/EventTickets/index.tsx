@@ -18,15 +18,17 @@ import {
   getAnyPartnerGrantForTicketEvent,
   resolveEventCollection,
 } from '@services';
-import { validateTicket, resendTicketPdfEmail } from '@services/ticketService';
+import { validateTicket, resendTicketPdfEmail, isTicketReservedHold, sumSoldEntradaUnitsForAdminStats } from '@services/ticketService';
 import {
   isTicketCourtesyRow,
+  ticketDocUnits,
   ticketListBuyerIdNumber,
   ticketListBuyerName,
   isAdminTicketRowVisible,
   buildParentBundleInfoMap,
   ticketPerBoletoAmountCOP,
 } from '@utils/ticketListDisplay';
+import type { Ticket as ServiceTicket } from '@services/types';
 import './index.scss';
 
 interface Ticket {
@@ -54,6 +56,7 @@ interface Ticket {
   childTicketIds?: string[];
   passCount?: number;
   metadata?: { userName?: string; buyerIdNumber?: string; buyerPhone?: string };
+  quantity?: number;
 }
 
 async function collectBundleTicketIdsForEdit(t: Ticket): Promise<string[]> {
@@ -106,6 +109,26 @@ const EventTicketsScreen: React.FC = () => {
     [tickets]
   );
 
+  const operativeVisibleTickets = useMemo(
+    () => visibleTickets.filter((t) => !isTicketReservedHold(t)),
+    [visibleTickets]
+  );
+
+  const reservedTicketsFiltered = useMemo(() => {
+    let list = visibleTickets.filter(isTicketReservedHold);
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase().trim();
+      list = list.filter((t) => {
+        const id = ticketListBuyerIdNumber(t).toLowerCase();
+        const name = ticketListBuyerName(t).toLowerCase();
+        const email = (t.buyerEmail || '').toLowerCase();
+        return id.includes(term) || name.includes(term) || email.includes(term);
+      });
+    }
+    if (filterLocalidad) list = list.filter((t) => (t.sectionName || 'General') === filterLocalidad);
+    return list;
+  }, [visibleTickets, searchTerm, filterLocalidad]);
+
   const parentBundleMap = useMemo(
     () => buildParentBundleInfoMap(tickets),
     [tickets]
@@ -140,7 +163,8 @@ const EventTicketsScreen: React.FC = () => {
       });
       ticketsData.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
       setTickets(ticketsData);
-      setFilteredTickets(ticketsData);
+      const vis = ticketsData.filter(isAdminTicketRowVisible);
+      setFilteredTickets(vis.filter((t) => !isTicketReservedHold(t)));
     } catch (err) {
       console.error('Error loading tickets:', err);
       setError('Error al cargar los boletos.');
@@ -228,12 +252,13 @@ const EventTicketsScreen: React.FC = () => {
 
   const localidades = useMemo(() => {
     const set = new Set<string>();
-    visibleTickets.forEach(t => set.add(t.sectionName || 'General'));
+    operativeVisibleTickets.forEach((t) => set.add(t.sectionName || 'General'));
+    visibleTickets.filter(isTicketReservedHold).forEach((t) => set.add(t.sectionName || 'General'));
     return Array.from(set).sort();
-  }, [visibleTickets]);
+  }, [operativeVisibleTickets, visibleTickets]);
 
   useEffect(() => {
-    let filtered = visibleTickets;
+    let filtered = operativeVisibleTickets;
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase().trim();
       filtered = filtered.filter(t => {
@@ -248,7 +273,7 @@ const EventTicketsScreen: React.FC = () => {
     else if (filterValidado === 'pending') filtered = filtered.filter(t => !t.validatedAt);
     if (filterCortesias === 'only') filtered = filtered.filter(t => isTicketCourtesyRow(t));
     setFilteredTickets(filtered);
-  }, [searchTerm, filterLocalidad, filterValidado, filterCortesias, visibleTickets]);
+  }, [searchTerm, filterLocalidad, filterValidado, filterCortesias, operativeVisibleTickets]);
 
   const handleEdit = (t: Ticket) => {
     setEditingTicket(t);
@@ -366,9 +391,12 @@ const EventTicketsScreen: React.FC = () => {
     const map: Record<string, { label: string; className: string }> = {
       approved: { label: 'Aprobado', className: 'status-approved' },
       pending: { label: 'Pendiente', className: 'status-pending' },
+      reserved: { label: 'Reservado', className: 'status-pending' },
       paid: { label: 'Pagado', className: 'status-approved' },
       cancelled: { label: 'Cancelado', className: 'status-rejected' },
-      disabled: { label: 'Deshabilitado', className: 'status-rejected' }
+      disabled: { label: 'Deshabilitado', className: 'status-rejected' },
+      used: { label: 'Usado', className: 'status-unknown' },
+      redeemed: { label: 'Validado', className: 'status-approved' },
     };
     const info = map[status || ''] || { label: status || '—', className: 'status-unknown' };
     return <span className={`status-badge ${info.className}`}>{info.label}</span>;
@@ -382,11 +410,46 @@ const EventTicketsScreen: React.FC = () => {
 
   if (!eventId) return null;
 
-  const isActive = (t: Ticket) => t.ticketStatus !== 'cancelled' && t.ticketStatus !== 'disabled';
-  const activeTickets = visibleTickets.filter(isActive);
-  const cortesias = activeTickets.filter(t => isTicketCourtesyRow(t));
-  const vendidos = activeTickets.filter(t => !isTicketCourtesyRow(t));
-  const validados = visibleTickets.filter(t => t.validatedAt).length;
+  const formatRowDate = (ts?: Timestamp | null) => {
+    if (!ts) return '—';
+    try {
+      return ts.toDate().toLocaleString('es-CO', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return '—';
+    }
+  };
+
+  const isActiveNonReserved = (t: Ticket) =>
+    !isTicketReservedHold(t) && t.ticketStatus !== 'cancelled' && t.ticketStatus !== 'disabled';
+
+  const activeTicketUnits = useMemo(
+    () => tickets.filter(isActiveNonReserved).reduce((s, t) => s + ticketDocUnits(t), 0),
+    [tickets]
+  );
+  const cortesiasUnits = useMemo(
+    () =>
+      tickets
+        .filter(isActiveNonReserved)
+        .filter((t) => isTicketCourtesyRow(t))
+        .reduce((s, t) => s + ticketDocUnits(t), 0),
+    [tickets]
+  );
+  const vendidosUnits = useMemo(() => sumSoldEntradaUnitsForAdminStats(tickets as ServiceTicket[]), [tickets]);
+  const validadosUnits = useMemo(
+    () =>
+      tickets
+        .filter((t) => t.validatedAt && !isTicketReservedHold(t))
+        .reduce((s, t) => s + ticketDocUnits(t), 0),
+    [tickets]
+  );
+  const reservedDocs = visibleTickets.filter(isTicketReservedHold);
+  const reservedUnits = reservedDocs.reduce((s, t) => s + ticketDocUnits(t), 0);
 
   return (
     <div className="event-tickets-screen">
@@ -447,10 +510,17 @@ const EventTicketsScreen: React.FC = () => {
           <>
             <div className="event-tickets-toolbar">
               <div className="summary-cards">
-                <div className="summary-card"><span className="label">Total</span><span className="value">{activeTickets.length}</span></div>
-                <div className="summary-card vendidos"><span className="label">Vendidos</span><span className="value">{vendidos.length}</span></div>
-                <div className="summary-card cortesias"><span className="label">Cortesías</span><span className="value">{cortesias.length}</span></div>
-                <div className="summary-card"><span className="label">Validados</span><span className="value">{validados}</span></div>
+                <div className="summary-card"><span className="label">Total</span><span className="value">{activeTicketUnits}</span></div>
+                <div className="summary-card vendidos"><span className="label">Vendidos</span><span className="value">{vendidosUnits}</span></div>
+                <div className="summary-card cortesias"><span className="label">Cortesías</span><span className="value">{cortesiasUnits}</span></div>
+                <div className="summary-card"><span className="label">Validados</span><span className="value">{validadosUnits}</span></div>
+                {reservedUnits > 0 && (
+                  <div className="summary-card reserved">
+                    <span className="label">En reserva (sin pago)</span>
+                    <span className="value">{reservedUnits}</span>
+                    <span className="sublabel">{reservedDocs.length} órdenes</span>
+                  </div>
+                )}
               </div>
               <div className="filters-row">
                 <input
@@ -476,9 +546,7 @@ const EventTicketsScreen: React.FC = () => {
               </div>
             </div>
 
-            {filteredTickets.length === 0 ? (
-              <div className="event-tickets-empty"><p>🔍 No hay boletos con los filtros aplicados</p></div>
-            ) : (
+            {filteredTickets.length > 0 && (
               <div className="event-tickets-table-container">
                 <table className="event-tickets-table">
                   <thead>
@@ -538,6 +606,78 @@ const EventTicketsScreen: React.FC = () => {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {!loading && operativeVisibleTickets.length > 0 && filteredTickets.length === 0 && (
+              <div className="event-tickets-empty">
+                <p>🔍 No hay boletos confirmados con los filtros aplicados</p>
+              </div>
+            )}
+            {!loading && operativeVisibleTickets.length === 0 && tickets.length > 0 && (
+              <div className="event-tickets-empty">
+                <p>
+                  📭 No hay filas confirmadas en este listado (puede haber solo reservas de cupo). Revisa «Boletas
+                  reservadas» abajo.
+                </p>
+              </div>
+            )}
+
+            {visibleTickets.some(isTicketReservedHold) && (
+              <div className="event-tickets-reserved-panel">
+                <div className="event-tickets-reserved-panel__head">
+                  <h2 className="event-tickets-reserved-panel__title">Boletas reservadas</h2>
+                  <p className="event-tickets-reserved-panel__hint">
+                    Checkout iniciado; el cupo está retenido hasta que se confirme o expire el pago. No se incluyen en
+                    Total, Vendidos ni Cortesías de arriba.
+                  </p>
+                </div>
+                {reservedTicketsFiltered.length === 0 ? (
+                  <p className="event-tickets-reserved-panel__empty">
+                    Ninguna reserva coincide con la búsqueda o la localidad seleccionada.
+                  </p>
+                ) : (
+                  <div className="event-tickets-table-container">
+                    <table className="event-tickets-table event-tickets-table--reserved">
+                      <thead>
+                        <tr>
+                          <th>Localidad</th>
+                          <th>Cédula</th>
+                          <th>Nombre</th>
+                          <th>Email</th>
+                          <th>Teléfono</th>
+                          <th>Cant.</th>
+                          <th>Monto</th>
+                          <th>Creado</th>
+                          <th>Estado</th>
+                          <th>Método</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reservedTicketsFiltered.map((ticket) => (
+                          <tr key={ticket.id}>
+                            <td>{ticket.sectionName || 'General'}</td>
+                            <td>{ticketListBuyerIdNumber(ticket) || '—'}</td>
+                            <td>{ticketListBuyerName(ticket) || '—'}</td>
+                            <td>{ticket.buyerEmail || '—'}</td>
+                            <td>{ticket.buyerPhone || '—'}</td>
+                            <td>{Number(ticket.quantity) > 0 ? ticket.quantity : 1}</td>
+                            <td>
+                              {isTicketCourtesyRow(ticket) ? (
+                                <span className="badge cortesia">Cortesía</span>
+                              ) : (
+                                `$${ticketPerBoletoAmountCOP(ticket, parentBundleMap).toLocaleString('es-CO')}`
+                              )}
+                            </td>
+                            <td>{formatRowDate(ticket.createdAt)}</td>
+                            <td>{getStatusBadge(ticket.ticketStatus || ticket.status)}</td>
+                            <td>{getPaymentBadge(ticket.paymentMethod, ticket.createdByAdmin)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
           </>

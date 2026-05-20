@@ -31,6 +31,16 @@ export function isTicketCourtesyRow(t: TicketListDoc): boolean {
   return ticketLineAmountCOP(t) === 0;
 }
 
+/**
+ * Entradas físicas que representa un documento `tickets` (alinea totales con estadísticas / `quantity`).
+ * Si no hay `quantity` válido, cuenta como 1 (comportamiento habitual en listados).
+ */
+export function ticketDocUnits(t: { quantity?: number | null }): number {
+  const q = Number(t.quantity);
+  if (Number.isFinite(q) && q > 0) return Math.floor(q);
+  return 1;
+}
+
 export function ticketListBuyerName(t: TicketListDoc): string {
   const root = typeof t.buyerName === 'string' ? t.buyerName.trim() : '';
   const meta = t.metadata?.userName;

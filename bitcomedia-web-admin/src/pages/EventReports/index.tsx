@@ -19,7 +19,7 @@ import {
   getPaymentConfig,
   getOrganizerBuyerFee,
 } from '@services';
-import { normalizeGatewayCommissionConfig } from '@utils/revenueBreakdown';
+import { normalizeGatewayCommissionConfig, buyerPaysServiceFeeOnTop, eventUsesMercadoPago } from '@utils/revenueBreakdown';
 import type { PdfVentasMoneyContext } from '@utils/eventReportsPdf';
 import { getTicketsByEventId } from '@services/ticketService';
 import type { Event, EventSection } from '@services/types';
@@ -135,6 +135,24 @@ const EventReportsScreen: React.FC = () => {
   }, [event, eventId, loading, navigate]);
 
   const eventName = event?.name || 'Evento';
+
+  const reportsNetoHint = useMemo(() => {
+    if (!event) {
+      return 'En ventas y entradas por localidad, la columna de monto es neta según la configuración del evento.';
+    }
+    const mp = eventUsesMercadoPago(event);
+    const feeOnTop = buyerPaysServiceFeeOnTop(event);
+    if (mp && !feeOnTop) {
+      return 'En ventas y entradas por localidad, la columna de monto es neta: se descuenta la tarifa de servicio del precio de lista. Mercado Pago no incluye estimación de comisión de pasarela.';
+    }
+    if (mp) {
+      return 'En ventas y entradas por localidad, la columna de monto es el subtotal de entradas (Mercado Pago, sin comisión pasarela estimada).';
+    }
+    if (!feeOnTop) {
+      return 'En ventas y entradas por localidad, la columna de monto es neta: se descuentan tarifa de servicio y comisión pasarela OnePay del precio de lista.';
+    }
+    return 'En ventas y entradas por localidad, la columna de monto es neta, después de deducciones de tiquetera y pasarela de pagos (OnePay).';
+  }, [event]);
 
   const sections: EventSection[] = event?.sections || [];
   const sectionOptions = useMemo(
@@ -339,9 +357,7 @@ const EventReportsScreen: React.FC = () => {
         <header className="event-reports-hero">
           <h1 className="event-reports-hero__title">Reportes PDF</h1>
           <p className="event-reports-hero__subtitle">
-            Genera informes con el logo de Ticket Colombia. En ventas y entradas por localidad, la columna de monto es{' '}
-            <strong>neta</strong>, después de deducciones de tiquetera y pasarela de pagos. Los egresos siguen en valor
-            registrado.
+            Genera informes con el logo de Ticket Colombia. {reportsNetoHint} Los egresos siguen en valor registrado.
           </p>
         </header>
 

@@ -185,6 +185,13 @@
       border-left-color: $color-accent;
     }
 
+    &.summary-reserved {
+      border-left-color: #ff9f0a;
+      .summary-value {
+        color: #ffcc00;
+      }
+    }
+
     .summary-label {
       font-size: 0.8rem;
       color: $color-text-secondary;
@@ -197,6 +204,12 @@
       font-size: 1.25rem;
       font-weight: 700;
       color: $color-accent;
+    }
+
+    .summary-sublabel {
+      font-size: 0.68rem;
+      color: rgba($color-text-secondary, 0.9);
+      font-weight: 500;
     }
 
     .summary-hint {
@@ -246,6 +259,38 @@
         border-color: $color-accent;
       }
     }
+  }
+}
+
+.tickets-reserved-panel {
+  margin-top: 1.25rem;
+  padding: 1rem 1rem 0.25rem;
+  border-radius: 10px;
+  border: 1px dashed rgba(#ff9f0a, 0.45);
+  background: rgba($color-primary, 0.35);
+
+  &__head {
+    margin-bottom: 0.75rem;
+  }
+
+  &__title {
+    margin: 0 0 0.35rem;
+    font-size: 1.05rem;
+    color: $color-text-primary;
+    font-weight: 700;
+  }
+
+  &__hint {
+    margin: 0;
+    font-size: 0.82rem;
+    color: $color-text-secondary;
+    line-height: 1.45;
+  }
+
+  &__empty {
+    margin: 0 0 1rem;
+    font-size: 0.88rem;
+    color: $color-text-secondary;
   }
 }
 

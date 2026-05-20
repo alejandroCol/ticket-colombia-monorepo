@@ -21,7 +21,7 @@ import {
 } from '@services';
 import { aggregateEventRevenueBreakdown, normalizeGatewayCommissionConfig } from '@utils/revenueBreakdown';
 import type { OrganizerBuyerFeeInput } from '@utils/revenueBreakdown';
-import { getTicketsByEventId, isTicketValidForSalesStats } from '@services/ticketService';
+import { getTicketsByEventId, isTicketReservedHold, filterSoldEntradasTicketsForAdminStats } from '@services/ticketService';
 import {
   IconTickets,
   IconRevenue,
@@ -35,6 +35,7 @@ import type { Event, EventSection } from '@services/types';
 import type { Ticket } from '@services/types';
 import type { Expense } from '@services/firestore';
 import { exportTicketsToExcel } from '@utils/exportTicketsExcel';
+import { ticketDocUnits } from '@utils/ticketListDisplay';
 import { buildDailySalesSeries, defaultLastNDaysRange } from '@utils/salesTimeSeries';
 import SalesCurveChart from '@components/SalesCurveChart';
 import SectionRadarChart from '@components/SectionRadarChart';
@@ -160,31 +161,37 @@ const EventStatsScreen: React.FC = () => {
   const formatCOP = (amount: number) =>
     new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(amount);
 
-  const validTickets = tickets.filter(isTicketValidForSalesStats);
+  const soldTicketsForStats = useMemo(() => filterSoldEntradasTicketsForAdminStats(tickets), [tickets]);
 
-  const totalRevenue = validTickets.reduce((sum, t) => sum + (t.amount || 0), 0);
-  const totalQuantity = validTickets.reduce((sum, t) => sum + (t.quantity || 1), 0);
-  const uniqueBuyers = new Set(validTickets.map((t) => t.buyerEmail || t.metadata?.userName)).size;
+  const reservedHoldTickets = useMemo(() => tickets.filter(isTicketReservedHold), [tickets]);
+  const reservedHoldUnits = useMemo(
+    () => reservedHoldTickets.reduce((s, t) => s + ticketDocUnits(t), 0),
+    [reservedHoldTickets]
+  );
+
+  const totalRevenue = soldTicketsForStats.reduce((sum, t) => sum + (t.amount || 0), 0);
+  const totalQuantity = soldTicketsForStats.reduce((sum, t) => sum + ticketDocUnits(t), 0);
+  const uniqueBuyers = new Set(soldTicketsForStats.map((t) => t.buyerEmail || t.metadata?.userName)).size;
   const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
 
   const moneyAggr = useMemo(() => {
     if (!event || !moneyCtx) return null;
     return aggregateEventRevenueBreakdown(
       event,
-      validTickets,
+      soldTicketsForStats,
       moneyCtx.globalFeesPercent,
       moneyCtx.organizerFee,
       moneyCtx.gateway
     );
-  }, [event, validTickets, moneyCtx]);
+  }, [event, soldTicketsForStats, moneyCtx]);
 
   const profitNetoVsEgresos = moneyAggr ? moneyAggr.netoOrganizador - totalExpenses : null;
 
   const chartRangeInvalid = chartFrom > chartTo;
   const salesSeries = useMemo(() => {
     if (chartFrom > chartTo) return [];
-    return buildDailySalesSeries(validTickets, chartFrom, chartTo);
-  }, [validTickets, chartFrom, chartTo]);
+    return buildDailySalesSeries(soldTicketsForStats, chartFrom, chartTo);
+  }, [soldTicketsForStats, chartFrom, chartTo]);
 
   const salesInChartRange = useMemo(
     () => salesSeries.reduce((s, p) => ({ rev: s.rev + p.revenue, units: s.units + p.ticketUnits }), { rev: 0, units: 0 }),
@@ -196,10 +203,10 @@ const EventStatsScreen: React.FC = () => {
 
   const sectionStats: SectionStats[] = hasSections
     ? sections.map((sec) => {
-        const sectionTickets = validTickets.filter(
+        const sectionTickets = soldTicketsForStats.filter(
           (t) => t.sectionId === sec.id || t.sectionName === sec.name
         );
-        const sold = sectionTickets.reduce((s, t) => s + (t.quantity || 1), 0);
+        const sold = sectionTickets.reduce((s, t) => s + ticketDocUnits(t), 0);
         const capacity = sec.available || 0;
         const revenue = sectionTickets.reduce((s, t) => s + (t.amount || 0), 0);
         const percentSold = capacity > 0 ? Math.min(100, (sold / capacity) * 100) : 0;
@@ -240,8 +247,8 @@ const EventStatsScreen: React.FC = () => {
   }));
 
   const emailDomainCount: Record<string, number> = {};
-  validTickets.forEach((t) => {
-    const qty = t.quantity || 1;
+  soldTicketsForStats.forEach((t) => {
+    const qty = ticketDocUnits(t);
     const email = t.buyerEmail || '';
     const domain = email.includes('@') ? email.split('@')[1]?.toLowerCase() || 'sin_email' : 'sin_email';
     emailDomainCount[domain] = (emailDomainCount[domain] || 0) + qty;
@@ -359,6 +366,7 @@ const EventStatsScreen: React.FC = () => {
             <div className="stat-kpi-content">
               <span className="stat-kpi-value">{totalQuantity}</span>
               <span className="stat-kpi-label">Boletas vendidas</span>
+              <span className="stat-kpi-hint">Sin cortesías</span>
             </div>
           </div>
           <div className="stat-kpi-card stat-kpi--revenue">
@@ -383,6 +391,18 @@ const EventStatsScreen: React.FC = () => {
           </div>
         </div>
 
+        {reservedHoldUnits > 0 && (
+          <div className="event-stats-reserved-callout" role="region" aria-label="Boletas en reserva">
+            <h2 className="event-stats-reserved-callout__title">Boletas reservadas (sin pago aún)</h2>
+            <p className="event-stats-reserved-callout__body">
+              <strong>{reservedHoldUnits}</strong> {reservedHoldUnits === 1 ? 'entrada retenida' : 'entradas retenidas'}{' '}
+              en checkout ({reservedHoldTickets.length}{' '}
+              {reservedHoldTickets.length === 1 ? 'orden' : 'órdenes'}). No entran en «Boletas vendidas», ingresos ni
+              curva de ventas hasta confirmarse el pago (las cortesías tampoco cuentan como vendidas en esas métricas).
+            </p>
+          </div>
+        )}
+
         <div className="event-stats-chart-section">
           <div className="event-stats-chart-head">
             <div className="section-header-title event-stats-chart-head__title">
@@ -390,7 +410,8 @@ const EventStatsScreen: React.FC = () => {
               <h3>Curva de ventas</h3>
             </div>
             <p className="event-stats-chart-intro">
-              Monto cobrado por día según la fecha de creación del boleto (ventas válidas). Por defecto: últimos 15 días.
+              Monto cobrado por día según la fecha de creación del boleto (solo ventas con cobro, sin cortesías). Por
+              defecto: últimos 15 días.
             </p>
             <div className="event-stats-chart-filters">
               <CustomInput
@@ -439,7 +460,7 @@ const EventStatsScreen: React.FC = () => {
             </div>
             <p className="event-stats-chart-intro">
               Vista poligonal: cada eje es una tribuna o sección; mientras más lejos del centro, mayor % de aforo
-              vendido. Hasta 12 secciones (prioridad por unidades vendidas).
+              vendido (solo entradas con cobro, sin cortesías). Hasta 12 secciones (prioridad por unidades vendidas).
             </p>
           </div>
           <SectionRadarChart sections={radarSectionData} />
@@ -450,37 +471,63 @@ const EventStatsScreen: React.FC = () => {
             <h3 className="event-stats-money-deck__title">Dinero y comisiones (estimado)</h3>
             <ul className="event-stats-money-deck__list">
               <li>
-                <span>Subtotal entradas (sin tarifa servicio)</span>
+                <span>
+                  {moneyAggr.serviceFeeDeductedFromNeto
+                    ? 'Total cobrado al comprador (precio de lista)'
+                    : 'Subtotal entradas (sin tarifa servicio)'}
+                </span>
                 <strong>{formatCOP(moneyAggr.subtotalEntradas)}</strong>
               </li>
               <li>
-                <span>Tarifa servicio tiquetera (cobrada al comprador)</span>
-                <strong>{formatCOP(moneyAggr.tiqueteraFee)}</strong>
+                <span>
+                  {moneyAggr.serviceFeeDeductedFromNeto
+                    ? 'Tarifa servicio tiquetera (descontada del neto)'
+                    : 'Tarifa servicio tiquetera (cobrada al comprador)'}
+                </span>
+                <strong>
+                  {moneyAggr.serviceFeeDeductedFromNeto
+                    ? `−${formatCOP(moneyAggr.tiqueteraFee)}`
+                    : formatCOP(moneyAggr.tiqueteraFee)}
+                </strong>
               </li>
-              <li className="event-stats-money-deck__accent">
-                <span>Comisión pasarela (total con IVA)</span>
-                <strong>−{formatCOP(moneyAggr.pasarelaTotal)}</strong>
-              </li>
-              <li className="event-stats-money-deck__sub">
-                <span>Parte porcentaje</span>
-                <span>{formatCOP(moneyAggr.pasarelaPercentPart)}</span>
-              </li>
-              <li className="event-stats-money-deck__sub">
-                <span>Parte fija (por transacción)</span>
-                <span>{formatCOP(moneyAggr.pasarelaFixedPart)}</span>
-              </li>
-              <li className="event-stats-money-deck__sub">
-                <span>IVA sobre base pasarela</span>
-                <span>{formatCOP(moneyAggr.pasarelaIva)}</span>
-              </li>
+              {moneyAggr.showPasarelaCommission && (
+                <>
+                  <li className="event-stats-money-deck__accent">
+                    <span>Comisión pasarela (total con IVA)</span>
+                    <strong>−{formatCOP(moneyAggr.pasarelaTotal)}</strong>
+                  </li>
+                  <li className="event-stats-money-deck__sub">
+                    <span>Parte porcentaje</span>
+                    <span>{formatCOP(moneyAggr.pasarelaPercentPart)}</span>
+                  </li>
+                  <li className="event-stats-money-deck__sub">
+                    <span>Parte fija (por transacción)</span>
+                    <span>{formatCOP(moneyAggr.pasarelaFixedPart)}</span>
+                  </li>
+                  <li className="event-stats-money-deck__sub">
+                    <span>IVA sobre base pasarela</span>
+                    <span>{formatCOP(moneyAggr.pasarelaIva)}</span>
+                  </li>
+                </>
+              )}
               <li className="event-stats-money-deck__neto">
-                <span>NETO por entradas (después de pasarela)</span>
+                <span>
+                  {moneyAggr.showPasarelaCommission
+                    ? 'NETO por entradas (después de pasarela'
+                    : 'NETO por entradas'}
+                  {moneyAggr.serviceFeeDeductedFromNeto ? ' y tarifa tiquetera' : ''}
+                  {moneyAggr.showPasarelaCommission ? ')' : ''}
+                </span>
                 <strong>{formatCOP(moneyAggr.netoOrganizador)}</strong>
               </li>
             </ul>
             <p className="event-stats-money-deck__hint">
-              Ventas manuales / transferencia no incluyen comisión de pasarela en este cálculo. La tarifa tiquetera se
-              muestra aparte; el NETO es subtotal de entradas menos pasarela.
+              {moneyAggr.showPasarelaCommission
+                ? 'Ventas manuales / transferencia no incluyen comisión de pasarela. '
+                : 'Este evento usa Mercado Pago: no se estima comisión de pasarela aquí. '}
+              {moneyAggr.serviceFeeDeductedFromNeto
+                ? 'La tarifa de servicio no se cobra aparte al comprador; se descuenta del neto.'
+                : 'La tarifa tiquetera se muestra aparte; el NETO refleja lo que queda para el organizador.'}
             </p>
           </div>
         )}

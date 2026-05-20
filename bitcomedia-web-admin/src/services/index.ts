@@ -95,6 +95,9 @@ export {
   getCurrentUserTickets,
   getTicketsSince,
   isTicketValidForSalesStats,
+  isTicketReservedHold,
+  filterSoldEntradasTicketsForAdminStats,
+  sumSoldEntradaUnitsForAdminStats,
   ticketCreatedAtMs
 } from './ticketService';
 

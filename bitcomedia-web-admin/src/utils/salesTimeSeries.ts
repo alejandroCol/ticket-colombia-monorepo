@@ -1,5 +1,6 @@
 import type { Ticket } from '@services/types';
 import { ticketCreatedAtMs } from '@services/ticketService';
+import { ticketDocUnits } from '@utils/ticketListDisplay';
 
 export function toYmdLocal(d: Date): string {
   const y = d.getFullYear();
@@ -38,7 +39,7 @@ export function buildDailySalesSeries(
     if (dayKey < fromYmd || dayKey > toYmd) continue;
     const cur = byDay.get(dayKey) || { revenue: 0, ticketUnits: 0 };
     cur.revenue += Number(t.amount) || 0;
-    cur.ticketUnits += Number(t.quantity) || 1;
+    cur.ticketUnits += ticketDocUnits(t);
     byDay.set(dayKey, cur);
   }
 

@@ -6,6 +6,7 @@ import { db } from './firestore';
 import { hasAdminAccess } from './auth';
 import { partnerCanReadTicket, partnerCanValidateTicket } from './partnerGrants';
 import type { Ticket } from './types';
+import { isTicketCourtesyRow, ticketDocUnits } from '@utils/ticketListDisplay';
 
 // Initialize Firebase Functions
 const functions = getFunctions(app);
@@ -99,6 +100,14 @@ export function ticketCreatedAtMs(t: Ticket): number {
 const REVENUE_COUNTING_STATUSES = ['paid', 'used', 'redeemed'] as const;
 
 /**
+ * Cupo retenido en checkout sin pago confirmado. No debe mezclarse con ventas ni KPIs operativos.
+ * Usar listados aparte (p. ej. «Boletas reservadas») para monitorear retención de inventario.
+ */
+export function isTicketReservedHold(t: { ticketStatus?: string | null }): boolean {
+  return t.ticketStatus === 'reserved';
+}
+
+/**
  * Boletos que cuentan en ingresos / reportes de ventas: pagados o ya canjeados/usados.
  * Excluye `reserved` (cupo retenido sin pago), cancelados, deshabilitados, transfers y pases hijo (`purchase_pass`).
  * Misma regla en estadísticas, balance y PDFs de conciliación.
@@ -110,6 +119,19 @@ export function isTicketValidForSalesStats(t: Ticket): boolean {
   const valid = (REVENUE_COUNTING_STATUSES as readonly string[]).includes(status);
   if ((t as { ticketKind?: string }).ticketKind === 'purchase_pass') return false;
   return valid && !invalid;
+}
+
+/**
+ * Tickets que alimentan el KPI «Boletas vendidas» (estadísticas y resumen en Boletos).
+ * Incluye documentos que no se listan en la tabla (p. ej. padre de bundle); excluye `purchase_pass` hijos y cortesías.
+ */
+export function filterSoldEntradasTicketsForAdminStats(tickets: Ticket[]): Ticket[] {
+  return tickets.filter((t) => isTicketValidForSalesStats(t) && !isTicketCourtesyRow(t));
+}
+
+/** Suma de entradas (`ticketDocUnits`) para el mismo KPI que {@link filterSoldEntradasTicketsForAdminStats}. */
+export function sumSoldEntradaUnitsForAdminStats(tickets: Ticket[]): number {
+  return filterSoldEntradasTicketsForAdminStats(tickets).reduce((s, t) => s + ticketDocUnits(t), 0);
 }
 
 /**
