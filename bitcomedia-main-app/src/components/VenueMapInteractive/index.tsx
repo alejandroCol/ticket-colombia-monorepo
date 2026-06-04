@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import type { EventSection, VenueMapVisualConfig, VenueMapZone } from "../../services/types";
+import { isMapZoneUnavailable } from "../../utils/venueMapSection";
 import { publicZoneButtonStyle } from "../../utils/venueMapZoneStyle";
 import VenueMapVisualLayer from "../VenueMapVisualLayer";
 import "./index.scss";
@@ -84,7 +85,7 @@ const VenueMapInteractive: React.FC<VenueMapInteractiveProps> = ({
             const sec = resolveSection(z.sectionId);
             if (!sec) return null;
             const isPalcoCell = z.palco_index != null;
-            const soldOut = (mapZoneSold[z.id] ?? 0) >= 1;
+            const soldOut = isMapZoneUnavailable(z, mapZoneSold);
             const zoneSelected = selectedMapZoneId === z.id;
             const sectionSelected = selectedSectionId === z.sectionId;
             const active = isPalcoCell ? zoneSelected : sectionSelected;

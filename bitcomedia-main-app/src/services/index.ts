@@ -66,6 +66,10 @@ export {
 // Meta Pixel service exports
 export { metaPixel } from './meta-pixel';
 
+// Organizer inquiry
+export { submitOrganizerInquiry } from './organizerInquiryService';
+export type { SubmitOrganizerInquiryRequest } from './organizerInquiryService';
+
 // Types exports
 export type {
   UserData,

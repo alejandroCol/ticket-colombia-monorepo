@@ -18,6 +18,11 @@ import {
   getEventAvailability,
 } from '@services';
 import type { EventSection, VenueMapZone, VenueMapConfig } from '@services/types';
+import {
+  isMapZoneUnavailable,
+  mapZoneDisplayLabel,
+  sectionRequiresMapZonePick,
+} from '@utils/venueMapSection';
 import './index.scss';
 
 type TaquillaEventOption = {
@@ -76,7 +81,9 @@ const TaquillaSaleScreen: React.FC = () => {
     );
   }, [selected, sectionId]);
 
-  const needsMapZonePick = sectionZonesSorted.length > 1;
+  const needsMapZonePick = sectionId
+    ? sectionRequiresMapZonePick(selected?.venue_map?.zones ?? [], sectionId)
+    : false;
   const selSectionMeta = selected?.sections?.find((s) => s.id === sectionId);
   const seatsPerUnitTaquilla = Math.max(1, Number(selSectionMeta?.seats_per_unit) || 1);
 
@@ -115,7 +122,7 @@ const TaquillaSaleScreen: React.FC = () => {
 
   const availableTaquillaZones = useMemo(() => {
     if (!needsMapZonePick || mapAvailLoading || availLoadFailed || mapZoneOccupancy === null) return [];
-    return sectionZonesSorted.filter((z) => (mapZoneOccupancy[z.id] ?? 0) < 1);
+    return sectionZonesSorted.filter((z) => !isMapZoneUnavailable(z, mapZoneOccupancy));
   }, [needsMapZonePick, sectionZonesSorted, mapZoneOccupancy, mapAvailLoading, availLoadFailed]);
 
   useEffect(() => {
@@ -150,8 +157,7 @@ const TaquillaSaleScreen: React.FC = () => {
 
   useEffect(() => {
     if (!selected || !sectionId) return;
-    const z = zonesForSectionOption(selected, sectionId);
-    if (z.length > 1) {
+    if (sectionRequiresMapZonePick(selected.venue_map?.zones ?? [], sectionId)) {
       const spu = Math.max(
         1,
         Number(selected.sections.find((s) => s.id === sectionId)?.seats_per_unit) || 1
@@ -479,7 +485,7 @@ const TaquillaSaleScreen: React.FC = () => {
                     value: z.id,
                     label:
                       (z.label && z.label.trim()) ||
-                      (z.palco_index !== undefined ? `Número ${z.palco_index}` : z.id.slice(0, 10)),
+                      mapZoneDisplayLabel(z),
                   })),
                 ]}
               />

@@ -87,9 +87,18 @@
 
     &__top {
       display: flex;
-      justify-content: center;
+      justify-content: space-between;
       align-items: center;
+      gap: 0.5rem;
       min-height: 44px;
+      padding: 0 0.125rem;
+    }
+
+    &__top-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      flex-shrink: 0;
     }
 
     &__search {
@@ -116,9 +125,59 @@
       .nav-container-mobile__top {
         min-height: 0;
         width: 100%;
-        justify-content: center;
+        justify-content: space-between;
       }
     }
+  }
+
+  .nav-links-desktop .nav-organizer-pill {
+    align-self: center;
+  }
+
+  .nav-mobile-profile-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+    transition: background 0.2s ease;
+
+    .icon {
+      height: 22px;
+      width: 22px;
+      transition: filter 0.2s ease;
+
+      &.icon-active {
+        filter: brightness(0) saturate(100%) invert(100%) sepia(0%) saturate(0%)
+          hue-rotate(324deg) brightness(102%) contrast(101%);
+      }
+
+      &.icon-inactive {
+        filter: brightness(0) saturate(100%) invert(81%) sepia(11%) saturate(895%)
+          hue-rotate(340deg) brightness(93%) contrast(90%);
+      }
+    }
+
+    &:hover,
+    &.active {
+      background: rgba($color-accent, 0.12);
+    }
+
+    &:focus-visible {
+      outline: 2px solid rgba($color-accent, 0.55);
+      outline-offset: 2px;
+    }
+  }
+
+  .mobile-nav-link--organizer {
+    justify-content: center;
+    padding: 0.75rem 1rem;
   }
   
   // Tablet and Desktop layout
@@ -559,17 +618,17 @@
   }
 }
 
-// Add padding to body to accommodate the fixed top navbar (+ notch / status bar)
+// Padding en body = altura real del nav fijo (ver --tc-nav-clearance* en main.scss)
 body {
-  padding-top: calc(50px + env(safe-area-inset-top, 0px));
+  padding-top: var(--tc-nav-clearance);
 
   @media (min-width: $breakpoint-md) {
-    padding-top: calc(60px + env(safe-area-inset-top, 0px));
+    padding-top: var(--tc-nav-clearance-md);
   }
 
   &:has(.top-nav-bar--with-event-search) {
     @media (max-width: ($breakpoint-md - 1px)) {
-      padding-top: calc(104px + env(safe-area-inset-top, 0px));
+      padding-top: var(--tc-nav-clearance-search);
     }
   }
 }
@@ -577,8 +636,9 @@ body {
 // Apply padding to the page containers
 .marketplace-screen,
 .profile-screen,
-.tickets-screen {
+.tickets-screen,
+.organizer-inquiry {
   @media (min-width: $breakpoint-md) {
-    padding-top: 1rem;
+    padding-top: 0.5rem;
   }
 }

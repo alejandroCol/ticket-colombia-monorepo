@@ -327,23 +327,78 @@ export function partitionMergedSlots(merged: Record<string, number>): {
   return {bySection, byMapZone};
 }
 
+export type VenueMapZoneDoc = {
+  id?: string;
+  sectionId?: string;
+  palco_index?: number;
+  disabled?: boolean;
+};
+
+function venueMapZones(eventData: EventDataLike): VenueMapZoneDoc[] {
+  const raw = eventData.venue_map as {zones?: VenueMapZoneDoc[]} | undefined;
+  const zones = raw?.zones;
+  return Array.isArray(zones) ? zones : [];
+}
+
 /** Zonas de mapa enlazadas a una localidad (para validar compra por palco). */
 export function mapZonesForSection(
   eventData: EventDataLike,
   sectionId: string
-): Array<{id: string; sectionId: string}> {
+): Array<{id: string; sectionId: string; palco_index?: number; disabled?: boolean}> {
   const sid = String(sectionId || "").trim();
   if (!sid) return [];
-  const raw = eventData.venue_map as {zones?: Array<{id?: string; sectionId?: string}>} | undefined;
-  const zones = raw?.zones;
-  if (!Array.isArray(zones)) return [];
-  const out: Array<{id: string; sectionId: string}> = [];
-  for (const z of zones) {
+  const out: Array<{id: string; sectionId: string; palco_index?: number; disabled?: boolean}> = [];
+  for (const z of venueMapZones(eventData)) {
     if (!z) continue;
     const zid = String(z.id || "").trim();
     if (!zid) continue;
     if (String(z.sectionId || "").trim() !== sid) continue;
-    out.push({id: zid, sectionId: sid});
+    out.push({
+      id: zid,
+      sectionId: sid,
+      ...(z.palco_index != null ? {palco_index: z.palco_index} : {}),
+      ...(z.disabled === true ? {disabled: true} : {}),
+    });
+  }
+  return out;
+}
+
+/** Hay que elegir celda en mapa: varias zonas o al menos una con `palco_index` (palco único). */
+export function sectionRequiresMapZonePick(
+  eventData: EventDataLike,
+  sectionId: string
+): boolean {
+  const zones = mapZonesForSection(eventData, sectionId);
+  return zones.length > 1 || zones.some((z) => z.palco_index != null);
+}
+
+export function findVenueMapZone(
+  eventData: EventDataLike,
+  mapZoneId: string
+): VenueMapZoneDoc | undefined {
+  const id = String(mapZoneId || "").trim();
+  if (!id) return undefined;
+  return venueMapZones(eventData).find((z) => String(z?.id || "").trim() === id);
+}
+
+export function isMapZoneDisabled(
+  eventData: EventDataLike,
+  mapZoneId: string
+): boolean {
+  const z = findVenueMapZone(eventData, mapZoneId);
+  return z?.disabled === true;
+}
+
+/** Celdas inhabilitadas en el mapa cuentan como ocupadas en la API de disponibilidad. */
+export function applyDisabledMapZonesToByMapZone(
+  eventData: EventDataLike,
+  byMapZone: Record<string, number>
+): Record<string, number> {
+  const out = {...byMapZone};
+  for (const z of venueMapZones(eventData)) {
+    const id = String(z?.id || "").trim();
+    if (!id || z.disabled !== true) continue;
+    out[id] = Math.max(out[id] ?? 0, 1);
   }
   return out;
 }
@@ -388,6 +443,9 @@ export async function assertEnoughCapacityForPurchase(
 ): Promise<void> {
   const mz = String(mapZoneId || "").trim();
   if (mz) {
+    if (isMapZoneDisabled(eventData, mz)) {
+      throw new Error("Esta celda del mapa no está disponible para la venta.");
+    }
     const sid = String(sectionId || "").trim();
     const spu = sid ? seatsPerUnitForSection(eventData, sid) : 1;
     if (quantity !== spu) {

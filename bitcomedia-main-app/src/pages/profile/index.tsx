@@ -23,8 +23,8 @@ import {
   ProfileIconChevronRight,
   ProfileIconInstagram,
   ProfileIconTikTok,
-  ProfileIconSparkle,
   ProfileIconUserBadge,
+  ProfileIconTicket,
 } from "../../components/ProfileScreenIcons";
 import "./index.scss";
 import type { UserData } from "../../services";
@@ -99,10 +99,24 @@ const ProfileScreen: React.FC = () => {
         <TopNavBar isAuthenticated={isAuthenticated} />
 
         <div className="profile-content profile-content--guest">
-          <div className="profile-guest-hero" aria-hidden>
-            <ProfileIconSparkle className="profile-guest-hero__deco" size={32} />
-          </div>
+          <nav className="profile-guest-tickets" aria-label="Mis entradas">
+            <button
+              type="button"
+              className="profile-action-row profile-action-row--primary"
+              onClick={() => navigate("/tickets")}
+            >
+              <span className="profile-action-row__icon" aria-hidden>
+                <ProfileIconTicket size={21} />
+              </span>
+              <span className="profile-action-row__label">Mis entradas</span>
+              <ProfileIconChevronRight
+                className="profile-action-row__chevron"
+                size={18}
+              />
+            </button>
+          </nav>
           <AccountlessState
+            iconVariant="logo"
             title="Tu espacio en Ticket Colombia"
             message="Crea una cuenta o inicia sesión para guardar tus datos, ver tus entradas y comprar más rápido."
             benefits={[
@@ -111,7 +125,6 @@ const ProfileScreen: React.FC = () => {
               "Checkout más ágil",
               "Novedades de eventos",
             ]}
-            icon="🎭"
           />
           <div className="bottom-nav-spacer" />
         </div>
@@ -220,6 +233,20 @@ const ProfileScreen: React.FC = () => {
               <button
                 type="button"
                 className="profile-action-row profile-action-row--primary"
+                onClick={() => navigate("/tickets")}
+              >
+                <span className="profile-action-row__icon" aria-hidden>
+                  <ProfileIconTicket size={21} />
+                </span>
+                <span className="profile-action-row__label">Mis entradas</span>
+                <ProfileIconChevronRight
+                  className="profile-action-row__chevron"
+                  size={18}
+                />
+              </button>
+              <button
+                type="button"
+                className="profile-action-row"
                 onClick={() => navigate("/editar-perfil")}
               >
                 <span className="profile-action-row__icon" aria-hidden>

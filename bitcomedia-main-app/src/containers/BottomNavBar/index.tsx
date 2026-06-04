@@ -6,8 +6,8 @@ import { generateCustomStyles, generateClassName } from '../../components/types'
 
 // Import SVG icons
 import homeIcon from '../../assets/home.svg';
-import ticketsIcon from '../../assets/tickets.svg';
 import profileIcon from '../../assets/profile.svg';
+import OrganizerNavPill from '../../components/OrganizerNavPill';
 
 interface BottomNavBarProps extends CustomStyleProps {
 }
@@ -65,20 +65,6 @@ const BottomNavBar: React.FC<BottomNavBarProps> = ({
       </div>
       
       <div 
-        className={`nav-item ${isActive('/tickets') ? 'active' : ''}`} 
-        onClick={() => navigate('/tickets')}
-      >
-        <div className="nav-icon">
-          <img 
-            src={ticketsIcon} 
-            alt="Tickets" 
-            className={`icon ${getIconClass(isActive('/tickets'))}`} 
-          />
-        </div>
-        <span className="nav-label">Tickets</span>
-      </div>
-      
-      <div 
         className={`nav-item ${isActive('/perfil') ? 'active' : ''}`} 
         onClick={() => navigate('/perfil')}
       >
@@ -90,6 +76,18 @@ const BottomNavBar: React.FC<BottomNavBarProps> = ({
           />
         </div>
         <span className="nav-label">Perfil</span>
+      </div>
+
+      <div
+        className={`nav-item nav-item--organizer ${
+          isActive('/organizador-eventos') ? 'active' : ''
+        }`}
+      >
+        <OrganizerNavPill
+          variant="bottom"
+          active={isActive('/organizador-eventos')}
+          onClick={() => navigate('/organizador-eventos')}
+        />
       </div>
     </div>
   );

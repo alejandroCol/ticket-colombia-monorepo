@@ -27,6 +27,7 @@ import {
   mercadopagoOAuthCallback,
 } from "./features/payments/mercadopago-oauth";
 import {previewEventDiscountCode} from "./features/discount-codes/preview-event-discount-code";
+import {submitOrganizerInquiry} from "./features/organizer-inquiry/submit-organizer-inquiry";
 
 admin.initializeApp();
 
@@ -482,6 +483,9 @@ exports.cleanupExpiredReservations = cleanupExpiredReservations;
 exports.expirePendingInstallments = expirePendingInstallments;
 
 exports.getAbonoCheckoutPublicInfo = getAbonoCheckoutPublicInfo;
+
+/** Formulario público: organizadores solicitan información (envía correo al equipo). */
+exports.submitOrganizerInquiry = submitOrganizerInquiry;
 
 exports.createBalanceInstallmentPreference = functions
   .runWith({

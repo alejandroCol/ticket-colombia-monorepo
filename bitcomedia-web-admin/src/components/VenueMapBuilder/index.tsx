@@ -20,6 +20,7 @@ import DecorationPreview from './DecorationPreview';
 import { compressImageForMapBackground } from '../../utils/imageCompression';
 import { createDecoration, DECORATION_PALETTE, DEFAULT_VENUE_MAP_BACKGROUND } from './constants';
 import { formatCopThousandsDisplay } from '../../utils/formatCopInput';
+import { palcoCellsForSection } from '../../utils/venueMapSection';
 import { exportVenueMapToBlob } from './exportVenueMapPng';
 import { adminZoneCanvasStyle } from './zoneColors';
 import './index.scss';
@@ -70,6 +71,16 @@ type DragState =
 
 function clamp(n: number, a: number, b: number): number {
   return Math.min(b, Math.max(a, n));
+}
+
+type PalcoSplitMode = 'single' | 'divide';
+
+function parseDivisionLabels(raw: string, count: number): string[] {
+  const parts = raw
+    .split(/[\n,;]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return Array.from({ length: count }, (_, i) => parts[i] || String(i + 1));
 }
 
 /** Prefijo de IDs de localidades creadas desde el mapa (se pueden limpiar al borrar la zona). */
@@ -134,9 +145,12 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [templateBusy, setTemplateBusy] = useState(false);
+  const [palcoSplitMode, setPalcoSplitMode] = useState<PalcoSplitMode>('divide');
   const [palcoSplitCount, setPalcoSplitCount] = useState('10');
   /** Personas / QRs por cada celda tras dividir (cada celda = 1 unidad de inventario). */
   const [palcoSplitPeoplePerCell, setPalcoSplitPeoplePerCell] = useState('1');
+  /** Un nombre por línea (opcional) al dividir; se usa al pulsar «Aplicar». */
+  const [palcoDivisionLabels, setPalcoDivisionLabels] = useState('');
 
   const refreshTemplates = useCallback(async () => {
     if (!organizerId) {
@@ -376,6 +390,10 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
     onSectionsChange(sections.map((s) => (s.id === sectionId ? { ...s, ...patch } : s)));
   };
 
+  const updateZoneById = (zoneId: string, patch: Partial<VenueMapZone>) => {
+    onZonesChange(zones.map((z) => (z.id === zoneId ? { ...z, ...patch } : z)));
+  };
+
   const onDecPointerDown = (e: React.PointerEvent, id: string) => {
     setSelection({ kind: 'dec', id });
     const d = visual.decorations.find((x) => x.id === id);
@@ -598,19 +616,45 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
     (a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)
   );
 
-  const splitSelectedZoneIntoPalcos = () => {
+  const applyPalcoConfiguration = () => {
     if (selection?.kind !== 'zone') return;
     const index = selection.index;
     const z = zones[index];
     if (!z?.sectionId) {
-      alert('Enlaza la zona a una localidad antes de dividir.');
+      alert('Enlaza la zona a una localidad antes de configurar el palco.');
       return;
     }
+    const people = Math.min(
+      100,
+      Math.max(1, parseInt(String(palcoSplitPeoplePerCell).replace(/\D/g, ''), 10) || 1)
+    );
+    const secName =
+      sections.find((s) => s.id === z.sectionId)?.name?.trim() || z.label?.trim() || 'Palco';
+
+    if (palcoSplitMode === 'single') {
+      const singleLabel = parseDivisionLabels(palcoDivisionLabels, 1)[0] || secName;
+      const next = [...zones];
+      next[index] = {
+        ...z,
+        label: singleLabel,
+        palco_index: 1,
+        ...(z.disabled === true ? { disabled: true } : {}),
+      };
+      onZonesChange(next);
+      updateLinkedSection(z.sectionId, {
+        available: 1,
+        seats_per_unit: people,
+        palco_multipersona: people >= 2,
+      });
+      setSelection({ kind: 'zone', index });
+      return;
+    }
+
     const n = Math.min(
       40,
       Math.max(2, parseInt(String(palcoSplitCount).replace(/\D/g, ''), 10) || 2)
     );
-    /** Rejilla de celdas iguales; fila incompleta centrada. */
+    const labels = parseDivisionLabels(palcoDivisionLabels, n);
     const cols = Math.max(1, Math.floor(Math.sqrt(n)));
     const rows = Math.ceil(n / cols);
     const cellW = z.w / cols;
@@ -633,7 +677,7 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
         y: z.y + row * cellH,
         w: cellW,
         h: cellH,
-        label: String(i + 1),
+        label: labels[i],
         palco_index: i + 1,
         ...(z.color?.trim() ? { color: z.color.trim() } : {}),
       });
@@ -641,10 +685,6 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
     const before = zones.slice(0, index);
     const after = zones.slice(index + 1);
     onZonesChange([...before, ...split, ...after]);
-    const people = Math.min(
-      100,
-      Math.max(1, parseInt(String(palcoSplitPeoplePerCell).replace(/\D/g, ''), 10) || 1)
-    );
     updateLinkedSection(z.sectionId, {
       available: n,
       seats_per_unit: people,
@@ -652,6 +692,22 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
     });
     setSelection({ kind: 'zone', index: before.length });
   };
+
+  const divisionCellsForSelected =
+    selectedZone?.sectionId
+      ? palcoCellsForSection(zones, selectedZone.sectionId).sort(
+          (a, b) => (Number(a.palco_index) || 0) - (Number(b.palco_index) || 0)
+        )
+      : [];
+
+  const parsedSplitCount =
+    palcoSplitMode === 'single'
+      ? 1
+      : Math.min(40, Math.max(2, parseInt(String(palcoSplitCount).replace(/\D/g, ''), 10) || 2));
+  const parsedPeoplePerCell = Math.min(
+    100,
+    Math.max(1, parseInt(String(palcoSplitPeoplePerCell).replace(/\D/g, ''), 10) || 1)
+  );
 
   return (
     <div className="vmb">
@@ -876,12 +932,13 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
                 const zSelected = selection?.kind === 'zone' && selection.index === index;
                 const customStyle = adminZoneCanvasStyle(z.color, zSelected);
                 const hasCustomColor = Object.keys(customStyle).length > 0;
+                const zoneDisabled = z.disabled === true;
                 return (
                 <div
                   key={z.id}
                   role="button"
                   tabIndex={0}
-                  className={`vmb-zone${z.shape === 'circle' ? ' vmb-zone--circle' : ''}${zSelected ? ' vmb-zone--selected' : ''}${hasCustomColor ? ' vmb-zone--custom' : ''}`}
+                  className={`vmb-zone${z.shape === 'circle' ? ' vmb-zone--circle' : ''}${zSelected ? ' vmb-zone--selected' : ''}${hasCustomColor ? ' vmb-zone--custom' : ''}${zoneDisabled ? ' vmb-zone--disabled' : ''}`}
                   style={{
                     left: `${z.x}%`,
                     top: `${z.y}%`,
@@ -1164,17 +1221,51 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
               >
                 Color por defecto
               </SecondaryButton>
+              {selectedZone.palco_index != null ? (
+                <label className="vmb__checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={selectedZone.disabled === true}
+                    onChange={(e) => updateSelectedZone({ disabled: e.target.checked })}
+                  />
+                  <span>
+                    Inhabilitar esta división (en la tienda se verá como vendida; no se podrá comprar).
+                  </span>
+                </label>
+              ) : null}
               <div className="vmb__palco-split">
                 <h4 style={{ margin: '0.75rem 0 0.35rem', fontSize: '0.95rem' }}>Divide la localidad</h4>
-                <label>
-                  Número de divisiones (celdas)
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={palcoSplitCount}
-                    onChange={(e) => setPalcoSplitCount(e.target.value.replace(/\D/g, '') || '2')}
-                  />
-                </label>
+                <div className="vmb__toolbar vmb__toolbar--format">
+                  <label className="vmb__radio-label">
+                    <input
+                      type="radio"
+                      name={`vmb-palco-mode-${selectedZone.id}`}
+                      checked={palcoSplitMode === 'single'}
+                      onChange={() => setPalcoSplitMode('single')}
+                    />
+                    Sin dividir (un solo palco)
+                  </label>
+                  <label className="vmb__radio-label">
+                    <input
+                      type="radio"
+                      name={`vmb-palco-mode-${selectedZone.id}`}
+                      checked={palcoSplitMode === 'divide'}
+                      onChange={() => setPalcoSplitMode('divide')}
+                    />
+                    Dividir en varias celdas
+                  </label>
+                </div>
+                {palcoSplitMode === 'divide' ? (
+                  <label>
+                    Número de divisiones (celdas)
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={palcoSplitCount}
+                      onChange={(e) => setPalcoSplitCount(e.target.value.replace(/\D/g, '') || '2')}
+                    />
+                  </label>
+                ) : null}
                 <label>
                   Personas por división
                   <input
@@ -1186,27 +1277,64 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
                     }
                   />
                 </label>
+                <label>
+                  Nombres de las divisiones (opcional, uno por línea)
+                  <textarea
+                    rows={palcoSplitMode === 'divide' ? 4 : 2}
+                    value={palcoDivisionLabels}
+                    onChange={(e) => setPalcoDivisionLabels(e.target.value)}
+                    placeholder={
+                      palcoSplitMode === 'single'
+                        ? 'Ej: Palco VIP'
+                        : 'Ej:\nPalco 1\nPalco 2\nMesa A'
+                    }
+                  />
+                </label>
                 <small className="vmb__hint" style={{ display: 'block', margin: '0.25rem 0 0.5rem' }}>
-                  Se crearán{' '}
-                  <strong>
-                    {Math.min(
-                      40,
-                      Math.max(2, parseInt(String(palcoSplitCount).replace(/\D/g, ''), 10) || 2)
-                    )}
-                  </strong>{' '}
-                  localidades con{' '}
-                  <strong>
-                    {Math.min(
-                      100,
-                      Math.max(1, parseInt(String(palcoSplitPeoplePerCell).replace(/\D/g, ''), 10) || 1)
-                    )}
-                  </strong>{' '}
-                  personas por localidad.
+                  {palcoSplitMode === 'single' ? (
+                    <>
+                      Un solo palco en el mapa con <strong>{parsedPeoplePerCell}</strong> persona(s) por venta.
+                    </>
+                  ) : (
+                    <>
+                      Se crearán <strong>{parsedSplitCount}</strong> celdas con{' '}
+                      <strong>{parsedPeoplePerCell}</strong> persona(s) cada una. Si no pones nombres, se usarán 1, 2,
+                      3…
+                    </>
+                  )}
                 </small>
-                <SecondaryButton type="button" size="small" onClick={() => splitSelectedZoneIntoPalcos()}>
-                  Dividir zona
+                <SecondaryButton type="button" size="small" onClick={() => applyPalcoConfiguration()}>
+                  {palcoSplitMode === 'single' ? 'Aplicar palco único' : 'Dividir zona'}
                 </SecondaryButton>
               </div>
+              {divisionCellsForSelected.length > 0 ? (
+                <div className="vmb__palco-labels">
+                  <h4 style={{ margin: '0.5rem 0 0.35rem', fontSize: '0.95rem' }}>Divisiones de esta localidad</h4>
+                  <p className="vmb__hint" style={{ marginTop: 0 }}>
+                    Edita el nombre de cada celda o inhabilítala para que aparezca como vendida.
+                  </p>
+                  {divisionCellsForSelected.map((cell) => (
+                    <div key={cell.id} className="vmb__palco-label-row">
+                      <label>
+                        {cell.palco_index != null ? `División ${cell.palco_index}` : 'Celda'}
+                        <input
+                          type="text"
+                          value={cell.label}
+                          onChange={(e) => updateZoneById(cell.id, { label: e.target.value })}
+                        />
+                      </label>
+                      <label className="vmb__checkbox-row">
+                        <input
+                          type="checkbox"
+                          checked={cell.disabled === true}
+                          onChange={(e) => updateZoneById(cell.id, { disabled: e.target.checked })}
+                        />
+                        <span>Inhabilitar (como vendida)</span>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               <SecondaryButton
                 type="button"
                 size="small"

@@ -3,6 +3,11 @@ import * as XLSX from 'xlsx';
 import { httpsCallable } from 'firebase/functions';
 import { functions, getEventOrRecurringById, getEventAvailability } from '@services';
 import type { Event, VenueMapZone } from '@services/types';
+import {
+  isMapZoneUnavailable,
+  mapZoneDisplayLabel,
+  sectionRequiresMapZonePick,
+} from '@utils/venueMapSection';
 import PrimaryButton from '@components/PrimaryButton';
 import SecondaryButton from '@components/SecondaryButton';
 import CustomSelector from '@components/CustomSelector';
@@ -157,7 +162,9 @@ const BulkUploadCortesiasModal: React.FC<BulkUploadCortesiasModalProps> = ({
     );
   }, [eventPick, bulkSectionId]);
 
-  const needsMapZonePick = sectionZonesSorted.length > 1;
+  const needsMapZonePick = bulkSectionId
+    ? sectionRequiresMapZonePick(eventPick?.venue_map?.zones ?? [], bulkSectionId)
+    : false;
   const seatsPerUnit = Math.max(1, Number(selectedSectionRow?.seats_per_unit) || 1);
 
   useEffect(() => {
@@ -193,7 +200,7 @@ const BulkUploadCortesiasModal: React.FC<BulkUploadCortesiasModalProps> = ({
     if (!needsMapZonePick || bulkMapAvailLoading || bulkAvailLoadFailed || bulkMapZoneOccupancy === null) {
       return [];
     }
-    return sectionZonesSorted.filter((z) => (bulkMapZoneOccupancy[z.id] ?? 0) < 1);
+    return sectionZonesSorted.filter((z) => !isMapZoneUnavailable(z, bulkMapZoneOccupancy));
   }, [needsMapZonePick, sectionZonesSorted, bulkMapAvailLoading, bulkAvailLoadFailed, bulkMapZoneOccupancy]);
 
   useEffect(() => {
@@ -239,7 +246,7 @@ const BulkUploadCortesiasModal: React.FC<BulkUploadCortesiasModalProps> = ({
     const z = sectionZonesSorted.find((zz) => zz.id === bulkMapZoneId);
     return (
       (z?.label && z.label.trim()) ||
-      (z?.palco_index !== undefined ? `Número ${z.palco_index}` : bulkMapZoneId.slice(0, 12))
+      (z ? mapZoneDisplayLabel(z) : bulkMapZoneId.slice(0, 12))
     );
   }, [bulkMapZoneId, sectionZonesSorted]);
 
@@ -566,7 +573,7 @@ const BulkUploadCortesiasModal: React.FC<BulkUploadCortesiasModalProps> = ({
                         value: z.id,
                         label:
                           (z.label && z.label.trim()) ||
-                          (z.palco_index !== undefined ? `Número ${z.palco_index}` : z.id.slice(0, 10)),
+                          mapZoneDisplayLabel(z),
                       })),
                     ]}
                     required

@@ -2,7 +2,8 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import PrimaryButton from '../../components/PrimaryButton';
 import SecondaryButton from '../../components/SecondaryButton';
-import { ProfileIconTicket } from '../../components/ProfileScreenIcons';
+import { ProfileIconTicket, ProfileIconUserBadge } from '../../components/ProfileScreenIcons';
+import logo from '../../assets/logo.png';
 import './index.scss';
 import type { CustomStyleProps } from '../../components/types';
 import { generateCustomStyles, generateClassName } from '../../components/types';
@@ -13,6 +14,8 @@ interface AccountlessStateProps extends CustomStyleProps {
   benefits?: string[];
   benefitsTitle?: string;
   icon?: string;
+  /** Marca TC, perfil lineal o emoji (por defecto emoji). */
+  iconVariant?: 'emoji' | 'logo' | 'profile';
   /** Eyebrow line above the title (e.g. “Mis entradas”) */
   eyebrow?: string;
   /** Visual layout aligned with tickets / profile heroes */
@@ -30,6 +33,7 @@ const AccountlessState: React.FC<AccountlessStateProps> = ({
   ],
   benefitsTitle = 'Con tu cuenta podrás:',
   icon = '🎭',
+  iconVariant = 'emoji',
   eyebrow,
   variant = 'default',
   theme,
@@ -67,12 +71,20 @@ const AccountlessState: React.FC<AccountlessStateProps> = ({
         className={
           variant === 'tickets'
             ? 'accountless-icon accountless-icon--ticket-mark'
-            : 'accountless-icon'
+            : `accountless-icon${iconVariant !== 'emoji' ? ' accountless-icon--brand' : ''}`
         }
       >
         {variant === 'tickets' ? (
           <span className="accountless-icon__ticket-ring" aria-hidden>
             <ProfileIconTicket size={36} />
+          </span>
+        ) : iconVariant === 'logo' ? (
+          <span className="accountless-icon__brand-ring" aria-hidden>
+            <img src={logo} alt="" className="accountless-icon__brand-img" />
+          </span>
+        ) : iconVariant === 'profile' ? (
+          <span className="accountless-icon__profile-ring" aria-hidden>
+            <ProfileIconUserBadge size={36} />
           </span>
         ) : (
           <span className="emoji-icon">{icon}</span>

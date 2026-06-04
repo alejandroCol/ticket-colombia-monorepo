@@ -13,6 +13,7 @@ import EventDetailScreen from '../event';
 import CheckoutScreen from '../Checkout';
 import PurchaseFinishedScreen from '../PurchaseFinished';
 import CompletarAbonoScreen from '../CompletarAbono';
+import OrganizerInquiryScreen from '../OrganizerInquiry';
 import EditProfileScreen from '../editProfile';
 import ForgetPasswordScreen from '../forgetPassword';
 import DesignSystemDemo from '../DesignSystemDemo';
@@ -152,6 +153,8 @@ const MainLayout: React.FC = () => {
         />
 
         <Route path="/completar-abono" element={<CompletarAbonoScreen />} />
+
+        <Route path="/organizador-eventos" element={<OrganizerInquiryScreen />} />
         
         {/* Protected User Routes */}
         <Route 

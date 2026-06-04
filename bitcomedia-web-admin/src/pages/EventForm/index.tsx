@@ -29,6 +29,7 @@ import { compressImageForBoleto } from '../../utils/imageCompression';
 import { isLegacyDateSuffixSlug, slugifyEventName } from '@utils/eventSlug';
 import { buildEventPublicPageUrl } from '@utils/eventPublicUrl';
 import { formatCopThousandsDisplay } from '@utils/formatCopInput';
+import { palcoCellsForSection, sectionRequiresMapZonePick } from '@utils/venueMapSection';
 import type {
   Venue,
   EventSection,
@@ -110,21 +111,29 @@ function paymentProviderFromStored(raw: unknown): 'onepay' | 'mercadopago' {
   return s === 'mercadopago' ? 'mercadopago' : 'onepay';
 }
 
-/** Ajusta palco_multipersona y seats_per_unit según zonas del mapa por localidad. */
+/** Ajusta palco_multipersona, seats_per_unit y cupo según celdas del mapa por localidad. */
 function normalizeSectionsForSave(sections: EventSection[], zones: VenueMapZone[]): EventSection[] {
   return sections.map((s) => {
-    const palcoCells = zones.filter((z) => z.sectionId === s.id).length;
-    if (palcoCells <= 1) {
-      return {...s, palco_multipersona: false};
+    if (!sectionRequiresMapZonePick(zones, s.id)) {
+      return { ...s, palco_multipersona: false };
     }
-    if (s.palco_multipersona === true) {
+    const cells = palcoCellsForSection(zones, s.id);
+    const cellCount = Math.max(1, cells.length);
+    const people = Math.max(1, Number(s.seats_per_unit) || 1);
+    if (s.palco_multipersona === true && people >= 2) {
       return {
         ...s,
-        seats_per_unit: Math.max(2, Number(s.seats_per_unit) || 2),
+        available: cellCount,
+        seats_per_unit: Math.max(2, people),
         palco_multipersona: true,
       };
     }
-    return {...s, seats_per_unit: 1, palco_multipersona: false};
+    return {
+      ...s,
+      available: cellCount,
+      seats_per_unit: people,
+      palco_multipersona: people >= 2,
+    };
   });
 }
 

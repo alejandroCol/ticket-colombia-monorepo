@@ -2,6 +2,7 @@ import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import type {DocumentData} from "firebase-admin/firestore";
 import {
+  applyDisabledMapZonesToByMapZone,
   loadMergedUsedFromTicketsAndReservations,
   partitionMergedSlots,
 } from "../reservations/availability";
@@ -81,7 +82,8 @@ export const getEventAvailability = functions.https.onCall(
       resolvedId,
       eventData
     );
-    const {bySection, byMapZone} = partitionMergedSlots(merged);
+    const {bySection, byMapZone: byMapZoneRaw} = partitionMergedSlots(merged);
+    const byMapZone = applyDisabledMapZonesToByMapZone(eventData, byMapZoneRaw);
 
     let totalSold = 0;
     Object.values(merged).forEach((n) => {

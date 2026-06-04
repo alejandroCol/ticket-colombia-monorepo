@@ -86,6 +86,12 @@ $breakpoint-xxl: 1400px; // XXL devices
   --breakpoint-lg: #{$breakpoint-lg};
   --breakpoint-xl: #{$breakpoint-xl};
   --breakpoint-xxl: #{$breakpoint-xxl};
+
+  // Altura útil del TopNavBar fijo (logo + padding vertical + notch)
+  --tc-nav-clearance: calc(50px + 1rem + env(safe-area-inset-top, 0px));
+  --tc-nav-clearance-md: calc(60px + 1rem + env(safe-area-inset-top, 0px));
+  --tc-nav-clearance-search: calc(104px + env(safe-area-inset-top, 0px));
+  --tc-nav-float-gap: 0.5rem;
 }
 
 // Base mobile-first styles

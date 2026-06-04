@@ -25,6 +25,10 @@ import VenueMapInteractive from '../../components/VenueMapInteractive';
 import WhatsAppButton from '../../components/WhatsAppButton';
 import './index.scss';
 import { isTcGlassUi } from '../../utils/tcEmbedUi';
+import {
+  palcoCellsForSection,
+  sectionRequiresMapZonePick,
+} from '../../utils/venueMapSection';
 
 function displayAvailable(remaining: number, capacity: number): number {
   if (capacity <= 0) return 0;
@@ -45,7 +49,7 @@ function zonesForSectionEvent(event: Event, sectionId: string): VenueMapZone[] {
 }
 
 function isPalcoSectionEvent(event: Event, sectionId: string): boolean {
-  return zonesForSectionEvent(event, sectionId).length > 1;
+  return sectionRequiresMapZonePick(event.venue_map?.zones ?? [], sectionId);
 }
 
 function palcoSlotsRemaining(
@@ -53,10 +57,11 @@ function palcoSlotsRemaining(
   event: Event,
   mapZoneSold: Record<string, number>
 ): number {
-  const zs = zonesForSectionEvent(event, sec.id);
-  if (zs.length <= 1) return -1;
+  const cells = palcoCellsForSection(event.venue_map?.zones ?? [], sec.id);
+  if (cells.length === 0) return -1;
   let free = 0;
-  for (const z of zs) {
+  for (const z of cells) {
+    if (z.disabled === true) continue;
     const u = mapZoneSold[z.id] ?? 0;
     if (u < 1) free += 1;
   }

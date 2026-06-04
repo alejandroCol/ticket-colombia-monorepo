@@ -50,6 +50,8 @@ export interface VenueMapZone {
   /** Color de la zona en el mapa (hex #rrggbb). */
   color?: string;
   palco_index?: number;
+  /** Celda bloqueada: aparece como no disponible en el mapa público. */
+  disabled?: boolean;
 }
 
 export type VenueMapDecorationType =

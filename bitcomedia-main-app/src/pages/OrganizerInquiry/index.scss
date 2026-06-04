@@ -1,0 +1,207 @@
+@import '../../main.scss';
+
+.organizer-inquiry {
+  min-height: 100vh;
+  background: $color-primary;
+
+  &__main {
+    max-width: 520px;
+    margin: 0 auto;
+    // Espacio extra bajo el nav fijo (logoOnly); body ya compensa --tc-nav-clearance
+    padding: calc(var(--tc-nav-float-gap) + 0.75rem) 1.25rem 3rem;
+
+    @include respond-sm {
+      padding: calc(var(--tc-nav-float-gap) + 1rem) 1.5rem 4rem;
+    }
+
+    @include respond-md {
+      padding-top: calc(var(--tc-nav-float-gap) + 1.25rem);
+    }
+  }
+
+  &__hero {
+    text-align: center;
+    margin-bottom: 1.5rem;
+  }
+
+  &__logo {
+    width: min(180px, 55vw);
+    height: auto;
+    margin-bottom: 1rem;
+  }
+
+  &__eyebrow {
+    margin: 0 0 0.35rem;
+    font-size: 0.8rem;
+    font-weight: $font-weight-semi-bold;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: $color-accent;
+  }
+
+  h1 {
+    margin: 0 0 0.5rem;
+    font-family: $font-family-display;
+    font-size: clamp(1.65rem, 5vw, 2rem);
+    font-weight: $font-weight-bold;
+    color: $color-text-primary;
+    letter-spacing: -0.02em;
+  }
+
+  &__lead {
+    margin: 0;
+    color: $color-text-secondary;
+    font-size: 1rem;
+    line-height: 1.55;
+  }
+
+  &__card {
+    background: $color-surface;
+    border: 1px solid rgba($color-accent, 0.12);
+    border-radius: 20px;
+    padding: 1.5rem 1.25rem 1.75rem;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+
+    @include respond-sm {
+      padding: 2rem 1.75rem 2.25rem;
+    }
+
+    .custom-input-container,
+    .custom-selector-container {
+      margin-bottom: 1.25rem;
+    }
+
+    &--success {
+      text-align: center;
+      padding: 2.5rem 1.5rem;
+    }
+  }
+
+  &__success-icon {
+    width: 4rem;
+    height: 4rem;
+    margin: 0 auto 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba($color-accent, 0.15);
+    color: $color-accent;
+    font-size: 1.75rem;
+    font-weight: $font-weight-bold;
+  }
+
+  &__form-error {
+    margin: 0 0 1rem;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    background: rgba(255, 59, 48, 0.1);
+    border-left: 3px solid #ff3b30;
+    color: #ff6b6b;
+    font-size: 0.9rem;
+  }
+
+  &__phone {
+    margin-bottom: 1.25rem;
+  }
+
+  &__phone-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: $font-weight-medium;
+    color: $color-text-primary;
+
+    .required-mark {
+      color: $color-accent;
+      margin-left: 0.15rem;
+    }
+  }
+
+  &__phone-row {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  &__dial-select {
+    flex: 0 0 auto;
+    min-width: 6.5rem;
+    padding: 0.75rem 0.5rem;
+    border-radius: 10px;
+    border: 1px solid rgba($color-text-secondary, 0.35);
+    background: $color-primary;
+    color: $color-text-primary;
+    font-size: 0.95rem;
+    cursor: pointer;
+
+    &:focus {
+      outline: 2px solid rgba($color-accent, 0.5);
+      border-color: $color-accent;
+    }
+  }
+
+  &__phone-input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.75rem 1rem;
+    border-radius: 10px;
+    border: 1px solid rgba($color-text-secondary, 0.35);
+    background: $color-primary;
+    color: $color-text-primary;
+    font-size: 1rem;
+
+    &::placeholder {
+      color: rgba($color-text-secondary, 0.7);
+    }
+
+    &:focus {
+      outline: 2px solid rgba($color-accent, 0.5);
+      border-color: $color-accent;
+    }
+  }
+
+  &__phone-hint {
+    margin: 0.5rem 0 0;
+    font-size: 0.8rem;
+    color: $color-text-secondary;
+  }
+
+  &__phone-preview {
+    color: $color-accent;
+    font-weight: $font-weight-medium;
+  }
+
+  &__field-error {
+    margin: 0.35rem 0 0;
+    font-size: 0.85rem;
+    color: #ff6b6b;
+  }
+
+  &__privacy {
+    margin: 1rem 0 0;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: $color-text-secondary;
+    text-align: center;
+  }
+
+  &__back-link {
+    display: block;
+    margin-top: 1.5rem;
+    text-decoration: none;
+  }
+
+  &__back-text {
+    display: block;
+    margin-top: 1.25rem;
+    text-align: center;
+    color: $color-text-secondary;
+    font-size: 0.9rem;
+    text-decoration: none;
+    transition: color 0.2s ease;
+
+    &:hover {
+      color: $color-accent;
+    }
+  }
+}

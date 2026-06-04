@@ -7,6 +7,11 @@ import Loader from '@components/Loader';
 import BulkUploadCortesiasModal from '@components/BulkUploadCortesiasModal';
 import type { Event, VenueMapZone } from '@services/types';
 import { getEventAvailability } from '@services';
+import {
+  isMapZoneUnavailable,
+  mapZoneDisplayLabel,
+  sectionRequiresMapZonePick,
+} from '@utils/venueMapSection';
 import './index.scss';
 
 function zonesForSelectedSection(event: Event, sectionId: string | undefined): VenueMapZone[] {
@@ -79,7 +84,9 @@ const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
     () => ({ sections: event.sections, venue_map: event.venue_map }),
     [event.sections, event.venue_map]
   );
-  const needsMapZonePick = sectionZones.length > 1;
+  const needsMapZonePick = formData.sectionId
+    ? sectionRequiresMapZonePick(event.venue_map?.zones ?? [], formData.sectionId)
+    : false;
   const selectedSectionRow = event.sections?.find((s) => s.id === formData.sectionId);
   const seatsPerUnit = Math.max(1, Number(selectedSectionRow?.seats_per_unit) || 1);
 
@@ -114,7 +121,7 @@ const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
 
   const availableSectionZones = useMemo(() => {
     if (!needsMapZonePick || mapAvailLoading || availLoadFailed || mapZoneOccupancy === null) return [];
-    return sectionZones.filter((z) => (mapZoneOccupancy[z.id] ?? 0) < 1);
+    return sectionZones.filter((z) => !isMapZoneUnavailable(z, mapZoneOccupancy));
   }, [needsMapZonePick, sectionZones, mapZoneOccupancy, mapAvailLoading, availLoadFailed]);
 
   useEffect(() => {
@@ -254,8 +261,9 @@ const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
 
   const handleSectionChange = (sectionIdValue: string) => {
     const selected = event.sections?.find((s) => s.id === sectionIdValue);
-    const zones = sectionIdValue ? zonesForSelectedSection(event, sectionIdValue) : [];
-    const divided = zones.length > 1;
+    const divided = sectionIdValue
+      ? sectionRequiresMapZonePick(event.venue_map?.zones ?? [], sectionIdValue)
+      : false;
     const spu = Math.max(1, Number(selected?.seats_per_unit) || 1);
     setFormData((prev) => ({
       ...prev,
@@ -269,10 +277,7 @@ const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
 
   const handleMapZoneChange = (zoneId: string) => {
     const z = sectionZones.find((zz) => zz.id === zoneId);
-    const label =
-      (z?.label && z.label.trim()) ||
-      (z?.palco_index !== undefined ? `Mesa ${z.palco_index}` : '') ||
-      zoneId.slice(0, 12);
+    const label = z ? mapZoneDisplayLabel(z) : zoneId.slice(0, 12);
     setFormData((prev) => ({
       ...prev,
       mapZoneId: zoneId || undefined,
@@ -375,9 +380,7 @@ const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
                     { value: '', label: 'Selecciona una celda disponible' },
                     ...availableSectionZones.map((z) => ({
                       value: z.id,
-                      label:
-                        (z.label && z.label.trim()) ||
-                        (z.palco_index !== undefined ? `Número ${z.palco_index}` : z.id.slice(0, 10)),
+                      label: mapZoneDisplayLabel(z),
                     })),
                   ]}
                   required

@@ -7,6 +7,7 @@ import {
   mapZonesForSection,
   remainingForSection,
   seatsPerUnitForSection,
+  sectionRequiresMapZonePick,
 } from "./availability";
 
 const COLLECTION = "ticket_reservations";
@@ -58,7 +59,9 @@ export const createTicketReservation = functions.https.onCall(
 
     const palcoZones =
       sectionId ? mapZonesForSection(eventData, sectionId) : [];
-    const needsPalcoPick = palcoZones.length > 1;
+    const needsPalcoPick = sectionId
+      ? sectionRequiresMapZonePick(eventData, sectionId)
+      : false;
 
     if (needsPalcoPick) {
       if (!mapZoneId) {
@@ -67,10 +70,17 @@ export const createTicketReservation = functions.https.onCall(
           "Debes elegir un palco en el mapa para esta localidad."
         );
       }
-      if (!palcoZones.some((z) => z.id === mapZoneId)) {
+      const picked = palcoZones.find((z) => z.id === mapZoneId);
+      if (!picked) {
         throw new functions.https.HttpsError(
           "invalid-argument",
           "La zona seleccionada no pertenece a esta localidad."
+        );
+      }
+      if (picked.disabled === true) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Esta celda del mapa no está disponible para la venta."
         );
       }
       const spu = seatsPerUnitForSection(eventData, sectionId);

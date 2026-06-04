@@ -5,6 +5,7 @@ import {
   assertEnoughCapacityForPurchase,
   capacityBucketAndCount,
   mapZonesForSection,
+  sectionRequiresMapZonePick,
 } from "../reservations/availability";
 import {generateMultipleTicketsPdf} from "./pdf-generator-multiple";
 import {sendTicketEmail} from "./email-sender";
@@ -160,13 +161,15 @@ export const createManualTicket = functions
         }
       }
 
-      /** Localidad dividida en el mapa: más de una zona para esta sección → hay que elegir celda/palco. */
+      /** Localidad con celdas en mapa (varias zonas o palco único con palco_index). */
       let resolvedMapZoneId = "";
       let resolvedMapZoneLabel = "";
       const mapCellsForSection = resolvedSectionId
         ? mapZonesForSection(eventData, resolvedSectionId)
         : [];
-      const requiresMapPick = mapCellsForSection.length > 1;
+      const requiresMapPick = resolvedSectionId
+        ? sectionRequiresMapZonePick(eventData, resolvedSectionId)
+        : false;
       const mapZoneReq = String(data.mapZoneId || "").trim();
 
       if (requiresMapPick && !mapZoneReq) {
@@ -182,11 +185,17 @@ export const createManualTicket = functions
         );
       }
       if (mapZoneReq && requiresMapPick) {
-        const matches = mapCellsForSection.some((z) => z.id === mapZoneReq);
-        if (!matches) {
+        const picked = mapCellsForSection.find((z) => z.id === mapZoneReq);
+        if (!picked) {
           throw new functions.https.HttpsError(
             "invalid-argument",
             "La celda del mapa no corresponde a esta localidad."
+          );
+        }
+        if (picked.disabled === true) {
+          throw new functions.https.HttpsError(
+            "failed-precondition",
+            "Esta celda del mapa no está disponible para la venta."
           );
         }
         resolvedMapZoneId = mapZoneReq;

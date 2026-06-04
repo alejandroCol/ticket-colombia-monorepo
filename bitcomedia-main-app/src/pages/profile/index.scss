@@ -32,15 +32,11 @@
       }
     }
 
-    .profile-guest-hero {
-      display: flex;
-      justify-content: center;
-      margin-bottom: 0.5rem;
-      opacity: 0.85;
+    .profile-guest-tickets {
+      margin-bottom: 1rem;
 
-      &__deco {
-        color: $color-accent;
-        filter: drop-shadow(0 0 12px rgba($color-accent, 0.35));
+      .profile-action-row {
+        width: 100%;
       }
     }
   }

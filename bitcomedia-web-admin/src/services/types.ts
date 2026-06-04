@@ -61,6 +61,8 @@ export interface VenueMapZone {
   color?: string;
   /** Tras «Dividir en palcos»: número mostrado en mapa (1, 2, …). */
   palco_index?: number;
+  /** Celda bloqueada por el organizador: se muestra como vendida y no se puede comprar. */
+  disabled?: boolean;
 }
 
 /** Elementos decorativos del mapa (no clicables; % 0–100) */

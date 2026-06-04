@@ -6,8 +6,8 @@ import { generateCustomStyles, generateClassName } from '../../components/types'
 
 // Import SVG icons
 import homeIcon from '../../assets/home.svg';
-import ticketsIcon from '../../assets/tickets.svg';
 import profileIcon from '../../assets/profile.svg';
+import OrganizerNavPill from '../../components/OrganizerNavPill';
 import logo from '../../assets/logo.png';
 
 export interface TopNavBarEventSearchProps {
@@ -127,6 +127,25 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
           <div className="logo-container-mobile" onClick={() => handleNavigation('/')}>
             <img src={logo} alt="Bitcomedia" className="logo" />
           </div>
+          <div className="nav-container-mobile__top-actions">
+            <button
+              type="button"
+              className={`nav-mobile-profile-btn ${isActive('/perfil') ? 'active' : ''}`}
+              onClick={() => handleNavigation('/perfil')}
+              aria-label="Perfil"
+            >
+              <img
+                src={profileIcon}
+                alt=""
+                className={`icon ${getIconClass(isActive('/perfil'))}`}
+              />
+            </button>
+            <OrganizerNavPill
+              variant="header"
+              active={isActive('/organizador-eventos')}
+              onClick={() => handleNavigation('/organizador-eventos')}
+            />
+          </div>
         </div>
         {eventSearch ? <div className="nav-container-mobile__search">{searchBar}</div> : null}
       </div>
@@ -155,18 +174,6 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
           </div>
           
           <div 
-            className={`nav-link ${isActive('/tickets') ? 'active' : ''}`}
-            onClick={() => handleNavigation('/tickets')}
-          >
-            <img 
-              src={ticketsIcon} 
-              alt="Tickets" 
-              className={`icon ${getIconClass(isActive('/tickets'))}`}
-            />
-            <span>Tickets</span>
-          </div>
-          
-          <div 
             className={`nav-link ${isActive('/perfil') ? 'active' : ''}`}
             onClick={() => handleNavigation('/perfil')}
           >
@@ -177,6 +184,11 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
             />
             <span>Perfil</span>
           </div>
+
+          <OrganizerNavPill
+            active={isActive('/organizador-eventos')}
+            onClick={() => handleNavigation('/organizador-eventos')}
+          />
         </div>
         
         {/* Auth buttons for desktop */}
@@ -219,18 +231,6 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
           </div>
           
           <div 
-            className={`mobile-nav-link ${isActive('/tickets') ? 'active' : ''}`}
-            onClick={() => handleNavigation('/tickets')}
-          >
-            <img 
-              src={ticketsIcon} 
-              alt="Tickets" 
-              className={`icon ${getIconClass(isActive('/tickets'))}`}
-            />
-            <span>Tickets</span>
-          </div>
-          
-          <div 
             className={`mobile-nav-link ${isActive('/perfil') ? 'active' : ''}`}
             onClick={() => handleNavigation('/perfil')}
           >
@@ -240,6 +240,17 @@ const TopNavBar: React.FC<TopNavBarProps> = ({
               className={`icon ${getIconClass(isActive('/perfil'))}`}
             />
             <span>Perfil</span>
+          </div>
+
+          <div
+            className={`mobile-nav-link mobile-nav-link--organizer ${
+              isActive('/organizador-eventos') ? 'active' : ''
+            }`}
+          >
+            <OrganizerNavPill
+              active={isActive('/organizador-eventos')}
+              onClick={() => handleNavigation('/organizador-eventos')}
+            />
           </div>
           
           <div className="mobile-menu-auth">

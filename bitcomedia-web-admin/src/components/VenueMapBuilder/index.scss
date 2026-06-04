@@ -245,6 +245,34 @@
       padding: 2px;
       cursor: pointer;
     }
+
+    textarea {
+      padding: 0.35rem 0.5rem;
+      border-radius: 6px;
+      border: 1px solid rgba($color-text-secondary, 0.25);
+      background: rgba($color-surface, 0.8);
+      color: $color-text-primary;
+      font-size: 0.85rem;
+      font-family: inherit;
+      resize: vertical;
+    }
+  }
+
+  &__palco-labels {
+    margin-top: 0.25rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba($color-text-secondary, 0.2);
+  }
+
+  &__palco-label-row {
+    margin-bottom: 0.65rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px dashed rgba($color-text-secondary, 0.15);
+
+    &:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+    }
   }
 
   &__hint {
@@ -475,6 +503,16 @@
     border-color: #ffab40;
     background: rgba(255, 171, 64, 0.18);
     z-index: 55;
+  }
+
+  &--disabled {
+    border-color: rgba(220, 80, 80, 0.9);
+    background: rgba(120, 40, 40, 0.35);
+    opacity: 0.75;
+
+    .vmb-zone__tag {
+      text-decoration: line-through;
+    }
   }
 
   &__tag {
