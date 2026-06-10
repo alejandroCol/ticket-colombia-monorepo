@@ -57,6 +57,20 @@ $breakpoint-xxl: 1400px; // XXL devices
   }
 }
 
+// Event flyer cover — shared 4:5 frame and crop (list cards + detail)
+@mixin event-cover-frame {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+}
+
+@mixin event-cover-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
 // Make variables available for importing in other SCSS files
 :root {
   // Colors

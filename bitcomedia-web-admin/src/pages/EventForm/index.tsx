@@ -10,6 +10,7 @@ import CustomSelector from '@components/CustomSelector';
 import CustomDateTimePicker from '@components/CustomDateTimePicker';
 import VenueAutocomplete from '@components/VenueAutocomplete';
 import VenueMapBuilder, { DEFAULT_VENUE_MAP_BACKGROUND } from '@components/VenueMapBuilder';
+import TicketFlyerPreview from '@components/TicketFlyerPreview';
 import TopNavBar from '@TopNavBar';
 import EventSubNav from '@components/EventSubNav';
 import {
@@ -516,6 +517,48 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
     () => (slugForPublicLink ? buildEventPublicPageUrl(slugForPublicLink) : ''),
     [slugForPublicLink]
   );
+
+  const ticketFlyerPreviewDateLabel = useMemo(() => {
+    if (isRecurring) {
+      const days = formData.recurrence.days_of_week.join(', ');
+      return `Recurrente · ${formData.recurrence.time} (${days})`;
+    }
+    if (!formData.single_date) return undefined;
+    try {
+      const [year, month, day] = formData.single_date.split('-').map(Number);
+      const date = new Date(year, month - 1, day);
+      const dateStr = date.toLocaleDateString('es-CO', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+      return `${dateStr} - ${formData.single_time}`;
+    } catch {
+      return undefined;
+    }
+  }, [
+    isRecurring,
+    formData.single_date,
+    formData.single_time,
+    formData.recurrence.days_of_week,
+    formData.recurrence.time,
+  ]);
+
+  const ticketFlyerPreviewSection = useMemo(
+    () => formData.sections[0]?.name?.trim() || undefined,
+    [formData.sections]
+  );
+
+  const ticketFlyerPreviewPrice = useMemo(() => {
+    const raw =
+      formData.sections.length > 0
+        ? formData.sections[0]?.price
+        : formData.ticket_price;
+    if (raw === '' || raw === undefined) return undefined;
+    const amount = Number(raw);
+    if (Number.isNaN(amount)) return undefined;
+    return amount === 0 ? 'Cortesía' : `$${amount.toLocaleString('es-CO')}`;
+  }, [formData.sections, formData.ticket_price]);
 
   const copyPublicEventUrl = async () => {
     if (!publicEventUrl) return;
@@ -2039,6 +2082,35 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
                     </div>
                   </div>
                 </div>
+
+                {formData.ticket_boleto_image_preview ? (
+                  <div className="form-group ticket-flyer-preview-form-group">
+                    <span className="custom-input-label">Vista previa del boleto</span>
+                    <span className="input-helper-text">
+                      Simulación con QR y datos de ejemplo. Cambia el diseño y los colores arriba para ver
+                      cómo quedará el PDF enviado por correo.
+                    </span>
+                    <TicketFlyerPreview
+                      backgroundImageUrl={formData.ticket_boleto_image_preview}
+                      layout={formData.ticket_flyer_pdf_layout}
+                      accentColor={parseTicketFlyerAccentHex(formData.ticket_flyer_accent_color)}
+                      minimalNameColor={parseTicketFlyerHex(
+                        formData.ticket_flyer_minimal_name_color,
+                        TICKET_FLYER_MINIMAL_NAME_DEFAULT
+                      )}
+                      minimalEmailColor={parseTicketFlyerHex(
+                        formData.ticket_flyer_minimal_email_color,
+                        TICKET_FLYER_MINIMAL_EMAIL_DEFAULT
+                      )}
+                      eventName={formData.name}
+                      eventDateLabel={ticketFlyerPreviewDateLabel}
+                      venueName={formData.venue.name}
+                      city={formData.city}
+                      sectionName={ticketFlyerPreviewSection}
+                      ticketPriceLabel={ticketFlyerPreviewPrice}
+                    />
+                  </div>
+                ) : null}
                 
                 <div className="form-group">
                   <CustomInput

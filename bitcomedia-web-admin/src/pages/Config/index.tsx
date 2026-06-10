@@ -39,9 +39,11 @@ import {
   IconHubHandshake,
   IconHubUsers,
   IconHubChevronRight,
+  IconHubClipboard,
 } from '@components/ConfigHubIcons';
 import { getOnePayWebhookUrl } from '../../config/cloudFunctionsPublic';
 import { normalizeGatewayCommissionConfig, GATEWAY_IVA_DEFAULT_PERCENT } from '@utils/revenueBreakdown';
+import { generateCommercialProposalPdf } from '@utils/commercialProposalPdf';
 import './index.scss';
 
 type TransferTarget = {
@@ -104,6 +106,8 @@ const ConfigScreen: React.FC = () => {
   const [newAdminName, setNewAdminName] = useState('');
   const [newAdminPhone, setNewAdminPhone] = useState('');
   const [createAdminSaving, setCreateAdminSaving] = useState(false);
+  const [includeWhiteLabelProposal, setIncludeWhiteLabelProposal] = useState(false);
+  const [generatingProposal, setGeneratingProposal] = useState(false);
 
   const adminSelectOptions = useMemo(
     () =>
@@ -823,6 +827,42 @@ const ConfigScreen: React.FC = () => {
                   Guardar comisión pasarela
                 </PrimaryButton>
               </div>
+            </div>
+
+            <div className="config-module config-module--surface config-proposal" style={{ marginTop: '1.25rem' }}>
+              <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.05rem' }}>Propuesta comercial (PDF)</h3>
+              <p className="helper-text" style={{ marginBottom: '1rem' }}>
+                Genera un documento de ventas con tarifas, pasarela OnePay y funcionalidades de la tiquetera. Úsalo en
+                reuniones comerciales con organizadores o aliados.
+              </p>
+              <label className="config-proposal__checkbox">
+                <input
+                  type="checkbox"
+                  checked={includeWhiteLabelProposal}
+                  onChange={(e) => setIncludeWhiteLabelProposal(e.target.checked)}
+                />
+                <span>Agregar precios marca blanca</span>
+              </label>
+              <p className="helper-text config-proposal__hint">
+                Si está marcado, el PDF incluye el apartado de marca blanca ($1.490.000/mes, $1.900 por boleto y
+                ejemplo de margen configurable).
+              </p>
+              <PrimaryButton
+                type="button"
+                disabled={generatingProposal}
+                loading={generatingProposal}
+                onClick={() => {
+                  setGeneratingProposal(true);
+                  void generateCommercialProposalPdf({ includeWhiteLabel: includeWhiteLabelProposal })
+                    .catch(() => setError('No se pudo generar la propuesta PDF.'))
+                    .finally(() => setGeneratingProposal(false));
+                }}
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}>
+                  <IconHubClipboard size={16} />
+                  Generar propuesta
+                </span>
+              </PrimaryButton>
             </div>
           </section>
         )}
