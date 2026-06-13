@@ -29,6 +29,7 @@ import {
   ticketPerBoletoAmountCOP,
 } from '@utils/ticketListDisplay';
 import type { Ticket as ServiceTicket } from '@services/types';
+import { exportEventClientsToExcel, ticketsForClientExport } from '@utils/exportEventClientsExcel';
 import './index.scss';
 
 interface Ticket {
@@ -450,6 +451,15 @@ const EventTicketsScreen: React.FC = () => {
   );
   const reservedDocs = visibleTickets.filter(isTicketReservedHold);
   const reservedUnits = reservedDocs.reduce((s, t) => s + ticketDocUnits(t), 0);
+  const exportableClientTickets = useMemo(
+    () => ticketsForClientExport(tickets as ServiceTicket[]),
+    [tickets]
+  );
+
+  const handleExportClientsExcel = () => {
+    if (!event?.name || exportableClientTickets.length === 0) return;
+    exportEventClientsToExcel(tickets as ServiceTicket[], event.name);
+  };
 
   return (
     <div className="event-tickets-screen">
@@ -477,11 +487,20 @@ const EventTicketsScreen: React.FC = () => {
             <h1>🎫 Boletos</h1>
             <p>{event?.name || 'Cargando...'}</p>
           </div>
-          {canBulkCourtesies && (
-            <PrimaryButton onClick={() => setIsBulkUploadOpen(true)}>
-              📤 Cargar cortesías Excel
-            </PrimaryButton>
-          )}
+          <div className="event-tickets-header__actions">
+            <SecondaryButton
+              type="button"
+              onClick={handleExportClientsExcel}
+              disabled={exportableClientTickets.length === 0}
+            >
+              📥 Descargar clientes Excel
+            </SecondaryButton>
+            {canBulkCourtesies && (
+              <PrimaryButton onClick={() => setIsBulkUploadOpen(true)}>
+                📤 Cargar cortesías Excel
+              </PrimaryButton>
+            )}
+          </div>
         </header>
 
         <BulkUploadCortesiasModal
