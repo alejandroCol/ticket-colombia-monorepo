@@ -2,10 +2,8 @@ import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import {defineSecret} from "firebase-functions/params";
 import {capacityBucketAndCount} from "../reservations/availability";
-import {generateMultipleTicketsPdf} from "../manual-ticket/pdf-generator-multiple";
-import {sendTicketEmail} from "../manual-ticket/email-sender";
+import {loadQRCodeModule, loadTicketDeliveryModules} from "../manual-ticket/lazy-ticket-delivery";
 import {randomUUID} from "crypto";
-import QRCode from "qrcode";
 
 const resendApiKey = defineSecret("RESEND_API_KEY");
 const senderEmail = defineSecret("SENDER_EMAIL");
@@ -176,6 +174,9 @@ export const transferTicket = functions
         transferredAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+
+      const QRCode = await loadQRCodeModule();
+      const {generateMultipleTicketsPdf, sendTicketEmail} = await loadTicketDeliveryModules();
 
       const qrCodeImage = await QRCode.toDataURL(qrCodeUrl, {
         errorCorrectionLevel: "H",

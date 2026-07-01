@@ -32,6 +32,8 @@ import {
   dayStartMs,
   dayEndMs,
   todayRangeMs,
+  duplicateSectionNames,
+  ticketBelongsToSection,
 } from '@utils/eventReportFilters';
 import { ticketCreatedAtMs } from '@services/ticketService';
 import './index.scss';
@@ -155,6 +157,7 @@ const EventReportsScreen: React.FC = () => {
   }, [event]);
 
   const sections: EventSection[] = event?.sections || [];
+  const sectionNameDupes = useMemo(() => duplicateSectionNames(sections), [sections]);
   const sectionOptions = useMemo(
     () => [
       { value: '', label: 'Todas las localidades' },
@@ -303,9 +306,9 @@ const EventReportsScreen: React.FC = () => {
       });
       if (sectionId) {
         const sec = sections.find((s) => s.id === sectionId);
-        list = list.filter(
-          (t) => t.sectionId === sectionId || (sec && t.sectionName === sec.name)
-        );
+        if (sec) {
+          list = list.filter((t) => ticketBelongsToSection(t, sec, sectionNameDupes));
+        }
       }
       const sectionLabel =
         sectionId ? sections.find((s) => s.id === sectionId)?.name || sectionId : 'Todas';

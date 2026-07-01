@@ -2,11 +2,9 @@ import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import {defineSecret} from "firebase-functions/params";
 import {
-  buildPurchaseTicketsPdfPayload,
   resolvePurchaseParentTicketId,
 } from "./purchase-ticket-pdf-builder";
-import {generateMultipleTicketsPdf} from "./pdf-generator-multiple";
-import {sendTicketEmail} from "./email-sender";
+import {loadTicketDeliveryModules} from "./lazy-ticket-delivery";
 
 const resendApiKey = defineSecret("RESEND_API_KEY");
 const senderEmail = defineSecret("SENDER_EMAIL");
@@ -130,6 +128,12 @@ export const resendTicketPdfEmail = functions
     if (recipientRaw) {
       await syncBundleBuyerEmail(db, parentId, recipientRaw);
     }
+
+    const {
+      buildPurchaseTicketsPdfPayload,
+      generateMultipleTicketsPdf,
+      sendTicketEmail,
+    } = await loadTicketDeliveryModules();
 
     const built = await buildPurchaseTicketsPdfPayload(parentId, db);
     if (!built) {

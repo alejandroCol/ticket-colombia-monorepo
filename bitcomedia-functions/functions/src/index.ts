@@ -3,13 +3,13 @@ import * as admin from "firebase-admin";
 import {randomUUID} from "crypto";
 import {EventServiceFactory, RecurringEvent} from "./features/events";
 import {
-  PaymentServiceFactory,
   CreateTicketRequest,
   WebhookNotification,
-  OnePayWebhookPayload,
   type MercadoPagoCardPaymentRequest,
-  resolvePaymentProviderForEventId,
-} from "./features/payments";
+} from "./features/payments/types";
+import type {OnePayWebhookPayload} from "./features/payments/handlers/onepay.api";
+import {PaymentServiceFactory} from "./features/payments/factories/payment-service.factory";
+import {resolvePaymentProviderForEventId} from "./features/payments/payment-provider";
 import {onePayWebhookInterestingHeaderKeys} from "./features/payments/handlers/onepay.api";
 import {defineSecret} from "firebase-functions/params";
 import {createManualTicket} from "./features/manual-ticket/create-manual-ticket";

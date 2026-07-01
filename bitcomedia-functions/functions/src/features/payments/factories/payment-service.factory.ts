@@ -1,12 +1,8 @@
 import {PaymentService, PaymentConfig} from "../types";
 import {
-  MercadoPagoPaymentService,
-} from "../services/payment.service";
-import {
-  FirestoreTicketRepository,
-} from "../repositories/firestore-ticket.repository";
-import {MercadoPagoProvider} from "../handlers/mercadopago.provider";
-import {SimpleQRCodeGenerator} from "../handlers/qr-generator";
+  createPaymentConfig as buildPaymentConfig,
+  createPaymentService as buildPaymentService,
+} from "../lazy-payment-modules";
 
 /**
  * Factory para crear instancias del servicio de pagos
@@ -18,18 +14,7 @@ export class PaymentServiceFactory {
    * @return {PaymentService} Instancia del servicio de pagos
    */
   static createPaymentService(config: PaymentConfig): PaymentService {
-    // Crear dependencias
-    const ticketRepository = new FirestoreTicketRepository();
-    const paymentProvider = new MercadoPagoProvider(config.accessToken);
-    const qrGenerator = new SimpleQRCodeGenerator();
-
-    // Crear y retornar el servicio
-    return new MercadoPagoPaymentService(
-      ticketRepository,
-      paymentProvider,
-      qrGenerator,
-      config
-    );
+    return buildPaymentService(config);
   }
 
   /**
@@ -52,17 +37,13 @@ export class PaymentServiceFactory {
     },
     mercadopagoPublicKey?: string
   ): PaymentConfig {
-    return {
+    return buildPaymentConfig(
       accessToken,
       webhookSecret,
       appUrl,
       isDevelopment,
-      // $100 COP para desarrollo, $1000 para producción
-      minAmount: isDevelopment ? 100 : 1000,
-      onepayApiKey: onepay?.apiKey,
-      onepayWebhookSecret: onepay?.webhookSecret,
-      onepayWebhookToken: onepay?.webhookToken,
-      mercadopagoPublicKey,
-    };
+      onepay,
+      mercadopagoPublicKey
+    );
   }
 }

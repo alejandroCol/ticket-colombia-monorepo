@@ -37,6 +37,7 @@ import type { Expense } from '@services/firestore';
 import { exportTicketsToExcel } from '@utils/exportTicketsExcel';
 import { ticketDocUnits } from '@utils/ticketListDisplay';
 import { buildDailySalesSeries, defaultLastNDaysRange } from '@utils/salesTimeSeries';
+import { duplicateSectionNames, ticketBelongsToSection } from '@utils/eventReportFilters';
 import SalesCurveChart from '@components/SalesCurveChart';
 import SectionRadarChart from '@components/SectionRadarChart';
 import './index.scss';
@@ -200,11 +201,12 @@ const EventStatsScreen: React.FC = () => {
 
   const sections: EventSection[] = event?.sections || [];
   const hasSections = sections.length > 0;
+  const sectionNameDupes = useMemo(() => duplicateSectionNames(sections), [sections]);
 
   const sectionStats: SectionStats[] = hasSections
     ? sections.map((sec) => {
-        const sectionTickets = soldTicketsForStats.filter(
-          (t) => t.sectionId === sec.id || t.sectionName === sec.name
+        const sectionTickets = soldTicketsForStats.filter((t) =>
+          ticketBelongsToSection(t, sec, sectionNameDupes)
         );
         const sold = sectionTickets.reduce((s, t) => s + ticketDocUnits(t), 0);
         const capacity = sec.available || 0;

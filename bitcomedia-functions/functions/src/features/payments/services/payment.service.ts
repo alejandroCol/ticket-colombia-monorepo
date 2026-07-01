@@ -15,10 +15,6 @@ import {
   MercadoPagoCardPaymentRequest,
 } from "../types";
 import {finalizePaidTicketsWithBundle} from "../bundle-issuance";
-import {sendAbonoDepositConfirmedEmail} from "../abono-email";
-import {sendTicketEmail} from "../../manual-ticket/email-sender";
-import {generateMultipleTicketsPdf} from "../../manual-ticket/pdf-generator-multiple";
-import {buildPurchaseTicketsPdfPayload} from "../../manual-ticket/purchase-ticket-pdf-builder";
 import {
   loadAbonoConfigFromEvent,
   computeDepositAndBalance,
@@ -46,6 +42,7 @@ import {
 } from "../../discount-codes/discount-code-helpers";
 import {MercadoPagoProvider} from "../handlers/mercadopago.provider";
 import {paymentProviderFromEventData} from "../payment-provider";
+import {loadTicketDeliveryModules} from "../../manual-ticket/lazy-ticket-delivery";
 import {
   onepayCreatePayment,
   onepayGetPayment,
@@ -1586,6 +1583,11 @@ export class MercadoPagoPaymentService implements PaymentService {
     };
 
     try {
+      const {
+        buildPurchaseTicketsPdfPayload,
+        generateMultipleTicketsPdf,
+        sendTicketEmail,
+      } = await loadTicketDeliveryModules();
       const built = await buildPurchaseTicketsPdfPayload(parentTicketId, db);
       if (!built) {
         console.warn("[ticket email] Sin datos para PDF", parentTicketId);
@@ -1634,6 +1636,7 @@ export class MercadoPagoPaymentService implements PaymentService {
         "";
     const url = `${this.config.appUrl}/completar-abono?token=${encodeURIComponent(token)}`;
     try {
+      const {sendAbonoDepositConfirmedEmail} = await import("../abono-email.js");
       await sendAbonoDepositConfirmedEmail({
         to: ticket.buyerEmail,
         buyerName: ticket.metadata?.userName || "Cliente",

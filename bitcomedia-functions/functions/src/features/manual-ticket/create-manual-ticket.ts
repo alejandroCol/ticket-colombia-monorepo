@@ -7,10 +7,8 @@ import {
   mapZonesForSection,
   sectionRequiresMapZonePick,
 } from "../reservations/availability";
-import {generateMultipleTicketsPdf} from "./pdf-generator-multiple";
-import {sendTicketEmail} from "./email-sender";
+import {loadQRCodeModule, loadTicketDeliveryModules} from "./lazy-ticket-delivery";
 import {randomUUID} from "crypto";
-import QRCode from "qrcode";
 
 // Definir secretos para el envío de correos
 const resendApiKey = defineSecret("RESEND_API_KEY");
@@ -358,6 +356,8 @@ export const createManualTicket = functions
 
       // 6. Generar QRs para todos los tickets
       console.log("[createManualTicket] Generando QRs...");
+      const QRCode = await loadQRCodeModule();
+      const {generateMultipleTicketsPdf, sendTicketEmail} = await loadTicketDeliveryModules();
       const ticketsWithQR = await Promise.all(
         ticketsToCreate.map(async (ticket) => {
           const qrCodeImage = await QRCode.toDataURL(ticket.qrCodeData, {errorCorrectionLevel: "H", width: 250});
