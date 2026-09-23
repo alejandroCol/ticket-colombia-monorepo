@@ -18,7 +18,7 @@ import {
   getAnyPartnerGrantForTicketEvent,
   resolveEventCollection,
 } from '@services';
-import { validateTicket, resendTicketPdfEmail, isTicketReservedHold, sumSoldEntradaUnitsForAdminStats } from '@services/ticketService';
+import { validateTicket, resendTicketPdfEmail, confirmManualTicketPayment, releaseReservedTicket, isTicketReservedHold, sumSoldEntradaUnitsForAdminStats } from '@services/ticketService';
 import {
   isTicketCourtesyRow,
   ticketDocUnits,
@@ -28,8 +28,17 @@ import {
   buildParentBundleInfoMap,
   ticketPerBoletoAmountCOP,
 } from '@utils/ticketListDisplay';
-import type { Ticket as ServiceTicket } from '@services/types';
+import {
+  resolveTicketLocality,
+  isTicketAbonoRow,
+  isTicketAbonoCompleted,
+  isTicketCheckoutHold,
+  eventSupportsAbono,
+} from '@utils/ticketDisplay';
+import { palcoCellsForSection, mapZoneDisplayLabel } from '@utils/venueMapSection';
+import type { Ticket as ServiceTicket, Event, VenueMapZone } from '@services/types';
 import { exportEventClientsToExcel, ticketsForClientExport } from '@utils/exportEventClientsExcel';
+import { exportEventBoleteriaToExcel, ticketsForBoleteriaExport } from '@utils/exportEventBoleteriaExcel';
 import './index.scss';
 
 interface Ticket {
@@ -45,6 +54,13 @@ interface Ticket {
   paymentMethod?: string;
   ticketStatus?: string;
   sectionName?: string;
+  sectionId?: string;
+  mapZoneId?: string;
+  installmentPhase?: string;
+  totalPurchaseCOP?: number;
+  depositCOP?: number;
+  balanceCOP?: number;
+  balanceDueAt?: Timestamp;
   createdAt?: Timestamp;
   validatedAt?: Timestamp | null;
   validatedBy?: string | null;
@@ -78,15 +94,19 @@ async function collectBundleTicketIdsForEdit(t: Ticket): Promise<string[]> {
 const EventTicketsScreen: React.FC = () => {
   const { eventId } = useParams<{ eventId: string }>();
   const navigate = useNavigate();
-  const [event, setEvent] = useState<{ name: string; organizer_id?: string } | null>(null);
+  const [event, setEvent] = useState<Pick<Event, 'name' | 'organizer_id' | 'venue_map' | 'sections' | 'abono_min_percent' | 'abono_min_amount_cop'> | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterLocalidad, setFilterLocalidad] = useState<string>('');
+  const [filterPalco, setFilterPalco] = useState<string>('');
   const [filterValidado, setFilterValidado] = useState<string>('all');
   const [filterCortesias, setFilterCortesias] = useState<string>('all');
+  const [filterAbono, setFilterAbono] = useState<string>('all');
+  const [confirmingPaymentId, setConfirmingPaymentId] = useState<string | null>(null);
+  const [releasingHoldId, setReleasingHoldId] = useState<string | null>(null);
   const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
   const [editFormData, setEditFormData] = useState({ buyerName: '', buyerEmail: '', buyerPhone: '' });
   const [editDialogSaved, setEditDialogSaved] = useState(false);
@@ -115,20 +135,50 @@ const EventTicketsScreen: React.FC = () => {
     [visibleTickets]
   );
 
+  const venueMap = event?.venue_map;
+
+  const ticketLocality = (t: Ticket) => resolveTicketLocality(t, venueMap);
+
+  const matchesSearch = (t: Ticket, term: string) => {
+    const id = ticketListBuyerIdNumber(t).toLowerCase();
+    const name = ticketListBuyerName(t).toLowerCase();
+    const email = (t.buyerEmail || '').toLowerCase();
+    return id.includes(term) || name.includes(term) || email.includes(term);
+  };
+
+  const matchesLocalityFilters = (t: Ticket) => {
+    const loc = ticketLocality(t);
+    if (filterLocalidad && loc.sectionName !== filterLocalidad) return false;
+    if (filterPalco && loc.palcoFilterKey !== filterPalco) return false;
+    return true;
+  };
+
   const reservedTicketsFiltered = useMemo(() => {
-    let list = visibleTickets.filter(isTicketReservedHold);
+    let list = visibleTickets.filter(isTicketCheckoutHold);
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase().trim();
-      list = list.filter((t) => {
-        const id = ticketListBuyerIdNumber(t).toLowerCase();
-        const name = ticketListBuyerName(t).toLowerCase();
-        const email = (t.buyerEmail || '').toLowerCase();
-        return id.includes(term) || name.includes(term) || email.includes(term);
-      });
+      list = list.filter((t) => matchesSearch(t, term));
     }
-    if (filterLocalidad) list = list.filter((t) => (t.sectionName || 'General') === filterLocalidad);
+    if (filterLocalidad || filterPalco) list = list.filter(matchesLocalityFilters);
     return list;
-  }, [visibleTickets, searchTerm, filterLocalidad]);
+  }, [visibleTickets, searchTerm, filterLocalidad, filterPalco, venueMap]);
+
+  const abonoEnabled = eventSupportsAbono(event);
+
+  const abonoTicketsFiltered = useMemo(() => {
+    let list = visibleTickets.filter(isTicketAbonoRow);
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase().trim();
+      list = list.filter((t) => matchesSearch(t, term));
+    }
+    if (filterLocalidad || filterPalco) list = list.filter(matchesLocalityFilters);
+    return list;
+  }, [visibleTickets, searchTerm, filterLocalidad, filterPalco, venueMap]);
+
+  const abonoCompletadosCount = useMemo(
+    () => visibleTickets.filter(isTicketAbonoCompleted).length,
+    [visibleTickets]
+  );
 
   const parentBundleMap = useMemo(
     () => buildParentBundleInfoMap(tickets),
@@ -142,7 +192,14 @@ const EventTicketsScreen: React.FC = () => {
         getEventOrRecurringById(eventId),
         resolveEventCollection(eventId),
       ]);
-      setEvent(eventData ? { name: eventData.name, organizer_id: eventData.organizer_id } : null);
+      setEvent(eventData ? {
+        name: eventData.name,
+        organizer_id: eventData.organizer_id,
+        venue_map: eventData.venue_map,
+        sections: eventData.sections,
+        abono_min_percent: eventData.abono_min_percent,
+        abono_min_amount_cop: eventData.abono_min_amount_cop,
+      } : null);
       setEventCollection(coll);
     } catch {
       setEvent(null);
@@ -253,28 +310,53 @@ const EventTicketsScreen: React.FC = () => {
 
   const localidades = useMemo(() => {
     const set = new Set<string>();
-    operativeVisibleTickets.forEach((t) => set.add(t.sectionName || 'General'));
-    visibleTickets.filter(isTicketReservedHold).forEach((t) => set.add(t.sectionName || 'General'));
+    const add = (t: Ticket) => set.add(ticketLocality(t).sectionName);
+    operativeVisibleTickets.forEach(add);
+    visibleTickets.filter(isTicketCheckoutHold).forEach(add);
+    visibleTickets.filter(isTicketAbonoRow).forEach(add);
     return Array.from(set).sort();
-  }, [operativeVisibleTickets, visibleTickets]);
+  }, [operativeVisibleTickets, visibleTickets, venueMap]);
+
+  const palcosFilterOptions = useMemo(() => {
+    const set = new Set<string>();
+    const zones = venueMap?.zones || [];
+    zones.forEach((z: VenueMapZone) => {
+      if (z.palco_index != null || zones.filter((x) => x.sectionId === z.sectionId).length > 1) {
+        set.add(`Palco ${mapZoneDisplayLabel(z)}`);
+      }
+    });
+    (event?.sections || []).forEach((sec) => {
+      palcoCellsForSection(zones, sec.id).forEach((z) => {
+        set.add(`Palco ${mapZoneDisplayLabel(z)}`);
+      });
+    });
+    visibleTickets.forEach((t) => {
+      const key = ticketLocality(t).palcoFilterKey;
+      if (key) set.add(key);
+    });
+    return Array.from(set).sort((a, b) => {
+      const na = parseInt(a.replace(/\D/g, ''), 10);
+      const nb = parseInt(b.replace(/\D/g, ''), 10);
+      if (!Number.isNaN(na) && !Number.isNaN(nb) && na !== nb) return na - nb;
+      return a.localeCompare(b, 'es');
+    });
+  }, [visibleTickets, venueMap, event?.sections]);
 
   useEffect(() => {
     let filtered = operativeVisibleTickets;
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase().trim();
-      filtered = filtered.filter(t => {
-        const id = ticketListBuyerIdNumber(t).toLowerCase();
-        const name = ticketListBuyerName(t).toLowerCase();
-        const email = (t.buyerEmail || '').toLowerCase();
-        return id.includes(term) || name.includes(term) || email.includes(term);
-      });
+      filtered = filtered.filter((t) => matchesSearch(t, term));
     }
-    if (filterLocalidad) filtered = filtered.filter(t => (t.sectionName || 'General') === filterLocalidad);
+    if (filterLocalidad || filterPalco) filtered = filtered.filter(matchesLocalityFilters);
     if (filterValidado === 'validated') filtered = filtered.filter(t => t.validatedAt);
     else if (filterValidado === 'pending') filtered = filtered.filter(t => !t.validatedAt);
     if (filterCortesias === 'only') filtered = filtered.filter(t => isTicketCourtesyRow(t));
+    if (filterAbono === 'pending') filtered = filtered.filter(t => isTicketAbonoRow(t));
+    else if (filterAbono === 'completed') filtered = filtered.filter(t => isTicketAbonoCompleted(t));
+    else if (filterAbono === 'full') filtered = filtered.filter(t => !isTicketAbonoRow(t) && !isTicketAbonoCompleted(t));
     setFilteredTickets(filtered);
-  }, [searchTerm, filterLocalidad, filterValidado, filterCortesias, operativeVisibleTickets]);
+  }, [searchTerm, filterLocalidad, filterPalco, filterValidado, filterCortesias, filterAbono, operativeVisibleTickets, venueMap]);
 
   const handleEdit = (t: Ticket) => {
     setEditingTicket(t);
@@ -388,6 +470,90 @@ const EventTicketsScreen: React.FC = () => {
     }
   };
 
+  const handleConfirmManualPayment = async (t: Ticket) => {
+    const phase = t.installmentPhase || 'none';
+    const isDeposit = phase === 'awaiting_deposit';
+    const msg = isDeposit
+      ? `¿Confirmar que recibiste el abono inicial de ${ticketListBuyerName(t) || 'este comprador'}? Se enviará el correo con el enlace para completar el saldo.`
+      : phase === 'deposit_paid' || phase === 'awaiting_balance'
+        ? `¿Confirmar que recibiste el saldo pendiente de ${ticketListBuyerName(t) || 'este comprador'}? Se generarán los QR y se enviarán las entradas por correo.`
+        : `¿Confirmar que recibiste el pago de ${ticketListBuyerName(t) || 'este comprador'} por otro medio? Se generarán los QR y se enviarán las entradas por correo.`;
+    if (!window.confirm(msg)) return;
+    setConfirmingPaymentId(t.id);
+    try {
+      const r = await confirmManualTicketPayment({ ticketId: t.id });
+      if (r.ticketsEmailed) {
+        alert('✅ Pago registrado. Las entradas fueron enviadas por correo.');
+      } else {
+        alert('✅ Abono inicial registrado. El comprador recibirá el enlace para completar el saldo.');
+      }
+      loadTickets();
+    } catch (e: unknown) {
+      const errMsg =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message?: string }).message)
+          : 'Error al confirmar el pago';
+      alert(`❌ ${errMsg}`);
+    } finally {
+      setConfirmingPaymentId(null);
+    }
+  };
+
+  const handleReleaseReservedHold = async (t: Ticket) => {
+    const loc = ticketLocality(t).displayLine;
+    if (
+      !window.confirm(
+        `¿Poner disponible ${loc}? Se libera la reserva de ${
+          ticketListBuyerName(t) || 'este comprador'
+        } y el palco/cupo vuelve a la venta.`
+      )
+    ) {
+      return;
+    }
+    setReleasingHoldId(t.id);
+    try {
+      const r = await releaseReservedTicket({ ticketId: t.id });
+      alert(
+        r.alreadyFree
+          ? '✅ Ese cupo ya estaba libre.'
+          : '✅ Reserva liberada. El palco/cupo ya está disponible para la venta.'
+      );
+      loadTickets();
+    } catch (e: unknown) {
+      const errMsg =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message?: string }).message)
+          : 'Error al liberar la reserva';
+      alert(`❌ ${errMsg}`);
+    } finally {
+      setReleasingHoldId(null);
+    }
+  };
+
+  const formatAbonoPhase = (phase?: string) => {
+    const map: Record<string, string> = {
+      awaiting_deposit: 'Esperando abono inicial',
+      deposit_paid: 'Abono pagado — saldo pendiente',
+      awaiting_balance: 'Pago de saldo en curso',
+    };
+    return map[phase || ''] || 'Abono';
+  };
+
+  const abonoPaidCOP = (t: Ticket) => {
+    const phase = t.installmentPhase || 'none';
+    if (phase === 'awaiting_deposit') return 0;
+    return Math.round(Number(t.depositCOP) || 0);
+  };
+
+  const abonoPendingCOP = (t: Ticket) => {
+    const phase = t.installmentPhase || 'none';
+    if (phase === 'awaiting_deposit') return Math.round(Number(t.depositCOP) || Number(t.amount) || 0);
+    if (phase === 'deposit_paid' || phase === 'awaiting_balance') {
+      return Math.round(Number(t.balanceCOP) || 0);
+    }
+    return 0;
+  };
+
   const getStatusBadge = (status?: string) => {
     const map: Record<string, { label: string; className: string }> = {
       approved: { label: 'Aprobado', className: 'status-approved' },
@@ -395,6 +561,7 @@ const EventTicketsScreen: React.FC = () => {
       reserved: { label: 'Reservado', className: 'status-pending' },
       paid: { label: 'Pagado', className: 'status-approved' },
       cancelled: { label: 'Cancelado', className: 'status-rejected' },
+      expired: { label: 'Expirado', className: 'status-rejected' },
       disabled: { label: 'Deshabilitado', className: 'status-rejected' },
       used: { label: 'Usado', className: 'status-unknown' },
       redeemed: { label: 'Validado', className: 'status-approved' },
@@ -404,7 +571,9 @@ const EventTicketsScreen: React.FC = () => {
   };
 
   const getPaymentBadge = (method?: string, createdByAdmin?: string) => {
-    if (method === 'manual' || createdByAdmin) return <span className="payment-badge payment-manual">Manual</span>;
+    if (method === 'manual' || method === 'admin_manual' || createdByAdmin) {
+      return <span className="payment-badge payment-manual">Manual</span>;
+    }
     if (method?.toLowerCase().includes('mercadopago')) return <span className="payment-badge payment-mercadopago">MercadoPago</span>;
     return <span className="payment-badge payment-other">{method || '—'}</span>;
   };
@@ -424,6 +593,12 @@ const EventTicketsScreen: React.FC = () => {
     } catch {
       return '—';
     }
+  };
+
+  const checkoutHoldExpired = (t: Ticket) => {
+    const createdMs = t.createdAt?.toMillis?.() ?? 0;
+    if (!createdMs) return false;
+    return Date.now() - createdMs >= 60 * 60 * 1000;
   };
 
   const isActiveNonReserved = (t: Ticket) =>
@@ -449,16 +624,43 @@ const EventTicketsScreen: React.FC = () => {
         .reduce((s, t) => s + ticketDocUnits(t), 0),
     [tickets]
   );
-  const reservedDocs = visibleTickets.filter(isTicketReservedHold);
+  const reservedDocs = visibleTickets.filter(isTicketCheckoutHold);
   const reservedUnits = reservedDocs.reduce((s, t) => s + ticketDocUnits(t), 0);
+  const palcosVendidos = useMemo(() => {
+    const sold = new Set<string>();
+    tickets.forEach((t) => {
+      if (!t.mapZoneId) return;
+      if (isTicketReservedHold(t) && !isTicketAbonoRow(t)) return;
+      if (t.ticketStatus === 'cancelled' || t.ticketStatus === 'disabled') return;
+      if (t.ticketKind === 'purchase_pass') return;
+      sold.add(t.mapZoneId);
+    });
+    return sold.size;
+  }, [tickets]);
+  const totalPalcos = useMemo(() => {
+    const zones = venueMap?.zones || [];
+    const palcoZones = zones.filter(
+      (z) => z.palco_index != null || zones.filter((x) => x.sectionId === z.sectionId).length > 1
+    );
+    return new Set(palcoZones.map((z) => z.id)).size;
+  }, [venueMap]);
   const exportableClientTickets = useMemo(
     () => ticketsForClientExport(tickets as ServiceTicket[]),
+    [tickets]
+  );
+  const exportableBoleteriaTickets = useMemo(
+    () => ticketsForBoleteriaExport(tickets as ServiceTicket[]),
     [tickets]
   );
 
   const handleExportClientsExcel = () => {
     if (!event?.name || exportableClientTickets.length === 0) return;
     exportEventClientsToExcel(tickets as ServiceTicket[], event.name);
+  };
+
+  const handleExportBoleteriaExcel = () => {
+    if (!event?.name || exportableBoleteriaTickets.length === 0) return;
+    exportEventBoleteriaToExcel(tickets as ServiceTicket[], event.name, venueMap);
   };
 
   return (
@@ -488,6 +690,13 @@ const EventTicketsScreen: React.FC = () => {
             <p>{event?.name || 'Cargando...'}</p>
           </div>
           <div className="event-tickets-header__actions">
+            <SecondaryButton
+              type="button"
+              onClick={handleExportBoleteriaExcel}
+              disabled={exportableBoleteriaTickets.length === 0}
+            >
+              📥 Descargar boletería Excel
+            </SecondaryButton>
             <SecondaryButton
               type="button"
               onClick={handleExportClientsExcel}
@@ -540,6 +749,24 @@ const EventTicketsScreen: React.FC = () => {
                     <span className="sublabel">{reservedDocs.length} órdenes</span>
                   </div>
                 )}
+                {totalPalcos > 0 && (
+                  <div className="summary-card palcos">
+                    <span className="label">Palcos vendidos</span>
+                    <span className="value">{palcosVendidos}</span>
+                    <span className="sublabel">de {totalPalcos} configurados</span>
+                  </div>
+                )}
+                {abonoEnabled && (
+                  <div className="summary-card abonos">
+                    <span className="label">Abonos activos</span>
+                    <span className="value">{abonoTicketsFiltered.length}</span>
+                    <span className="sublabel">
+                      {abonoCompletadosCount > 0
+                        ? `${abonoCompletadosCount} completados`
+                        : 'con saldo pendiente'}
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="filters-row">
                 <input
@@ -553,6 +780,12 @@ const EventTicketsScreen: React.FC = () => {
                   <option value="">Todas localidades</option>
                   {localidades.map(l => <option key={l} value={l}>{l}</option>)}
                 </select>
+                {palcosFilterOptions.length > 0 && (
+                  <select value={filterPalco} onChange={e => setFilterPalco(e.target.value)} className="filter-select">
+                    <option value="">Todos los palcos</option>
+                    {palcosFilterOptions.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                )}
                 <select value={filterValidado} onChange={e => setFilterValidado(e.target.value)} className="filter-select">
                   <option value="all">Todos</option>
                   <option value="validated">✓ Validados</option>
@@ -562,6 +795,14 @@ const EventTicketsScreen: React.FC = () => {
                   <option value="all">Todos</option>
                   <option value="only">Solo cortesías</option>
                 </select>
+                {abonoEnabled && (
+                  <select value={filterAbono} onChange={e => setFilterAbono(e.target.value)} className="filter-select">
+                    <option value="all">Todos los pagos</option>
+                    <option value="pending">Solo abonos pendientes</option>
+                    <option value="completed">Solo abonos completados</option>
+                    <option value="full">Solo pago total</option>
+                  </select>
+                )}
               </div>
             </div>
 
@@ -598,7 +839,12 @@ const EventTicketsScreen: React.FC = () => {
                             <button className={`btn-icon ${(ticket.ticketStatus === 'cancelled' || ticket.ticketStatus === 'disabled') ? 'enable' : 'disable'}`} onClick={() => handleDisable(ticket)} title={(ticket.ticketStatus === 'cancelled' || ticket.ticketStatus === 'disabled') ? 'Habilitar' : 'Deshabilitar'} disabled={loading}>{(ticket.ticketStatus === 'cancelled' || ticket.ticketStatus === 'disabled') ? '✓' : '✕'}</button>
                           )}
                         </td>
-                        <td>{ticket.sectionName || 'General'}</td>
+                        <td>
+                          {ticketLocality(ticket).displayLine}
+                          {isTicketAbonoCompleted(ticket) && (
+                            <span className="badge abono-completed" title="Compra con abono ya completada">Abono ✓</span>
+                          )}
+                        </td>
                         <td>{ticketListBuyerIdNumber(ticket) || '—'}</td>
                         <td>{ticketListBuyerName(ticket) || '—'}</td>
                         <td>
@@ -642,24 +888,28 @@ const EventTicketsScreen: React.FC = () => {
               </div>
             )}
 
-            {visibleTickets.some(isTicketReservedHold) && (
+            {visibleTickets.some(isTicketCheckoutHold) && (
               <div className="event-tickets-reserved-panel">
                 <div className="event-tickets-reserved-panel__head">
                   <h2 className="event-tickets-reserved-panel__title">Boletas reservadas</h2>
                   <p className="event-tickets-reserved-panel__hint">
-                    Checkout iniciado; el cupo está retenido hasta que se confirme o expire el pago. No se incluyen en
-                    Total, Vendidos ni Cortesías de arriba.
+                    Checkout a <strong>pago total</strong> sin confirmar. El contador de 10 minutos es solo del
+                    formulario; si el cliente ya está en la pasarela, el cupo se mantiene hasta 1 hora para que pueda
+                    terminar el pago (PSE/tarjeta). Si abandona, el palco se libera. «Poner disponible» lo suelta antes.
+                    Las compras con <strong>abono (p. ej. 30%)</strong> están en «Abonados» y no se sueltan a los 10
+                    minutos: el palco queda reservado hasta la fecha límite del saldo.
                   </p>
                 </div>
                 {reservedTicketsFiltered.length === 0 ? (
                   <p className="event-tickets-reserved-panel__empty">
-                    Ninguna reserva coincide con la búsqueda o la localidad seleccionada.
+                    Ninguna reserva coincide con la búsqueda o los filtros seleccionados.
                   </p>
                 ) : (
                   <div className="event-tickets-table-container">
                     <table className="event-tickets-table event-tickets-table--reserved">
                       <thead>
                         <tr>
+                          <th>Acciones</th>
                           <th>Localidad</th>
                           <th>Cédula</th>
                           <th>Nombre</th>
@@ -675,7 +925,41 @@ const EventTicketsScreen: React.FC = () => {
                       <tbody>
                         {reservedTicketsFiltered.map((ticket) => (
                           <tr key={ticket.id}>
-                            <td>{ticket.sectionName || 'General'}</td>
+                            <td>
+                              {canEditRows && (
+                                <div className="event-tickets-reserved-actions">
+                                  <button
+                                    type="button"
+                                    className="btn-confirm-payment"
+                                    onClick={() => handleConfirmManualPayment(ticket)}
+                                    disabled={
+                                      confirmingPaymentId === ticket.id ||
+                                      releasingHoldId === ticket.id
+                                    }
+                                    title="Registrar pago por otro medio"
+                                  >
+                                    {confirmingPaymentId === ticket.id
+                                      ? 'Procesando…'
+                                      : 'Recibí el pago por otro medio'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn-release-hold"
+                                    onClick={() => handleReleaseReservedHold(ticket)}
+                                    disabled={
+                                      confirmingPaymentId === ticket.id ||
+                                      releasingHoldId === ticket.id
+                                    }
+                                    title="Liberar el palco o cupo para que vuelva a la venta"
+                                  >
+                                    {releasingHoldId === ticket.id
+                                      ? 'Liberando…'
+                                      : 'Poner disponible'}
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+                            <td>{ticketLocality(ticket).displayLine}</td>
                             <td>{ticketListBuyerIdNumber(ticket) || '—'}</td>
                             <td>{ticketListBuyerName(ticket) || '—'}</td>
                             <td>{ticket.buyerEmail || '—'}</td>
@@ -689,8 +973,92 @@ const EventTicketsScreen: React.FC = () => {
                               )}
                             </td>
                             <td>{formatRowDate(ticket.createdAt)}</td>
-                            <td>{getStatusBadge(ticket.ticketStatus || ticket.status)}</td>
+                            <td>
+                              {getStatusBadge(ticket.ticketStatus || ticket.status)}
+                              {checkoutHoldExpired(ticket) && (
+                                <span className="badge hold-expired" title="Pasó más de 1 hora sin pago; el palco ya no está retenido en la tienda">
+                                  Ya expiró
+                                </span>
+                              )}
+                            </td>
                             <td>{getPaymentBadge(ticket.paymentMethod, ticket.createdByAdmin)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {abonoEnabled && (
+              <div className="event-tickets-abono-panel">
+                <div className="event-tickets-abono-panel__head">
+                  <h2 className="event-tickets-abono-panel__title">Abonados</h2>
+                  <p className="event-tickets-abono-panel__hint">
+                    Compras donde el usuario eligió <strong>pagar con abono</strong> (depósito + saldo).
+                    Si ya pagó el 30% (u otro depósito), el palco <strong>sigue reservado</strong> hasta la fecha límite
+                    del saldo; no se libera a los 10 minutos.
+                  </p>
+                </div>
+                {abonoTicketsFiltered.length === 0 ? (
+                  <p className="event-tickets-abono-panel__empty">
+                    No hay abonos activos en este evento.
+                    {reservedTicketsFiltered.length > 0 && (
+                      <> Las reservas de arriba son checkout a <strong>pago total</strong>, no abonos.</>
+                    )}
+                    {abonoCompletadosCount > 0 && (
+                      <> Hay {abonoCompletadosCount} abono{abonoCompletadosCount === 1 ? '' : 's'} ya completado{abonoCompletadosCount === 1 ? '' : 's'} en el listado principal (badge «Abono ✓»).</>
+                    )}
+                  </p>
+                ) : (
+                  <div className="event-tickets-table-container">
+                    <table className="event-tickets-table event-tickets-table--abono">
+                      <thead>
+                        <tr>
+                          <th>Acciones</th>
+                          <th>Localidad</th>
+                          <th>Cédula</th>
+                          <th>Nombre</th>
+                          <th>Email</th>
+                          <th>Estado abono</th>
+                          <th>Separó</th>
+                          <th>Falta</th>
+                          <th>Vence</th>
+                          <th>Total compra</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {abonoTicketsFiltered.map((ticket) => (
+                          <tr key={ticket.id}>
+                            <td>
+                              {canEditRows && (
+                                <button
+                                  type="button"
+                                  className="btn-confirm-payment"
+                                  onClick={() => handleConfirmManualPayment(ticket)}
+                                  disabled={confirmingPaymentId === ticket.id}
+                                  title="Registrar pago por otro medio"
+                                >
+                                  {confirmingPaymentId === ticket.id
+                                    ? 'Procesando…'
+                                    : 'Recibí el pago por otro medio'}
+                                </button>
+                              )}
+                            </td>
+                            <td>{ticketLocality(ticket).displayLine}</td>
+                            <td>{ticketListBuyerIdNumber(ticket) || '—'}</td>
+                            <td>{ticketListBuyerName(ticket) || '—'}</td>
+                            <td>{ticket.buyerEmail || '—'}</td>
+                            <td>
+                              <span className="badge abono">{formatAbonoPhase(ticket.installmentPhase)}</span>
+                            </td>
+                            <td>${abonoPaidCOP(ticket).toLocaleString('es-CO')}</td>
+                            <td className="abono-pending">${abonoPendingCOP(ticket).toLocaleString('es-CO')}</td>
+                            <td>{formatRowDate(ticket.balanceDueAt)}</td>
+                            <td>
+                              ${Math.round(Number(ticket.totalPurchaseCOP) || Number(ticket.amount) || 0).toLocaleString('es-CO')}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -716,7 +1084,7 @@ const EventTicketsScreen: React.FC = () => {
           <div className="event-tickets-edit-dialog" onClick={(e) => e.stopPropagation()}>
             <h3 id="edit-ticket-dialog-title">Editar boleto</h3>
             <p className="event-tickets-edit-dialog__locality">
-              {editingTicket.sectionName || 'General'}
+              {editingTicket ? ticketLocality(editingTicket).displayLine : 'General'}
               {' · '}
               <span className="event-tickets-edit-dialog__id">{editingTicket.id.slice(0, 8)}…</span>
             </p>

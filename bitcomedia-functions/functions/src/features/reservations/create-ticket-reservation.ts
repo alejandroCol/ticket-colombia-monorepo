@@ -9,9 +9,9 @@ import {
   seatsPerUnitForSection,
   sectionRequiresMapZonePick,
 } from "./availability";
+import {CHECKOUT_HOLD_MS} from "./checkout-hold";
 
 const COLLECTION = "ticket_reservations";
-const HOLD_MS = 10 * 60 * 1000;
 
 export interface CreateReservationInput {
   eventId: string;
@@ -148,7 +148,7 @@ export const createTicketReservation = functions.https.onCall(
     });
 
     const newRef = db.collection(COLLECTION).doc();
-    const expiresAt = admin.firestore.Timestamp.fromMillis(now + HOLD_MS);
+    const expiresAt = admin.firestore.Timestamp.fromMillis(now + CHECKOUT_HOLD_MS);
 
     batch.set(newRef, {
       eventId,

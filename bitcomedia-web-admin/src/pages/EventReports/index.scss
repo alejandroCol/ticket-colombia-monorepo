@@ -99,6 +99,10 @@
     grid-column: 1 / -1;
   }
 
+  &--excel {
+    border-color: rgba(#58d68d, 0.35);
+  }
+
   &__title {
     margin: 0;
     font-size: 1.05rem;

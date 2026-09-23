@@ -223,7 +223,7 @@ export interface Ticket {
   preferenceId?: string;
   qrCode: string;
   quantity: number;
-  ticketStatus: 'reserved' | 'paid' | 'cancelled' | 'used' | 'redeemed' | 'disabled';
+  ticketStatus: 'reserved' | 'paid' | 'cancelled' | 'expired' | 'used' | 'redeemed' | 'disabled';
   updatedAt?: Timestamp;
   userId?: string;
   // Campos para tickets manuales
@@ -232,6 +232,13 @@ export interface Ticket {
   buyerIdNumber?: string; // Cédula del comprador
   sectionName?: string; // Nombre de la localidad/sección
   sectionId?: string; // ID de la localidad/sección
+  mapZoneId?: string;
+  /** Plan de abono */
+  installmentPhase?: 'none' | 'awaiting_deposit' | 'deposit_paid' | 'awaiting_balance' | 'completed' | 'forfeited';
+  totalPurchaseCOP?: number;
+  depositCOP?: number;
+  balanceCOP?: number;
+  balanceDueAt?: Timestamp;
   createdByAdmin?: string;
   // Campos de validación
   validatedAt?: Timestamp | null;

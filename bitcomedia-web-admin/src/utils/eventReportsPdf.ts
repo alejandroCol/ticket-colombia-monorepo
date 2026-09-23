@@ -10,10 +10,9 @@ import {
   ticketIsGatewayOnlineSale,
   buyerPaysServiceFeeOnTop,
   eventUsesMercadoPago,
+  computeTicketTiqueteraFeeCOP,
   inferSubtotalAndTiqueteraFee,
   computePasarelaCommissionCOP,
-  computeServiceFeeCOP,
-  buyerFeeFixedUnitCountFromRequest,
 } from '@utils/revenueBreakdown';
 import { validTicketsForReportSales } from '@utils/eventReportFilters';
 import { isTicketCourtesyRow } from '@utils/ticketListDisplay';
@@ -193,7 +192,9 @@ function paymentMethodLabel(t: Ticket): string {
   if (raw.includes('mercadopago')) return 'Mercado Pago';
   if (raw.includes('onepay')) return 'OnePay';
   if (raw === 'free' || raw === 'gratis') return 'Gratis';
-  if (raw === 'manual' || (t as { createdByAdmin?: string }).createdByAdmin) return 'Manual / taquilla';
+  if (raw === 'manual' || raw === 'admin_manual' || (t as { createdByAdmin?: string }).createdByAdmin) {
+    return 'Manual / taquilla';
+  }
   return String(t.paymentMethod || '—').slice(0, 28);
 }
 
@@ -535,32 +536,12 @@ export async function pdfConciliacionComisionTiquetera(
   const rows = filtered.map((t) => {
     const qty = Math.max(1, Math.floor(Number(t.quantity) || 1));
     const lineTotal = Math.round(ticketLineAmountCOP(t));
-    const manual = ticketIsManualLike(t);
-    const sid = (t as { sectionId?: string }).sectionId;
-    const mz = (t as { mapZoneId?: string }).mapZoneId;
-    let fee: number;
-    if (manual) {
-      const fixUnits = buyerFeeFixedUnitCountFromRequest(qty, money.event, sid, mz);
-      fee = computeServiceFeeCOP(
-        lineTotal,
-        qty,
-        money.event,
-        money.globalFeesPercent,
-        money.organizerFee,
-        fixUnits
-      ).feeCOP;
-    } else {
-      fee = inferSubtotalAndTiqueteraFee(
-        lineTotal,
-        qty,
-        money.event,
-        money.globalFeesPercent,
-        money.organizerFee,
-        sid,
-        mz,
-        false
-      ).tiqueteraFee;
-    }
+    const fee = computeTicketTiqueteraFeeCOP(
+      t,
+      money.event,
+      money.globalFeesPercent,
+      money.organizerFee
+    );
     sumFee += fee;
     sumCobrado += lineTotal;
     return [
@@ -721,7 +702,6 @@ export async function pdfConciliacionPasarelaNeto(
   const rows = filtered.map((t) => {
     const qty = Math.max(1, Math.floor(Number(t.quantity) || 1));
     const amount = Math.round(Number(t.amount) || 0);
-    const manual = ticketIsManualLike(t);
     const sid = (t as { sectionId?: string }).sectionId;
     const mz = (t as { mapZoneId?: string }).mapZoneId;
     const { subtotal } = inferSubtotalAndTiqueteraFee(
@@ -732,7 +712,7 @@ export async function pdfConciliacionPasarelaNeto(
       money.organizerFee,
       sid,
       mz,
-      manual
+      ticketIsGatewayOnlineSale(t)
     );
     const pasarelaBase = feeOnTop ? amount : subtotal;
     const pas = computePasarelaCommissionCOP(pasarelaBase, money.gateway);

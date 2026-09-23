@@ -8,7 +8,7 @@ import {
 } from "../reservations/availability";
 
 export interface AvailabilityResponse {
-  /** Tickets + reservas activas (hold 10 min) por sección */
+  /** Tickets + reservas activas (checkout 10 min; pasarela 60 min; abono pagado hasta vencimiento) */
   bySection: Record<string, number>;
   /** Ocupación por id de zona de mapa (palcos divididos); cada clave suele ser 0 o 1. */
   byMapZone: Record<string, number>;

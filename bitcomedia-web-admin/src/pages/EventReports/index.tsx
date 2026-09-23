@@ -21,7 +21,8 @@ import {
 } from '@services';
 import { normalizeGatewayCommissionConfig, buyerPaysServiceFeeOnTop, eventUsesMercadoPago } from '@utils/revenueBreakdown';
 import type { PdfVentasMoneyContext } from '@utils/eventReportsPdf';
-import { getTicketsByEventId } from '@services/ticketService';
+import { exportEventSalesChannelToExcel } from '@utils/exportEventSalesChannelExcel';
+import { filterSoldEntradasTicketsForAdminStats, getTicketsByEventId, ticketCreatedAtMs } from '@services/ticketService';
 import type { Event, EventSection } from '@services/types';
 import type { Ticket } from '@services/types';
 import type { Expense } from '@services/firestore';
@@ -35,7 +36,6 @@ import {
   duplicateSectionNames,
   ticketBelongsToSection,
 } from '@utils/eventReportFilters';
-import { ticketCreatedAtMs } from '@services/ticketService';
 import './index.scss';
 
 function defaultDateRange(): { from: string; to: string } {
@@ -57,6 +57,7 @@ const EventReportsScreen: React.FC = () => {
   const [eventCollection, setEventCollection] = useState<'events' | 'recurring_events' | null>(null);
   const [showOrganizerExtras, setShowOrganizerExtras] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [excelBusy, setExcelBusy] = useState(false);
 
   const [periodFrom, setPeriodFrom] = useState(defaultDateRange().from);
   const [periodTo, setPeriodTo] = useState(defaultDateRange().to);
@@ -167,6 +168,10 @@ const EventReportsScreen: React.FC = () => {
   );
 
   const salesPool = useMemo(() => tickets.filter(validTicketsForReportSales), [tickets]);
+  const soldTicketsForChannelReport = useMemo(
+    () => filterSoldEntradasTicketsForAdminStats(tickets),
+    [tickets]
+  );
 
   const runPdf = async (fn: () => Promise<void>) => {
     setPdfBusy(true);
@@ -320,6 +325,33 @@ const EventReportsScreen: React.FC = () => {
       });
     });
 
+  const handleVentasCanalExcel = () => {
+    if (!event || !pdfMoney) {
+      alert('No se pudo cargar la configuración de pagos del evento.');
+      return;
+    }
+    if (soldTicketsForChannelReport.length === 0) {
+      alert('No hay ventas con cobro para exportar.');
+      return;
+    }
+    setExcelBusy(true);
+    try {
+      exportEventSalesChannelToExcel(
+        event,
+        soldTicketsForChannelReport,
+        pdfMoney.globalFeesPercent,
+        pdfMoney.organizerFee,
+        pdfMoney.gateway,
+        `ventas-canal-${eventId}`
+      );
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : 'No se pudo generar el Excel.');
+    } finally {
+      setExcelBusy(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="event-reports-screen">
@@ -358,9 +390,10 @@ const EventReportsScreen: React.FC = () => {
       )}
       <div className="event-reports-content">
         <header className="event-reports-hero">
-          <h1 className="event-reports-hero__title">Reportes PDF</h1>
+          <h1 className="event-reports-hero__title">Reportes</h1>
           <p className="event-reports-hero__subtitle">
-            Genera informes con el logo de Ticket Colombia. {reportsNetoHint} Los egresos siguen en valor registrado.
+            Genera informes PDF con el logo de Ticket Colombia o descarga Excel con desglose pasarela vs manual.{' '}
+            {reportsNetoHint} Los egresos siguen en valor registrado.
           </p>
         </header>
 
@@ -371,7 +404,28 @@ const EventReportsScreen: React.FC = () => {
           </div>
         )}
 
+        {excelBusy && (
+          <div className="event-reports-busy" role="status">
+            <Loader />
+            <span>Generando Excel…</span>
+          </div>
+        )}
+
         <div className="event-reports-grid">
+          <section className="event-reports-card event-reports-card--wide event-reports-card--excel">
+            <h2 className="event-reports-card__title">Ventas por canal (Excel)</h2>
+            <p className="event-reports-card__desc">
+              Descarga resumen y detalle por canal. La tarifa tiquetera total (pasarela + manual) aparece en la fila
+              pasarela con el total de boletas; el neto manual es el recaudado sin deducciones. Excluye cortesías.
+            </p>
+            <SecondaryButton
+              type="button"
+              disabled={excelBusy || pdfBusy || !pdfMoney || soldTicketsForChannelReport.length === 0}
+              onClick={handleVentasCanalExcel}
+            >
+              Descargar Excel
+            </SecondaryButton>
+          </section>
           <section className="event-reports-card">
             <h2 className="event-reports-card__title">Ventas hoy</h2>
             <p className="event-reports-card__desc">Boletos vendidos hoy (fecha local) con estado válido.</p>

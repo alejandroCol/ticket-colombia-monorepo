@@ -29,6 +29,10 @@ export function collectOnePaySignatureHeader(
   headersNorm: Record<string, string>
 ): string {
   const keys = [
+    // Rotación de secretos: OnePay manda la firma nueva en `signature-next`.
+    "signature-next",
+    // OnePay documenta `Signature` (Express/Firebase lo baja a `signature`).
+    "signature",
     "x-signature",
     "x-onepay-signature",
     "x-webhook-signature",
@@ -75,18 +79,21 @@ export type OnePayPaymentDetail = {
 };
 
 /**
- * OnePay exige metadata como objeto cuyas propiedades son { key, value } cada una.
+ * OnePay exige metadata en el request como lista de pares { key, value }, ambos texto.
+ * Un objeto `{"eventId": "..."}` (o valores objeto) responde 422.
+ * En la respuesta la API lo devuelve aplanado: `{"eventId": "..."}`.
+ * @see https://docs.onepay.la/client/payments/create
  * @param {Array<{key: string; value: string}>} pairs Pares clave/valor
- * @return {Record<string, {key: string; value: string}>} Formato API
+ * @return {Array<{key: string; value: string}>} Formato API
  */
 export function onepayMetadataForApi(
   pairs: Array<{key: string; value: string}>
-): Record<string, {key: string; value: string}> {
-  const out: Record<string, {key: string; value: string}> = {};
+): Array<{key: string; value: string}> {
+  const out: Array<{key: string; value: string}> = [];
   for (const p of pairs) {
     const k = String(p.key || "").trim();
     if (!k) continue;
-    out[k] = {key: k, value: String(p.value ?? "")};
+    out.push({key: k, value: String(p.value ?? "")});
   }
   return out;
 }
@@ -106,7 +113,7 @@ export async function onepayCreatePayment(params: {
   redirectUrl: string;
   idempotencyKey: string;
   description?: string;
-  /** Cada ítem se serializa como metadata[nombre] = { key, value } */
+  /** Se serializa como metadata: [{ key, value }, ...] */
   metadataPairs?: Array<{key: string; value: string}>;
 }): Promise<OnePayPaymentCreateResponse> {
   const body: Record<string, unknown> = {
@@ -127,7 +134,7 @@ export async function onepayCreatePayment(params: {
   if (params.description) body.description = params.description;
   if (params.metadataPairs?.length) {
     const meta = onepayMetadataForApi(params.metadataPairs);
-    if (Object.keys(meta).length) body.metadata = meta;
+    if (meta.length) body.metadata = meta;
   }
 
   const res = await fetch(`${ONEPAY_API_BASE}/payments`, {

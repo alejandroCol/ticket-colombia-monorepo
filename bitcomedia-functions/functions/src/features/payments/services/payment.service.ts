@@ -27,6 +27,11 @@ import {
   capacityBucketAndCount,
 } from "../../reservations/availability";
 import {
+  CHECKOUT_HOLD_MS,
+  PAYMENT_IN_PROGRESS_HOLD_MS,
+  isAbonoInventoryHold,
+} from "../../reservations/checkout-hold";
+import {
   expectedTotalCOP,
   totalChargedWithTicketDiscount,
   buyerFeeFixedUnitCountFromRequest,
@@ -57,8 +62,6 @@ import {
   onePayWebhookInterestingHeaderKeys,
   type OnePayWebhookPayload,
 } from "../handlers/onepay.api";
-
-const RESERVATION_HOLD_MS = 10 * 60 * 1000;
 
 /**
  * URL de `mercadopagoWebhook` para Checkout Pro. Si queda fija a otro proyecto, MP aprueba el pago
@@ -413,7 +416,7 @@ export class MercadoPagoPaymentService implements PaymentService {
           request.metadata?.mapZoneId
         );
       } catch (capErr) {
-        await restoreReservationActive(db, reservationId, RESERVATION_HOLD_MS);
+        await restoreReservationActive(db, reservationId, CHECKOUT_HOLD_MS);
         throw capErr;
       }
 
@@ -521,7 +524,7 @@ export class MercadoPagoPaymentService implements PaymentService {
           if (freeTicketId) {
             await this.ticketRepository.delete(freeTicketId).catch(() => undefined);
           }
-          await restoreReservationActive(db, reservationId, RESERVATION_HOLD_MS);
+          await restoreReservationActive(db, reservationId, CHECKOUT_HOLD_MS);
           throw freeErr;
         }
       }
@@ -663,6 +666,9 @@ export class MercadoPagoPaymentService implements PaymentService {
         quantity: request.quantity,
         currency: "COP",
         ticketStatus: "reserved",
+        holdExpiresAt: admin.firestore.Timestamp.fromMillis(
+          Date.now() + PAYMENT_IN_PROGRESS_HOLD_MS
+        ),
         qrCode: "", // Se generará cuando se confirme el pago completo
         buyerEmail: request.buyerEmail,
         initPoint: "", // Se llenará después de crear la preferencia
@@ -723,7 +729,7 @@ export class MercadoPagoPaymentService implements PaymentService {
       try {
         paidTicketId = await this.ticketRepository.create(ticketData);
       } catch (createErr) {
-        await restoreReservationActive(db, reservationId, RESERVATION_HOLD_MS);
+        await restoreReservationActive(db, reservationId, CHECKOUT_HOLD_MS);
         throw createErr;
       }
       console.log("[createTicketPreference] Ticket creado:", paidTicketId);
@@ -760,7 +766,7 @@ export class MercadoPagoPaymentService implements PaymentService {
         const apiKey = this.config.onepayApiKey?.trim();
         if (!apiKey) {
           await this.ticketRepository.delete(paidTicketId).catch(() => undefined);
-          await restoreReservationActive(db, reservationId, RESERVATION_HOLD_MS);
+          await restoreReservationActive(db, reservationId, CHECKOUT_HOLD_MS);
           throw new Error("OnePay no está configurado (ONEPAY_API_KEY)");
         }
         console.log("[createTicketPreference] Creando cobro OnePay", {
@@ -797,7 +803,7 @@ export class MercadoPagoPaymentService implements PaymentService {
         } catch (onePayErr) {
           console.error("[createTicketPreference] OnePay:", onePayErr);
           await this.ticketRepository.delete(paidTicketId).catch(() => undefined);
-          await restoreReservationActive(db, reservationId, RESERVATION_HOLD_MS);
+          await restoreReservationActive(db, reservationId, CHECKOUT_HOLD_MS);
           throw onePayErr;
         }
         console.log(`Ticket created (OnePay): ${paidTicketId} for user: ${userId}`);
@@ -841,7 +847,7 @@ export class MercadoPagoPaymentService implements PaymentService {
       } catch (mpErr) {
         console.error("[createTicketPreference] Mercado Pago Checkout Pro:", mpErr);
         await this.ticketRepository.delete(paidTicketId).catch(() => undefined);
-        await restoreReservationActive(db, reservationId, RESERVATION_HOLD_MS);
+        await restoreReservationActive(db, reservationId, CHECKOUT_HOLD_MS);
         throw mpErr;
       }
     } catch (error) {
@@ -886,6 +892,11 @@ export class MercadoPagoPaymentService implements PaymentService {
       if (!userId || ticket.userId !== userId) {
         throw new Error("Este ticket no pertenece a tu cuenta");
       }
+    }
+
+    const holdStatus = String(ticket.ticketStatus || "");
+    if (holdStatus === "cancelled" || holdStatus === "disabled" || holdStatus === "expired") {
+      throw new Error("Esta reserva ya no es válida. Vuelve al evento e intenta de nuevo.");
     }
 
     const phase = ticket.installmentPhase || "none";
@@ -1054,8 +1065,10 @@ export class MercadoPagoPaymentService implements PaymentService {
     );
 
     const tok = normalizeOnePaySecretValue(
-      headersNorm["x-webhook-token"] ||
+      headersNorm["x-webhook-token-next"] ||
+        headersNorm["x-webhook-token"] ||
         headersNorm["x-onepay-token"] ||
+        headersNorm["webhook-token"] ||
         ""
     );
 
@@ -1067,8 +1080,13 @@ export class MercadoPagoPaymentService implements PaymentService {
       | undefined;
     const chPreview = normPreview.charge as {id?: string} | undefined;
 
-    /** 1) Con firma: HMAC con wh_tok_. 2) Sin firma (observado en producción OnePay): solo token wh_hdr_. */
+    /**
+     * OnePay firma en `Signature` (wh_tok_) y manda `x-webhook-token` (wh_hdr_).
+     * Durante rotación puede venir firma nueva + token viejo (o al revés).
+     * Se acepta si HMAC o token coinciden; no se exige ambos.
+     */
     const hasSig = Boolean(sig);
+    let accepted = false;
     if (hasSig) {
       if (!secret) {
         throw new Error("ONEPAY_WEBHOOK_SECRET no configurado");
@@ -1079,53 +1097,52 @@ export class MercadoPagoPaymentService implements PaymentService {
         secret,
         sig
       );
-      if (!sigCheck.ok) {
-        console.error("[onepay webhook] firma HMAC rechazada", {
+      if (sigCheck.ok) {
+        accepted = true;
+        console.log("[onepay webhook] firma HMAC OK", {
+          via: sigCheck.attempts.filter((a) => a.ok).map((a) => a.source),
+        });
+        if (expectToken && tok && tok !== expectToken) {
+          console.warn(
+            "[onepay webhook] x-webhook-token no coincide; se procesa por HMAC válida.",
+            {headerTokenLen: tok.length, expectedTokenLen: expectToken.length}
+          );
+        }
+      } else {
+        console.warn("[onepay webhook] firma HMAC no coincidió; se intenta token", {
           attempts: sigCheck.attempts,
           rawBodyLength: rawBody.length,
           signatureHeaderLen: sig.length,
           interestingHeaders: onePayWebhookInterestingHeaderKeys(headersNorm),
           paymentIdFromPayload: payPreview?.id ?? null,
           chargeIdFromPayload: chPreview?.id ?? null,
-          externalIdFromPayload: payPreview?.external_id ?? null,
           eventType: normPreview.event?.type ?? null,
-          hint:
-            "ONEPAY_WEBHOOK_SECRET debe ser el wh_tok_ del webhook (ver docs.onepay.la/client/webhooks/create)",
         });
-        throw new Error("Firma OnePay inválida");
-      }
-      console.log("[onepay webhook] firma HMAC OK", {
-        via: sigCheck.attempts.filter((a) => a.ok).map((a) => a.source),
-      });
-      if (expectToken && tok !== expectToken) {
-        console.warn(
-          "[onepay webhook] x-webhook-token no coincide con ONEPAY_WEBHOOK_TOKEN; se procesa porque la firma HMAC es válida.",
-          {headerTokenLen: tok.length, expectedTokenLen: expectToken.length}
-        );
       }
     } else {
-      console.warn("[onepay webhook] Sin cabecera de firma (x-signature, etc.)", {
+      console.warn("[onepay webhook] Sin cabecera Signature / x-signature", {
         interestingHeaders: onePayWebhookInterestingHeaderKeys(headersNorm),
         rawBodyLength: rawBody.length,
         eventType: normPreview.event?.type ?? null,
-        hint:
-          "Algunas entregas de OnePay solo envían x-webhook-token. Configura ONEPAY_WEBHOOK_TOKEN = wh_hdr_ del panel.",
       });
+    }
+
+    if (!accepted) {
       if (!expectToken) {
         throw new Error(
-          "OnePay webhook sin x-signature: configura ONEPAY_WEBHOOK_TOKEN (wh_hdr_) para validar el origen"
+          "OnePay webhook: configura ONEPAY_WEBHOOK_TOKEN (wh_hdr_) o verifica ONEPAY_WEBHOOK_SECRET (wh_tok_)"
         );
       }
       if (tok !== expectToken) {
-        console.error("[onepay webhook] Sin firma HMAC y token inválido", {
+        console.error("[onepay webhook] HMAC y token inválidos", {
           headerTokenLen: tok.length,
           expectedTokenLen: expectToken.length,
+          hasSig,
         });
         throw new Error("OnePay webhook token inválido");
       }
-      console.warn(
-        "[onepay webhook] Aceptado solo con x-webhook-token (no vino firma HMAC)"
-      );
+      accepted = true;
+      console.log("[onepay webhook] Aceptado con x-webhook-token");
     }
 
     const norm = normalizeOnePayWebhookPayload(bodyObj);
@@ -1402,6 +1419,64 @@ export class MercadoPagoPaymentService implements PaymentService {
   }
 
   /**
+   * Pago aprobado en pasarela: no se descarta por unos minutos extra en MP/OnePay.
+   * Un rechazo previo (boleta cancelled) no bloquea un approved posterior del mismo checkout.
+   * Solo se rechaza si el admin deshabilitó, liberó el cupo, o el hold expiró y ya no hay cupo.
+   */
+  private async checkoutHoldStillAllowsCapture(
+    ticketId: string,
+    ticket: Ticket
+  ): Promise<boolean> {
+    const status = String(ticket.ticketStatus || "");
+    const ticketDoc = ticket as unknown as DocumentData;
+    if (status === "disabled") {
+      return false;
+    }
+    if (status === "cancelled" && ticketDoc.holdReleasedBy) {
+      return false;
+    }
+    if (isAbonoInventoryHold(ticketDoc)) {
+      return true;
+    }
+    if (status === "reserved") {
+      return true;
+    }
+    if (status !== "expired" && status !== "cancelled") {
+      return true;
+    }
+
+    const db = admin.firestore();
+    let eventDoc = await db.collection("events").doc(ticket.eventId).get();
+    if (!eventDoc.exists) {
+      eventDoc = await db.collection("recurring_events").doc(ticket.eventId).get();
+    }
+    if (!eventDoc.exists) return false;
+    try {
+      await assertEnoughCapacityForPurchase(
+        db,
+        ticket.eventId,
+        eventDoc.data()!,
+        Math.max(1, Number(ticket.quantity) || 1),
+        ticket.sectionId,
+        ticket.sectionName,
+        ticket.mapZoneId
+      );
+      if (status === "cancelled") {
+        console.log(
+          `[checkoutHold] Approved posterior reactiva ticket cancelado por rechazo ${ticketId}`
+        );
+      }
+      return true;
+    } catch (e) {
+      console.warn(
+        `[checkoutHold] Pago tardío sin cupo ticket=${ticketId}:`,
+        (e as Error).message
+      );
+      return false;
+    }
+  }
+
+  /**
    * Actualiza un ticket basado en los datos del pago
    * @param {string} ticketId - ID del ticket
    * @param {PaymentData} paymentData - Datos del pago
@@ -1428,6 +1503,16 @@ export class MercadoPagoPaymentService implements PaymentService {
         ) {
           console.log(
             `[updateTicketFromPayment] Idempotente: pago ${paymentData.id} ya aplicado`
+          );
+          return;
+        }
+        const canCapture = await this.checkoutHoldStillAllowsCapture(
+          ticketId,
+          ticket
+        );
+        if (!canCapture) {
+          console.warn(
+            `[updateTicketFromPayment] Pago ${paymentData.id} ignorado: hold expirado y cupo no disponible (${ticketId})`
           );
           return;
         }
@@ -1508,19 +1593,35 @@ export class MercadoPagoPaymentService implements PaymentService {
         return;
       }
 
-      case "rejected":
+      case "rejected": {
+        const current = String(ticket.ticketStatus || "");
+        if (current === "paid" || current === "used" || current === "redeemed") {
+          console.log(
+            `[updateTicketFromPayment] Rechazo ${paymentData.id} ignorado: ticket ya ${current}`
+          );
+          return;
+        }
         await this.ticketRepository.update(ticketId, {
           ...baseUpdate,
           ticketStatus: "cancelled",
         });
         break;
+      }
 
-      case "pending":
+      case "pending": {
+        const current = String(ticket.ticketStatus || "");
+        if (current === "paid" || current === "used" || current === "redeemed") {
+          console.log(
+            `[updateTicketFromPayment] Pending ${paymentData.id} ignorado: ticket ya ${current}`
+          );
+          return;
+        }
         await this.ticketRepository.update(ticketId, {
           ...baseUpdate,
           ticketStatus: "reserved",
         });
         break;
+      }
 
       default:
         console.log(`Unhandled payment status: ${paymentData.status}`);
@@ -1787,5 +1888,101 @@ export class MercadoPagoPaymentService implements PaymentService {
       await this.ticketRepository.update(ticketId, {installmentPhase: "deposit_paid"});
       throw e;
     }
+  }
+
+  /**
+   * Confirma pago manual del organizador (efectivo, transferencia, etc.).
+   * @param {string} ticketId ID del documento de compra
+   * @param {string} adminUid UID del admin/organizador que confirma
+   */
+  async confirmManualTicketPayment(
+    ticketId: string,
+    adminUid: string
+  ): Promise<{ installmentPhase: string; ticketsEmailed: boolean }> {
+    const ticket = await this.ticketRepository.findById(ticketId);
+    if (!ticket) {
+      throw new Error("Boleto no encontrado");
+    }
+
+    const phase = ticket.installmentPhase || "none";
+    const status = String(ticket.ticketStatus || "");
+
+    if (phase === "completed" || status === "paid" || status === "used" || status === "redeemed") {
+      throw new Error("Esta compra ya está pagada y emitida");
+    }
+    if (phase === "forfeited" || status === "cancelled" || status === "disabled" || status === "expired") {
+      throw new Error("Esta compra no admite confirmación de pago");
+    }
+
+    const manualPaymentId = `manual_${adminUid}_${Date.now()}`;
+    const baseUpdate: Partial<Ticket> = {
+      paymentId: manualPaymentId,
+      paymentStatus: "approved",
+      paymentMethod: "admin_manual",
+    };
+
+    if (phase === "awaiting_deposit") {
+      await this.ticketRepository.update(ticketId, {
+        ...baseUpdate,
+        installmentPhase: "deposit_paid",
+        ticketStatus: "reserved",
+        qrCode: "",
+        initPoint: `${this.config.appUrl}/tickets`,
+      });
+      const snapDep = await admin.firestore().collection("tickets").doc(ticketId).get();
+      await redeemEventDiscountOnPaidTicket(
+        admin.firestore(),
+        ticketId,
+        (snapDep.data() || {}) as Record<string, unknown>
+      );
+      await this.sendDepositConfirmationIfPossible(ticketId, ticket);
+      return {installmentPhase: "deposit_paid", ticketsEmailed: false};
+    }
+
+    if (phase === "deposit_paid" || phase === "awaiting_balance") {
+      await this.ticketRepository.update(ticketId, {
+        ...baseUpdate,
+        installmentPhase: "completed",
+        ticketStatus: "paid",
+        initPoint: `${this.config.appUrl}/tickets`,
+      });
+      const snap = await admin.firestore().collection("tickets").doc(ticketId).get();
+      await finalizePaidTicketsWithBundle(
+        admin.firestore(),
+        ticketId,
+        {...(snap.data() || {})},
+        this.qrGenerator,
+        this.config.appUrl,
+        this.ticketRepository
+      );
+      await this.sendPaidPurchaseTicketsEmail(ticketId);
+      return {installmentPhase: "completed", ticketsEmailed: true};
+    }
+
+    if (status === "reserved") {
+      await this.ticketRepository.update(ticketId, {
+        ...baseUpdate,
+        ticketStatus: "paid",
+        initPoint: `${this.config.appUrl}/tickets`,
+      });
+      const snapSingle = await admin.firestore().collection("tickets").doc(ticketId).get();
+      await redeemEventDiscountOnPaidTicket(
+        admin.firestore(),
+        ticketId,
+        (snapSingle.data() || {}) as Record<string, unknown>
+      );
+      await finalizePaidTicketsWithBundle(
+        admin.firestore(),
+        ticketId,
+        {...(snapSingle.data() || {})},
+        this.qrGenerator,
+        this.config.appUrl,
+        this.ticketRepository
+      );
+      await this.sendPaidPurchaseTicketsEmail(ticketId);
+      return {installmentPhase: "paid", ticketsEmailed: true};
+    }
+
+    throw new Error("Estado de la compra no admite confirmación manual de pago");
   }
 }

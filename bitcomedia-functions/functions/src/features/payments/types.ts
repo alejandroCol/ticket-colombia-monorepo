@@ -91,6 +91,8 @@ export interface Ticket {
   capacityCount?: number;
   transferredTo?: string | null;
   transferredFrom?: string | null;
+  /** Fin de retención en pasarela (60 min). No aplica si ya pagó abono. */
+  holdExpiresAt?: Timestamp;
   /** Plan de abono (solo documento padre de la compra) */
   installmentPhase?: InstallmentPhase;
   totalPurchaseCOP?: number;
@@ -174,7 +176,9 @@ export type TicketStatus =
   | "paid"
   | "cancelled"
   | "expired"
-  | "used";
+  | "used"
+  | "disabled"
+  | "redeemed";
 
 // Interfaces de servicios
 export interface MercadoPagoCardPaymentRequest {
@@ -219,6 +223,15 @@ export interface PaymentService {
     ticketId: string,
     paymentData: PaymentData
   ): Promise<void>;
+
+  /**
+   * Admin confirma pago recibido por otro medio (efectivo, transferencia, etc.).
+   * Reutiliza la misma emisión de QR/PDF que el webhook de pasarela.
+   */
+  confirmManualTicketPayment(
+    ticketId: string,
+    adminUid: string
+  ): Promise<{ installmentPhase: string; ticketsEmailed: boolean }>;
 
   processOnePayWebhook(
     payload: OnePayWebhookPayload,

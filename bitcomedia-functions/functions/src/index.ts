@@ -28,6 +28,8 @@ import {
 } from "./features/payments/mercadopago-oauth";
 import {previewEventDiscountCode} from "./features/discount-codes/preview-event-discount-code";
 import {submitOrganizerInquiry} from "./features/organizer-inquiry/submit-organizer-inquiry";
+import {confirmManualTicketPayment} from "./features/payments/confirm-manual-ticket-payment";
+import {releaseReservedTicket} from "./features/payments/release-reserved-ticket";
 
 admin.initializeApp();
 
@@ -465,6 +467,8 @@ exports.createManualTicket = createManualTicket;
 
 /** Reenvía el PDF con QRs existentes (mismo documento Firestore; opcional correo destino). */
 exports.resendTicketPdfEmail = resendTicketPdfEmail;
+exports.confirmManualTicketPayment = confirmManualTicketPayment;
+exports.releaseReservedTicket = releaseReservedTicket;
 
 // Función para transferir tickets a otra persona
 exports.transferTicket = transferTicket;

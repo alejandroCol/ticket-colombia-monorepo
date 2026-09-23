@@ -142,6 +142,22 @@
         letter-spacing: 0;
       }
     }
+
+    &.palcos {
+      border-left-color: #5e5ce6;
+
+      .value {
+        color: #a5a3ff;
+      }
+    }
+
+    &.abonos {
+      border-left-color: #64d2ff;
+
+      .value {
+        color: #64d2ff;
+      }
+    }
   }
 }
 
@@ -150,6 +166,42 @@
   padding: 1rem 1.15rem 0.25rem;
   border-radius: 12px;
   border: 1px dashed rgba(#ff9f0a, 0.5);
+  background: rgba($color-surface, 0.55);
+
+  &__head {
+    margin-bottom: 0.85rem;
+  }
+
+  &__title {
+    margin: 0 0 0.4rem;
+    font-size: 1.15rem;
+    color: $color-text-primary;
+    font-weight: 700;
+  }
+
+  &__hint {
+    margin: 0;
+    font-size: 0.88rem;
+    color: $color-text-secondary;
+    line-height: 1.45;
+  }
+
+  &__empty {
+    margin: 0 0 1rem;
+    font-size: 0.9rem;
+    color: $color-text-secondary;
+  }
+
+  .event-tickets-table-container {
+    margin-bottom: 0.75rem;
+  }
+}
+
+.event-tickets-abono-panel {
+  margin-top: 1.5rem;
+  padding: 1rem 1.15rem 0.25rem;
+  border-radius: 12px;
+  border: 1px dashed rgba(#64d2ff, 0.45);
   background: rgba($color-surface, 0.55);
 
   &__head {
@@ -329,6 +381,85 @@
     &.cortesia {
       background: rgba(255, 149, 0, 0.2);
       color: #ff9500;
+    }
+
+    &.abono {
+      background: rgba(100, 210, 255, 0.18);
+      color: #64d2ff;
+    }
+
+    &.abono-completed {
+      display: block;
+      margin-top: 0.3rem;
+      background: rgba(52, 199, 89, 0.15);
+      color: #34c759;
+      font-size: 0.72rem;
+    }
+
+    &.hold-expired {
+      display: block;
+      margin-top: 0.3rem;
+      background: rgba(255, 159, 10, 0.18);
+      color: #ffcc00;
+      font-size: 0.72rem;
+    }
+  }
+
+  .abono-pending {
+    font-weight: 600;
+    color: #ffcc00;
+  }
+
+  .btn-confirm-payment {
+    display: inline-block;
+    padding: 0.35rem 0.65rem;
+    border: 1px solid rgba(#34c759, 0.45);
+    border-radius: 6px;
+    background: rgba(52, 199, 89, 0.12);
+    color: #34c759;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
+
+    &:hover:not(:disabled) {
+      background: rgba(52, 199, 89, 0.22);
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  }
+
+  .event-tickets-reserved-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+  }
+
+  .btn-release-hold {
+    display: inline-block;
+    padding: 0.35rem 0.65rem;
+    border: 1px solid rgba(#ff9f0a, 0.5);
+    border-radius: 6px;
+    background: rgba(255, 159, 10, 0.12);
+    color: #ffcc00;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
+
+    &:hover:not(:disabled) {
+      background: rgba(255, 159, 10, 0.22);
+    }
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
     }
   }
 

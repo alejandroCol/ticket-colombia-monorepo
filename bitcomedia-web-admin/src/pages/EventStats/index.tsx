@@ -21,6 +21,7 @@ import {
 } from '@services';
 import { aggregateEventRevenueBreakdown, normalizeGatewayCommissionConfig } from '@utils/revenueBreakdown';
 import type { OrganizerBuyerFeeInput } from '@utils/revenueBreakdown';
+import { aggregateSalesChannelBreakdown } from '@utils/salesChannelBreakdown';
 import { getTicketsByEventId, isTicketReservedHold, filterSoldEntradasTicketsForAdminStats } from '@services/ticketService';
 import {
   IconTickets,
@@ -178,6 +179,17 @@ const EventStatsScreen: React.FC = () => {
   const moneyAggr = useMemo(() => {
     if (!event || !moneyCtx) return null;
     return aggregateEventRevenueBreakdown(
+      event,
+      soldTicketsForStats,
+      moneyCtx.globalFeesPercent,
+      moneyCtx.organizerFee,
+      moneyCtx.gateway
+    );
+  }, [event, soldTicketsForStats, moneyCtx]);
+
+  const channelBreakdown = useMemo(() => {
+    if (!event || !moneyCtx) return null;
+    return aggregateSalesChannelBreakdown(
       event,
       soldTicketsForStats,
       moneyCtx.globalFeesPercent,
@@ -393,6 +405,68 @@ const EventStatsScreen: React.FC = () => {
           </div>
         </div>
 
+        {channelBreakdown && (
+          <div className="event-stats-channel-breakdown">
+            <h3 className="event-stats-channel-breakdown__title">Ventas por canal de cobro</h3>
+            <p className="event-stats-channel-breakdown__intro">
+              Desglose entre cobros en pasarela y ventas manuales (taquilla, transferencia). La tarifa tiquetera se
+              calcula sobre <strong>todas las boletas con cobro</strong> (pasarela + manual) y se descuenta en el bloque
+              pasarela; el neto manual es el recaudado sin deducciones adicionales.
+            </p>
+            <div className="event-stats-channel-grid">
+              <div className="event-stats-channel-card event-stats-channel-card--gateway">
+                <h4 className="event-stats-channel-card__heading">Pasarela (en línea)</h4>
+                <ul className="event-stats-channel-card__list">
+                  <li>
+                    <span>Boletas vendidas</span>
+                    <strong>{channelBreakdown.gateway.ticketUnits}</strong>
+                  </li>
+                  <li>
+                    <span>Recaudado</span>
+                    <strong>{formatCOP(channelBreakdown.gateway.totalCobrado)}</strong>
+                  </li>
+                  {channelBreakdown.combinedTiqueteraFee > 0 && (
+                    <li className="event-stats-channel-card__accent">
+                      <span>
+                        Tarifa tiquetera ({channelBreakdown.combinedTiqueteraBoletas}{' '}
+                        {channelBreakdown.combinedTiqueteraBoletas === 1 ? 'boleto' : 'boletas'})
+                      </span>
+                      <strong>−{formatCOP(channelBreakdown.combinedTiqueteraFee)}</strong>
+                    </li>
+                  )}
+                  {channelBreakdown.gateway.showPasarelaCommission && (
+                    <li className="event-stats-channel-card__accent">
+                      <span>Comisión pasarela (est.)</span>
+                      <strong>−{formatCOP(channelBreakdown.gateway.pasarelaTotal)}</strong>
+                    </li>
+                  )}
+                  <li className="event-stats-channel-card__neto">
+                    <span>Neto organizador</span>
+                    <strong>{formatCOP(channelBreakdown.pasarelaNetoOrganizador)}</strong>
+                  </li>
+                </ul>
+              </div>
+              <div className="event-stats-channel-card event-stats-channel-card--manual">
+                <h4 className="event-stats-channel-card__heading">Manual / taquilla</h4>
+                <ul className="event-stats-channel-card__list">
+                  <li>
+                    <span>Boletas vendidas</span>
+                    <strong>{channelBreakdown.manual.ticketUnits}</strong>
+                  </li>
+                  <li>
+                    <span>Recaudado</span>
+                    <strong>{formatCOP(channelBreakdown.manual.totalCobrado)}</strong>
+                  </li>
+                  <li className="event-stats-channel-card__neto">
+                    <span>Neto organizador</span>
+                    <strong>{formatCOP(channelBreakdown.manual.netoOrganizador)}</strong>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
         {reservedHoldUnits > 0 && (
           <div className="event-stats-reserved-callout" role="region" aria-label="Boletas en reserva">
             <h2 className="event-stats-reserved-callout__title">Boletas reservadas (sin pago aún)</h2>
@@ -525,11 +599,11 @@ const EventStatsScreen: React.FC = () => {
             </ul>
             <p className="event-stats-money-deck__hint">
               {moneyAggr.showPasarelaCommission
-                ? 'Ventas manuales / transferencia no incluyen comisión de pasarela. '
+                ? 'Ventas manuales / transferencia no incluyen comisión de pasarela ni tarifa tiquetera. '
                 : 'Este evento usa Mercado Pago: no se estima comisión de pasarela aquí. '}
               {moneyAggr.serviceFeeDeductedFromNeto
-                ? 'La tarifa de servicio no se cobra aparte al comprador; se descuenta del neto.'
-                : 'La tarifa tiquetera se muestra aparte; el NETO refleja lo que queda para el organizador.'}
+                ? 'La tarifa tiquetera (pasarela + manual) se descuenta del bloque pasarela.'
+                : 'En pasarela la tarifa tiquetera la paga el comprador aparte; el total incluye manual y se muestra en el bloque pasarela.'}
             </p>
           </div>
         )}

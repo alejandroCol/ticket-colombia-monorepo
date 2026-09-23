@@ -87,7 +87,18 @@ export function computeServiceFeeCOP(
 export function ticketIsManualLike(t: Ticket): boolean {
   if ((t as { createdByAdmin?: string }).createdByAdmin) return true;
   const pm = String(t.paymentMethod || '').toLowerCase();
-  return pm === 'manual' || pm === 'transfer' || pm === 'free';
+  return pm === 'manual' || pm === 'transfer' || pm === 'free' || pm === 'admin_manual';
+}
+
+/**
+ * Taquilla / venta manual con precio de lista en `amount` (sin tarifa tiquetera embebida en el cobro).
+ * Excluye cortesías ($0), `free` y pagos `admin_manual` originados en checkout.
+ */
+export function ticketIsTaquillaManualSale(t: Ticket): boolean {
+  if (Math.round(Number(t.amount) || 0) <= 0) return false;
+  if ((t as { createdByAdmin?: string }).createdByAdmin) return true;
+  const pm = String(t.paymentMethod || '').toLowerCase();
+  return pm === 'manual' || pm === 'transfer';
 }
 
 /** Cobro en línea (pasarela): no manual/taquilla y con monto cobrado. */
@@ -112,8 +123,8 @@ export function eventUsesMercadoPago(eventData: Pick<Event, 'payment_provider'>)
 }
 
 /**
- * A partir del total cobrado al comprador (subtotal + tarifa tiquetera), infiere el subtotal de entradas.
- * Ventas manuales / transferencia: se asume que `amount` es solo valor de entradas (sin tarifa de servicio en línea).
+ * A partir del total cobrado, infiere subtotal de entradas y tarifa tiquetera.
+ * Solo ventas pasarela incluyen tarifa tiquetera; taquilla/manual = subtotal sin tarifa.
  */
 export function inferSubtotalAndTiqueteraFee(
   paidTotal: number,
@@ -123,14 +134,16 @@ export function inferSubtotalAndTiqueteraFee(
   organizerFee: OrganizerBuyerFeeInput,
   sectionId: string | undefined,
   mapZoneId: string | undefined,
-  manualLike: boolean
+  includeTiqueteraFee: boolean
 ): { subtotal: number; tiqueteraFee: number } {
   const A = Math.max(0, Math.round(paidTotal));
   if (A <= 0) return { subtotal: 0, tiqueteraFee: 0 };
-  if (manualLike) {
+
+  const fixUnits = buyerFeeFixedUnitCountFromRequest(quantity, eventData, sectionId, mapZoneId);
+
+  if (!includeTiqueteraFee) {
     return { subtotal: A, tiqueteraFee: 0 };
   }
-  const fixUnits = buyerFeeFixedUnitCountFromRequest(quantity, eventData, sectionId, mapZoneId);
 
   if (!buyerPaysServiceFeeOnTop(eventData)) {
     const feeCOP = computeServiceFeeCOP(
@@ -162,6 +175,53 @@ export function inferSubtotalAndTiqueteraFee(
     } else break;
   }
   return { subtotal, tiqueteraFee: feeCOP };
+}
+
+/** Tarifa tiquetera que reduce el neto del organizador para este boleto. */
+export function tiqueteraFeeDeductedFromOrganizerNeto(
+  t: Ticket,
+  event: Event,
+  tiqueteraFee: number
+): number {
+  if (tiqueteraFee <= 0) return 0;
+  if (ticketIsTaquillaManualSale(t)) return tiqueteraFee;
+  if (!ticketIsGatewayOnlineSale(t)) return 0;
+  if (!buyerPaysServiceFeeOnTop(event)) return tiqueteraFee;
+  return 0;
+}
+
+/** Tarifa tiquetera por boleto: pasarela (inferida) + taquilla manual (sobre precio de lista). */
+export function computeTicketTiqueteraFeeCOP(
+  t: Ticket,
+  event: Event,
+  globalFeesPercent: number,
+  organizerFee: OrganizerBuyerFeeInput
+): number {
+  const qty = Math.max(1, Math.floor(Number(t.quantity) || 1));
+  const amount = Math.round(Number(t.amount) || 0);
+  if (amount <= 0) return 0;
+  const sid = (t as { sectionId?: string }).sectionId;
+  const mz = (t as { mapZoneId?: string }).mapZoneId;
+
+  if (ticketIsGatewayOnlineSale(t)) {
+    return inferSubtotalAndTiqueteraFee(
+      amount,
+      qty,
+      event,
+      globalFeesPercent,
+      organizerFee,
+      sid,
+      mz,
+      true
+    ).tiqueteraFee;
+  }
+
+  if (ticketIsTaquillaManualSale(t)) {
+    const fixUnits = buyerFeeFixedUnitCountFromRequest(qty, event, sid, mz);
+    return computeServiceFeeCOP(amount, qty, event, globalFeesPercent, organizerFee, fixUnits).feeCOP;
+  }
+
+  return 0;
 }
 
 /**
@@ -231,15 +291,17 @@ export function aggregateEventRevenueBreakdown(
   let pasarelaFixedPart = 0;
   let pasarelaIva = 0;
   let pasarelaTotal = 0;
+  let tiqueteraFeeDeductedFromNeto = 0;
 
   for (const t of validTickets) {
     const qty = Math.max(1, Math.floor(Number(t.quantity) || 1));
     const amount = Math.round(Number(t.amount) || 0);
     totalCobrado += amount;
     const manual = ticketIsManualLike(t);
+    const gatewaySale = ticketIsGatewayOnlineSale(t);
     const sid = (t as { sectionId?: string }).sectionId;
     const mz = (t as { mapZoneId?: string }).mapZoneId;
-    const { subtotal, tiqueteraFee: tf } = inferSubtotalAndTiqueteraFee(
+    const { subtotal } = inferSubtotalAndTiqueteraFee(
       amount,
       qty,
       event,
@@ -247,10 +309,12 @@ export function aggregateEventRevenueBreakdown(
       organizerFee,
       sid,
       mz,
-      manual
+      gatewaySale
     );
+    const tf = computeTicketTiqueteraFeeCOP(t, event, globalFeesPercent, organizerFee);
     subtotalEntradas += subtotal;
     tiqueteraFee += tf;
+    tiqueteraFeeDeductedFromNeto += tiqueteraFeeDeductedFromOrganizerNeto(t, event, tf);
 
     if (!manual && amount > 0 && showPasarelaCommission) {
       const pasarelaBase = feeOnTop ? amount : subtotal;
@@ -263,9 +327,7 @@ export function aggregateEventRevenueBreakdown(
   }
 
   let netoOrganizador = subtotalEntradas;
-  if (!feeOnTop) {
-    netoOrganizador -= tiqueteraFee;
-  }
+  netoOrganizador -= tiqueteraFeeDeductedFromNeto;
   if (showPasarelaCommission) {
     netoOrganizador -= pasarelaTotal;
   }
@@ -281,13 +343,12 @@ export function aggregateEventRevenueBreakdown(
     pasarelaTotal,
     netoOrganizador,
     showPasarelaCommission,
-    serviceFeeDeductedFromNeto: !feeOnTop,
+    serviceFeeDeductedFromNeto: tiqueteraFeeDeductedFromNeto > 0,
   };
 }
 
 /**
- * Valor neto para el organizador de un boleto (subtotal entradas − comisión pasarela de pagos).
- * La tarifa tiquetera queda fuera del subtotal; ventas manuales no aplican pasarela.
+ * Valor neto para el organizador de un boleto (subtotal entradas − tarifa tiquetera − comisión pasarela).
  */
 export function ticketNetOrganizerCOP(
   t: Ticket,
@@ -298,12 +359,15 @@ export function ticketNetOrganizerCOP(
 ): number {
   const qty = Math.max(1, Math.floor(Number(t.quantity) || 1));
   const amount = Math.round(Number(t.amount) || 0);
+  if (amount <= 0) return 0;
+
   const manual = ticketIsManualLike(t);
+  const gatewaySale = ticketIsGatewayOnlineSale(t);
   const sid = (t as { sectionId?: string }).sectionId;
   const mz = (t as { mapZoneId?: string }).mapZoneId;
   const feeOnTop = buyerPaysServiceFeeOnTop(event);
   const showPasarelaCommission = !eventUsesMercadoPago(event);
-  const { subtotal, tiqueteraFee } = inferSubtotalAndTiqueteraFee(
+  const { subtotal } = inferSubtotalAndTiqueteraFee(
     amount,
     qty,
     event,
@@ -311,16 +375,22 @@ export function ticketNetOrganizerCOP(
     organizerFee,
     sid,
     mz,
-    manual
+    gatewaySale
   );
-  if (manual || amount <= 0) {
+  const tiqueteraFee = computeTicketTiqueteraFeeCOP(t, event, globalFeesPercent, organizerFee);
+
+  if (ticketIsTaquillaManualSale(t)) {
     return Math.max(0, subtotal);
   }
-  let neto = subtotal;
-  if (!feeOnTop) {
-    neto -= tiqueteraFee;
+
+  if (manual || !gatewaySale) {
+    return Math.max(0, subtotal);
   }
-  if (showPasarelaCommission) {
+
+  let neto = subtotal;
+  neto -= tiqueteraFeeDeductedFromOrganizerNeto(t, event, tiqueteraFee);
+
+  if (!manual && showPasarelaCommission) {
     const pasarelaBase = feeOnTop ? amount : subtotal;
     const p = computePasarelaCommissionCOP(pasarelaBase, gateway);
     neto -= p.total;

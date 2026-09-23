@@ -4,16 +4,22 @@ import {
   type Firestore,
   type QuerySnapshot,
 } from "firebase-admin/firestore";
+import {ticketReservedOccupiesInventory} from "./checkout-hold";
 
-/** Estados que consumen cupo (alineado con countTicketsBySection). */
-export const TICKET_VALID_STATUSES: readonly string[] = [
+/** Estados confirmados que siempre consumen cupo. `reserved` se evalúa aparte (hold 10 min). */
+export const TICKET_CONFIRMED_STATUSES: readonly string[] = [
   "paid",
-  "reserved",
   "used",
   "redeemed",
 ];
 
-const TICKET_VALID = TICKET_VALID_STATUSES as unknown as string[];
+/** @deprecated Usar TICKET_CONFIRMED_STATUSES + holds vigentes. Se mantiene por compat. */
+export const TICKET_VALID_STATUSES: readonly string[] = [
+  ...TICKET_CONFIRMED_STATUSES,
+  "reserved",
+];
+
+const TICKET_CONFIRMED = TICKET_CONFIRMED_STATUSES as unknown as string[];
 
 /** Prefijo de clave de inventario por celda de mapa (palco / subdivisión). */
 export const MAP_ZONE_SLOT_PREFIX = "__mapZone__";
@@ -24,29 +30,43 @@ export function mapZoneSlotKey(mapZoneId: string): string {
 
 export type EventDataLike = DocumentData;
 
+function ticketDocOccupiesInventory(t: DocumentData, nowMs: number): boolean {
+  const status = String(t.ticketStatus || t.status || "");
+  if (["cancelled", "disabled", "expired"].includes(status)) return false;
+  if (t.transferredTo) return false;
+  if (t.ticketKind === "purchase_pass") return false;
+  if (status === "reserved") {
+    return ticketReservedOccupiesInventory(t, nowMs);
+  }
+  return TICKET_CONFIRMED.includes(status);
+}
+
+function addTicketToSlotCounts(
+  t: DocumentData,
+  bySection: Record<string, number>
+): number {
+  const mz = String(t.mapZoneId || "").trim();
+  /** Un palco ocupa una sola celda aunque el ticket lleve varias entradas (bundle). */
+  const qty = mz ? 1 : (t.quantity || 1);
+  const key = mz ? mapZoneSlotKey(mz) : (t.sectionName || t.sectionId || "General");
+  bySection[key] = (bySection[key] || 0) + qty;
+  return qty;
+}
+
 /**
- * Cuenta boletos vendidos/reservados por nombre de sección, o por mapa (palco) si hay mapZoneId.
+ * Cuenta boletos vendidos o con hold vigente por sección / palco.
  */
 export function countTicketsBySection(
-  ticketsSnap: QuerySnapshot
+  ticketsSnap: QuerySnapshot,
+  nowMs: number = Date.now()
 ): { bySection: Record<string, number>; totalSold: number } {
   const bySection: Record<string, number> = {};
   let totalSold = 0;
 
   ticketsSnap.forEach((doc) => {
     const t = doc.data();
-    const status = t.ticketStatus || t.status;
-    if (!TICKET_VALID.includes(status)) return;
-    if (["cancelled", "disabled"].includes(status)) return;
-    if (t.transferredTo) return;
-    if (t.ticketKind === "purchase_pass") return;
-
-    const mz = String(t.mapZoneId || "").trim();
-    /** Un palco ocupa una sola celda aunque el ticket lleve varias entradas (bundle). */
-    const qty = mz ? 1 : (t.quantity || 1);
-    const key = mz ? mapZoneSlotKey(mz) : (t.sectionName || t.sectionId || "General");
-    bySection[key] = (bySection[key] || 0) + qty;
-    totalSold += qty;
+    if (!ticketDocOccupiesInventory(t, nowMs)) return;
+    totalSold += addTicketToSlotCounts(t, bySection);
   });
 
   return { bySection, totalSold };
@@ -236,7 +256,7 @@ async function loadTicketUsedBySlotAggregates(
   eventData: EventDataLike
 ): Promise<Record<string, number>> {
   const slotKeys = allCapacitySlotKeysForEvent(eventData);
-  const st = [...TICKET_VALID_STATUSES];
+  const st = [...TICKET_CONFIRMED_STATUSES];
   const chunks: string[][] = [];
   for (let i = 0; i < slotKeys.length; i += 24) {
     chunks.push(slotKeys.slice(i, i + 24));
@@ -262,6 +282,25 @@ async function loadTicketUsedBySlotAggregates(
     }
   }
   return merged;
+}
+
+async function loadOccupyingReservedBySlot(
+  db: Firestore,
+  eventId: string,
+  nowMs: number
+): Promise<Record<string, number>> {
+  const snap = await db
+    .collection("tickets")
+    .where("eventId", "==", eventId)
+    .where("ticketStatus", "==", "reserved")
+    .get();
+  const bySection: Record<string, number> = {};
+  snap.forEach((doc) => {
+    const t = doc.data();
+    if (!ticketDocOccupiesInventory(t, nowMs)) return;
+    addTicketToSlotCounts(t, bySection);
+  });
+  return bySection;
 }
 
 /**
@@ -291,9 +330,13 @@ export async function loadMergedUsedFromTicketsAndReservations(
       .collection("tickets")
       .where("eventId", "==", eventId)
       .get();
-    tBy = countTicketsBySection(ticketsSnap).bySection;
+    tBy = countTicketsBySection(ticketsSnap, now).bySection;
   } else {
-    tBy = await loadTicketUsedBySlotAggregates(db, eventId, eventData);
+    const [confirmed, occupyingReserved] = await Promise.all([
+      loadTicketUsedBySlotAggregates(db, eventId, eventData),
+      loadOccupyingReservedBySlot(db, eventId, now),
+    ]);
+    tBy = mergedUsedBySection(confirmed, occupyingReserved);
   }
   return mergedUsedBySection(tBy, rBy);
 }

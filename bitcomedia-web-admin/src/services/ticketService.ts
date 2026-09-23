@@ -24,6 +24,28 @@ export async function resendTicketPdfEmail(params: {
   return result.data;
 }
 
+export async function confirmManualTicketPayment(params: {
+  ticketId: string;
+}): Promise<{ success: boolean; installmentPhase: string; ticketsEmailed: boolean }> {
+  const fn = httpsCallable<
+    { ticketId: string },
+    { success: boolean; installmentPhase: string; ticketsEmailed: boolean }
+  >(functions, 'confirmManualTicketPayment');
+  const result = await fn(params);
+  return result.data;
+}
+
+export async function releaseReservedTicket(params: {
+  ticketId: string;
+}): Promise<{ released: boolean; alreadyFree: boolean }> {
+  const fn = httpsCallable<
+    { ticketId: string },
+    { released: boolean; alreadyFree: boolean }
+  >(functions, 'releaseReservedTicket');
+  const result = await fn(params);
+  return result.data;
+}
+
 export interface CreateReservationResult {
   reservationId: string;
   expiresAt: number;

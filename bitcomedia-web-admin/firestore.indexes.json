@@ -89,6 +89,14 @@
         { "fieldPath": "event_id", "order": "ASCENDING" },
         { "fieldPath": "event_path", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "tickets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "eventId", "order": "ASCENDING" },
+        { "fieldPath": "ticketStatus", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
