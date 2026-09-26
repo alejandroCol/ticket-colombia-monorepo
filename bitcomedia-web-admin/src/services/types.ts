@@ -41,6 +41,8 @@ export interface EventSection {
    * Palcos divididos multipersona: `price` es el total del palco (incluye N personas); una venta genera N QR.
    */
   palco_multipersona?: boolean;
+  /** Oculta la localidad en la landing de compra (admin/taquilla no afectada). */
+  hidden_from_public_store?: boolean;
 }
 
 /** Forma de la zona de localidad en el mapa (por defecto rectángulo). */
@@ -240,6 +242,9 @@ export interface Ticket {
   balanceCOP?: number;
   balanceDueAt?: Timestamp;
   createdByAdmin?: string;
+  /** Boleto reemitido por transferencia end-user (ticket origen deshabilitado). */
+  transferredFrom?: string;
+  transferredTo?: string;
   // Campos de validación
   validatedAt?: Timestamp | null;
   validatedBy?: string | null;

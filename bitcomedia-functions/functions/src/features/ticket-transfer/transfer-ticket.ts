@@ -17,6 +17,28 @@ interface TransferTicketRequest {
 }
 
 /**
+ * Conserva el id de cobro real (OnePay / Mercado Pago) al reemitir el boleto.
+ * Solo usa `transfer_<ticketId>` si el origen no tiene pasarela conocida.
+ */
+function paymentIdsForTransferredTicket(
+  source: Record<string, unknown>,
+  sourceTicketId: string
+): {paymentId: string; preferenceId: string} {
+  const pref = String(source.preferenceId || "").trim();
+  const pay = String(source.paymentId || "").trim();
+  const gatewayRef = pref || pay;
+  const onepayLike = /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(gatewayRef);
+  const mpLike = /^3526506746-/i.test(gatewayRef);
+  if (onepayLike || mpLike) {
+    const preferenceId = pref || pay;
+    const paymentId = pay || pref;
+    return {paymentId, preferenceId};
+  }
+  const legacy = `transfer_${sourceTicketId}`;
+  return {paymentId: legacy, preferenceId: legacy};
+}
+
+/**
  * Transfiere un ticket a otra persona.
  * Anula el ticket actual y crea uno nuevo para el destinatario.
  * El destinatario recibe un correo con la nueva boleta.
@@ -126,6 +148,8 @@ export const transferTicket = functions
       const quantity = (ticketData.quantity as number) || 1;
       const amount = (ticketData.amount as number) || 0;
       const mzTr = String(ticketData.mapZoneId || "").trim();
+      const {paymentId: nextPaymentId, preferenceId: nextPreferenceId} =
+        paymentIdsForTransferredTicket(ticketData, ticketId);
 
       const newTicketDoc: Record<string, unknown> = {
         id: newTicketId,
@@ -145,8 +169,8 @@ export const transferTicket = functions
         ticketStatus: "paid",
         paymentStatus: "approved",
         paymentMethod: ticketData.paymentMethod || "transfer",
-        paymentId: `transfer_${ticketId}`,
-        preferenceId: `transfer_${ticketId}`,
+        paymentId: nextPaymentId,
+        preferenceId: nextPreferenceId,
         qrCode: qrCodeUrl,
         qrCodeData: qrCodeUrl,
         sectionId: ticketData.sectionId || null,

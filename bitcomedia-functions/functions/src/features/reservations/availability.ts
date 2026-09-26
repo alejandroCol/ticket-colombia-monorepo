@@ -472,6 +472,25 @@ export function usedInSectionMerged(
   );
 }
 
+type EventSectionLike = { id: string; hidden_from_public_store?: boolean };
+
+export function findEventSectionById(
+  eventData: EventDataLike,
+  sectionId: string | undefined
+): EventSectionLike | undefined {
+  const sid = String(sectionId || "").trim();
+  if (!sid) return undefined;
+  const sections = eventData.sections as EventSectionLike[] | undefined;
+  return sections?.find((s) => String(s.id || "").trim() === sid);
+}
+
+export function isSectionHiddenFromPublicStore(
+  eventData: EventDataLike,
+  sectionId: string | undefined
+): boolean {
+  return findEventSectionById(eventData, sectionId)?.hidden_from_public_store === true;
+}
+
 /**
  * Verifica que quepa `quantity` en la sección (servidor, al crear preferencia).
  */

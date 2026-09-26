@@ -26,6 +26,7 @@ import {
   buyerFeeFixedUnitCount,
 } from "../../utils/buyerServiceFee";
 import { computeDepositSplit, getAbonoRulesFromEvent } from "../../utils/abonoPricing";
+import { isSectionHiddenFromPublicStore } from "../../utils/eventSectionPublic";
 import type { PaymentConfigDoc } from "../../services";
 import { persistMercadoPagoReturnIntent } from "../../utils/mpCheckoutReturnIntent";
 import MercadoPagoCardPaymentStep from "../../components/MercadoPagoCardPaymentStep";
@@ -133,7 +134,9 @@ const CheckoutScreen: React.FC = () => {
 
   const selectedSection = useMemo(() => {
     if (!event?.sections?.length || !sectionId) return undefined;
-    return event.sections.find((s) => s.id === sectionId);
+    const sec = event.sections.find((s) => s.id === sectionId);
+    if (sec && isSectionHiddenFromPublicStore(sec)) return undefined;
+    return sec;
   }, [event, sectionId]);
 
   const seatsPerUnit = Math.max(1, selectedSection?.seats_per_unit ?? 1);
@@ -376,6 +379,12 @@ const CheckoutScreen: React.FC = () => {
         let s0: EventSection | undefined;
         if (secId0 && eventData.sections?.length) {
           s0 = eventData.sections.find((x) => x.id === secId0);
+          if (s0?.hidden_from_public_store) {
+            setError("Esta localidad no está disponible para compra en línea.");
+            setEvent(eventData);
+            setIsLoading(false);
+            return;
+          }
           if (s0) unit0 = s0.price;
         }
         const spu0 = Math.max(1, Number(s0?.seats_per_unit) || 1);

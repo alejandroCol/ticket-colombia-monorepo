@@ -2,10 +2,13 @@ import type { Timestamp } from 'firebase/firestore';
 import {
   getEventOrRecurringById,
   getExpensesByEventId,
+  getWithdrawalsByEventId,
   getOrganizerBuyerFee,
 } from '@services';
 import { aggregateEventRevenueBreakdown, normalizeGatewayCommissionConfig } from '@utils/revenueBreakdown';
 import type { OrganizerBuyerFeeInput } from '@utils/revenueBreakdown';
+import { aggregateSalesChannelBreakdown } from '@utils/salesChannelBreakdown';
+import { computeEventPasarelaBalances, type EventPasarelaBalances } from '@utils/pasarelaBalance';
 import { getTicketsByEventId, isTicketValidForSalesStats } from '@services/ticketService';
 import type { Ticket } from '@services/types';
 import type { AdminPaymentConfig } from '@services/firestore';
@@ -24,6 +27,8 @@ export interface EventBalanceRow extends ListedEvent {
   ticketsSold: number;
   ingresos: number;
   egresos: number;
+  /** Retiros registrados desde pasarela (OnePay, etc.). */
+  retirosPasarela: number;
   subtotalEntradas: number;
   tiqueteraFee: number;
   pasarelaTotal: number;
@@ -33,6 +38,7 @@ export interface EventBalanceRow extends ListedEvent {
   netoOrganizador: number;
   showPasarelaCommission: boolean;
   serviceFeeDeductedFromNeto: boolean;
+  pasarelaBalances: EventPasarelaBalances | null;
 }
 
 export const emptyMoneyBreakdown = {
@@ -45,6 +51,7 @@ export const emptyMoneyBreakdown = {
   netoOrganizador: 0,
   showPasarelaCommission: true,
   serviceFeeDeductedFromNeto: false,
+  pasarelaBalances: null,
 };
 
 export function validTicketsForBalance(tickets: Ticket[]): Ticket[] {
@@ -62,17 +69,19 @@ export async function loadEventBalanceRow(
   ctx: BalanceLoadContext
 ): Promise<EventBalanceRow> {
   try {
-    const [tickets, expenses, eventDoc] = await Promise.all([
+    const [tickets, expenses, withdrawals, eventDoc] = await Promise.all([
       getTicketsByEventId(listed.id),
       getExpensesByEventId(listed.id),
+      getWithdrawalsByEventId(listed.id),
       getEventOrRecurringById(listed.id),
     ]);
     const valid = validTicketsForBalance(tickets);
     const ticketsSold = valid.reduce((s, t) => s + (t.quantity || 1), 0);
     const ingresos = valid.reduce((s, t) => s + (t.amount || 0), 0);
     const egresos = expenses.reduce((s, e) => s + (e.amount || 0), 0);
+    const retirosPasarela = withdrawals.reduce((s, w) => s + (w.amount || 0), 0);
     if (!eventDoc) {
-      return { ...listed, ticketsSold, ingresos, egresos, ...emptyMoneyBreakdown };
+      return { ...listed, ticketsSold, ingresos, egresos, retirosPasarela, ...emptyMoneyBreakdown };
     }
     const orgId = String(listed.organizer_id || eventDoc.organizer_id || '').trim();
     let orgFee = ctx.orgFeeCache.get(orgId) ?? null;
@@ -88,11 +97,20 @@ export async function loadEventBalanceRow(
       orgFee,
       ctx.gateway
     );
+    const channel = aggregateSalesChannelBreakdown(
+      eventDoc,
+      valid,
+      ctx.globalFeesPercent,
+      orgFee,
+      ctx.gateway
+    );
+    const pasarelaBalances = computeEventPasarelaBalances(channel, withdrawals);
     return {
       ...listed,
       ticketsSold,
       ingresos,
       egresos,
+      retirosPasarela,
       subtotalEntradas: agg.subtotalEntradas,
       tiqueteraFee: agg.tiqueteraFee,
       pasarelaTotal: agg.pasarelaTotal,
@@ -102,6 +120,7 @@ export async function loadEventBalanceRow(
       netoOrganizador: agg.netoOrganizador,
       showPasarelaCommission: agg.showPasarelaCommission,
       serviceFeeDeductedFromNeto: agg.serviceFeeDeductedFromNeto,
+      pasarelaBalances,
     };
   } catch {
     return {
@@ -109,6 +128,7 @@ export async function loadEventBalanceRow(
       ticketsSold: 0,
       ingresos: 0,
       egresos: 0,
+      retirosPasarela: 0,
       ...emptyMoneyBreakdown,
     };
   }

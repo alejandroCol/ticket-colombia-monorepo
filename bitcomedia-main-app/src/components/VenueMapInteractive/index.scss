@@ -113,6 +113,13 @@
       }
     }
 
+    &--section-hidden {
+      cursor: not-allowed;
+      opacity: 0.55;
+      border-color: rgba($color-text-secondary, 0.45);
+      background: rgba(0, 0, 0, 0.28);
+    }
+
     &--circle {
       border-radius: 50%;
     }

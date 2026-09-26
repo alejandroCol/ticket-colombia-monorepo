@@ -495,6 +495,12 @@
     border-radius: 8px;
     padding: 1rem;
     margin-bottom: 1rem;
+
+    &--hidden-store {
+      opacity: 0.88;
+      border-style: dashed;
+      border-color: rgba($color-text-secondary, 0.45);
+    }
     
     .section-row {
       display: grid;

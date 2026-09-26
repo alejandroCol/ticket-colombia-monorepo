@@ -2273,7 +2273,10 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
                     const palcoCount = palcoZones.length;
                     const isDividedPalcoLocality = palcoCount > 1;
                     return (
-                    <div key={section.id} className="section-item">
+                    <div
+                      key={section.id}
+                      className={`section-item${section.hidden_from_public_store ? ' section-item--hidden-store' : ''}`}
+                    >
                       <div className="section-row">
                         <div className="form-group-inline">
                           <CustomInput
@@ -2391,6 +2394,26 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
                             </small>
                           </div>
                         )}
+                        <div className="form-group-inline section-abono-check">
+                          <label className="section-abono-check__label">
+                            <input
+                              type="checkbox"
+                              checked={section.hidden_from_public_store === true}
+                              onChange={(e) =>
+                                updateSection(index, 'hidden_from_public_store', e.target.checked)
+                              }
+                            />
+                            <span>
+                              Ocultar en tienda (landing)
+                              <br />
+                              <span className="section-abono-scope-note">
+                                No aparece en la lista de localidades para compra en línea; el mapa del evento
+                                sigue mostrando sus palcos (no seleccionables). Taquilla y admin pueden seguir
+                                vendiendo.
+                              </span>
+                            </span>
+                          </label>
+                        </div>
                         <div className="form-group-inline section-abono-check">
                           <label className="section-abono-check__label">
                             <input

@@ -252,6 +252,15 @@
     color: $color-text-primary;
   }
 
+  &__providers {
+    margin-top: 0.85rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba($color-accent, 0.12);
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+
   &__list {
     list-style: none;
     margin: 0;
@@ -289,6 +298,17 @@
     font-style: italic;
   }
 
+  &__disclaimer-line {
+    grid-column: 1 / -1;
+    font-size: 0.72rem;
+    line-height: 1.35;
+    opacity: 0.75;
+    font-style: italic;
+    color: rgba($color-text-primary, 0.85);
+    margin-top: -0.15rem;
+    padding-bottom: 0.25rem;
+  }
+
   &__neto {
     margin-top: 0.35rem;
     padding-top: 0.5rem;
@@ -299,6 +319,33 @@
     strong {
       color: #fcf3cf;
     }
+  }
+}
+
+.event-stats-channel-provider {
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.15);
+
+  &--onepay {
+    border-left: 3px solid rgba(#58d68d, 0.75);
+  }
+
+  &--mp {
+    border-left: 3px solid rgba(#5dade2, 0.85);
+  }
+
+  &__title {
+    margin: 0 0 0.45rem;
+    font-size: 0.8rem;
+    font-weight: $font-weight-bold;
+    color: $color-text-primary;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .event-stats-channel-card__list {
+    font-size: 0.82rem;
   }
 }
 
@@ -471,6 +518,13 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1.25rem;
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: flex-end;
+  }
 }
 
 .balance-title {
@@ -499,6 +553,25 @@
   padding: 1rem;
   background: rgba(0, 0, 0, 0.2);
   border-radius: 10px;
+}
+
+.balance-withdrawal-form__intro {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: $color-text-secondary;
+}
+
+.balance-withdrawals-list {
+  border-left-color: rgba(#f5b041, 0.35);
+}
+
+.balance-withdrawal-item {
+  font-size: 0.88rem;
+}
+
+.balance-pasarela-wrap {
+  margin: 0.25rem 0 0.5rem;
 }
 
 .balance-summary {
@@ -540,6 +613,17 @@
   &.balance-row--expense {
     .balance-row-icon { color: #e74c3c; }
     .balance-row-value { color: #e74c3c; }
+  }
+
+  &.balance-row--withdrawal {
+    .balance-row-icon { color: #f5b041; }
+    .balance-row-value { color: #f5b041; }
+  }
+
+  &.balance-row--pasarela-saldo {
+    background: rgba(#5dade2, 0.12);
+    border: 1px solid rgba(#5dade2, 0.25);
+    .balance-row-value { color: #85c1e9; }
   }
 
   &.balance-row--profit {

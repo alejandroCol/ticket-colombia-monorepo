@@ -177,8 +177,38 @@ export function exportEventSalesChannelToExcel(
     gateway
   );
 
+  const providerSubRow = (
+    label: string,
+    slice: SalesChannelSlice,
+    netoCOP: number
+  ): SummaryRow => ({
+    canal: label,
+    ordenes: slice.ticketDocs,
+    boletas: slice.ticketUnits,
+    recaudadoCOP: slice.totalCobrado,
+    subtotalEntradasCOP: slice.subtotalEntradas,
+    tarifaTiqueteraCOP: 0,
+    tarifaTiqueteraNota: 'Ver total pasarela (arriba)',
+    comisionPasarelaCOP: slice.pasarelaTotal,
+    netoOrganizadorCOP: netoCOP,
+  });
+
   const summaryRows: SummaryRow[] = [
     sliceToSummaryRow('Pasarela (en línea)', breakdown.gateway, breakdown, 'gateway'),
+    ...(breakdown.gatewayOnepay.ticketUnits > 0
+      ? [
+          providerSubRow('  └ OnePay', breakdown.gatewayOnepay, breakdown.gatewayOnepay.netoOrganizador),
+        ]
+      : []),
+    ...(breakdown.gatewayMercadopago.ticketUnits > 0
+      ? [
+          providerSubRow(
+            '  └ Mercado Pago',
+            breakdown.gatewayMercadopago,
+            breakdown.gatewayMercadopago.totalCobrado
+          ),
+        ]
+      : []),
     sliceToSummaryRow('Manual / taquilla', breakdown.manual, breakdown, 'manual'),
     sliceToSummaryRow(
       'Total evento',

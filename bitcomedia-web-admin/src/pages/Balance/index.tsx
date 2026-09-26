@@ -18,6 +18,7 @@ import {
   type ListedEvent,
   type EventBalanceRow,
 } from '@utils/eventBalanceLoad';
+import BalancePasarelaBreakdown from '@components/BalancePasarelaBreakdown';
 import {
   IconTickets,
   IconRevenue,
@@ -252,52 +253,15 @@ const BalanceScreen: React.FC = () => {
                   </div>
                   <div className="balance-money-breakdown" aria-label="Desglose de dinero">
                     <div className="balance-money-breakdown__row">
-                      <span>
-                        {ev.serviceFeeDeductedFromNeto
-                          ? 'Total cobrado al comprador (precio de lista)'
-                          : 'Subtotal entradas (sin tarifa servicio)'}
-                      </span>
-                      <span>{formatCOP(ev.subtotalEntradas)}</span>
+                      <span>Neto organizador (todas las ventas)</span>
+                      <span>{formatCOP(ev.netoOrganizador)}</span>
                     </div>
-                    <div className="balance-money-breakdown__row balance-money-breakdown__row--muted">
-                      <span>
-                        {ev.serviceFeeDeductedFromNeto
-                          ? 'Tarifa servicio tiquetera (descontada del neto)'
-                          : 'Tarifa servicio tiquetera'}
-                      </span>
-                      <span>
-                        {ev.serviceFeeDeductedFromNeto
-                          ? `−${formatCOP(ev.tiqueteraFee)}`
-                          : formatCOP(ev.tiqueteraFee)}
-                      </span>
-                    </div>
-                    {ev.showPasarelaCommission && (
-                      <>
-                        <div className="balance-money-breakdown__row balance-money-breakdown__row--accent">
-                          <span>Comisión pasarela (estimada)</span>
-                          <span>−{formatCOP(ev.pasarelaTotal)}</span>
-                        </div>
-                        <div className="balance-money-breakdown__sub">
-                          <span>% variable</span>
-                          <span>{formatCOP(ev.pasarelaPct)}</span>
-                        </div>
-                        <div className="balance-money-breakdown__sub">
-                          <span>Valor fijo (por transacción)</span>
-                          <span>{formatCOP(ev.pasarelaFixed)}</span>
-                        </div>
-                        <div className="balance-money-breakdown__sub">
-                          <span>IVA sobre base pasarela</span>
-                          <span>{formatCOP(ev.pasarelaIva)}</span>
-                        </div>
-                      </>
+                    {ev.pasarelaBalances && (
+                      <BalancePasarelaBreakdown balances={ev.pasarelaBalances} formatCOP={formatCOP} compact />
                     )}
                     <p className="balance-money-breakdown__hint">
-                      {ev.showPasarelaCommission
-                        ? 'El neto resta la comisión de pasarela (estimada, solo ventas en línea OnePay). '
-                        : 'Mercado Pago: sin estimación de comisión de pasarela. '}
-                      {ev.serviceFeeDeductedFromNeto
-                        ? 'La tarifa de servicio se descuenta del neto porque no se cobra aparte al comprador.'
-                        : 'El total cobrado al comprador es subtotal + tarifa tiquetera.'}
+                      Saldo por pasarela: recaudado en línea − tarifa tiquetera (OnePay si hay cobros OnePay; solo MP si
+                      no hay OnePay) − comisión estimada − retiros registrados.
                     </p>
                   </div>
                 </div>

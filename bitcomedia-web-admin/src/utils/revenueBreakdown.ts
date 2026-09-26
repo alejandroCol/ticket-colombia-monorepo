@@ -1,4 +1,5 @@
 import type { Event, Ticket } from '@services/types';
+import { ticketReconcilesWithOnepay } from '@utils/ticketPaymentReference';
 
 /** Tarifa al comprador por organizador (misma prioridad que el backend). */
 export type OrganizerBuyerFeeInput = { type: string; value: number } | null;
@@ -105,6 +106,20 @@ export function ticketIsTaquillaManualSale(t: Ticket): boolean {
 export function ticketIsGatewayOnlineSale(t: Ticket): boolean {
   if (ticketIsManualLike(t)) return false;
   return Math.round(Number(t.amount) || 0) > 0;
+}
+
+/** Checkout Mercado Pago (preferencia legacy `3526506746-…` u otro indicador explícito). */
+export function ticketUsesMercadoPagoCheckout(t: Ticket): boolean {
+  const pref = String(t.preferenceId || '').trim();
+  if (/^3526506746-/i.test(pref)) return true;
+  const pm = String(t.paymentMethod || '').toLowerCase();
+  return pm.includes('mercadopago');
+}
+
+/** Cobro en línea efectivamente por OnePay (excluye Mercado Pago; incluye reemisiones `transfer_*`). */
+export function ticketUsesOnepayCheckout(t: Ticket): boolean {
+  if (!ticketIsGatewayOnlineSale(t)) return false;
+  return !ticketUsesMercadoPagoCheckout(t);
 }
 
 /**
@@ -297,7 +312,6 @@ export function aggregateEventRevenueBreakdown(
     const qty = Math.max(1, Math.floor(Number(t.quantity) || 1));
     const amount = Math.round(Number(t.amount) || 0);
     totalCobrado += amount;
-    const manual = ticketIsManualLike(t);
     const gatewaySale = ticketIsGatewayOnlineSale(t);
     const sid = (t as { sectionId?: string }).sectionId;
     const mz = (t as { mapZoneId?: string }).mapZoneId;
@@ -316,7 +330,11 @@ export function aggregateEventRevenueBreakdown(
     tiqueteraFee += tf;
     tiqueteraFeeDeductedFromNeto += tiqueteraFeeDeductedFromOrganizerNeto(t, event, tf);
 
-    if (!manual && amount > 0 && showPasarelaCommission) {
+    if (
+      amount > 0 &&
+      showPasarelaCommission &&
+      ticketReconcilesWithOnepay(t)
+    ) {
       const pasarelaBase = feeOnTop ? amount : subtotal;
       const p = computePasarelaCommissionCOP(pasarelaBase, gateway);
       pasarelaPercentPart += p.percentPart;

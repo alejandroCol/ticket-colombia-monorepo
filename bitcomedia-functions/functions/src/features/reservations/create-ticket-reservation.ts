@@ -8,6 +8,7 @@ import {
   remainingForSection,
   seatsPerUnitForSection,
   sectionRequiresMapZonePick,
+  isSectionHiddenFromPublicStore,
 } from "./availability";
 import {CHECKOUT_HOLD_MS} from "./checkout-hold";
 
@@ -56,6 +57,13 @@ export const createTicketReservation = functions.https.onCall(
       throw new functions.https.HttpsError("not-found", "Evento no encontrado");
     }
     const eventData = eventDoc.data()!;
+
+    if (sectionId && isSectionHiddenFromPublicStore(eventData, sectionId)) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Esta localidad no está disponible para compra en línea."
+      );
+    }
 
     const palcoZones =
       sectionId ? mapZonesForSection(eventData, sectionId) : [];

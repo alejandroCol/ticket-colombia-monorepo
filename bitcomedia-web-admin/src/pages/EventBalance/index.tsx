@@ -18,6 +18,7 @@ import {
 import type { Event } from '@services/types';
 import type { ListedEvent, EventBalanceRow } from '@utils/eventBalanceLoad';
 import { loadEventBalanceRow, buildBalanceLoadContext } from '@utils/eventBalanceLoad';
+import BalancePasarelaBreakdown from '@components/BalancePasarelaBreakdown';
 import {
   IconTickets,
   IconRevenue,
@@ -230,54 +231,28 @@ const EventBalanceScreen: React.FC = () => {
                   <span className="balance-kpi__value">{formatCOP(ev.egresos)}</span>
                 </div>
               </div>
+              {ev.retirosPasarela > 0 && (
+                <div className="balance-kpi balance-kpi--expense">
+                  <div className="balance-kpi__icon" aria-hidden>
+                    <IconRevenue />
+                  </div>
+                  <div className="balance-kpi__body">
+                    <span className="balance-kpi__label">Retiros pasarela (registrados)</span>
+                    <span className="balance-kpi__value">{formatCOP(ev.retirosPasarela)}</span>
+                  </div>
+                </div>
+              )}
               <div className="balance-money-breakdown" aria-label="Desglose de dinero">
                 <div className="balance-money-breakdown__row">
-                  <span>
-                    {ev.serviceFeeDeductedFromNeto
-                      ? 'Total cobrado al comprador (precio de lista)'
-                      : 'Subtotal entradas (sin tarifa servicio)'}
-                  </span>
-                  <span>{formatCOP(ev.subtotalEntradas)}</span>
+                  <span>Neto organizador (todas las ventas)</span>
+                  <span>{formatCOP(ev.netoOrganizador)}</span>
                 </div>
-                <div className="balance-money-breakdown__row balance-money-breakdown__row--muted">
-                  <span>
-                    {ev.serviceFeeDeductedFromNeto
-                      ? 'Tarifa servicio tiquetera (descontada del neto)'
-                      : 'Tarifa servicio tiquetera'}
-                  </span>
-                  <span>
-                    {ev.serviceFeeDeductedFromNeto
-                      ? `−${formatCOP(ev.tiqueteraFee)}`
-                      : formatCOP(ev.tiqueteraFee)}
-                  </span>
-                </div>
-                {ev.showPasarelaCommission && (
-                  <>
-                    <div className="balance-money-breakdown__row balance-money-breakdown__row--accent">
-                      <span>Comisión pasarela (estimada)</span>
-                      <span>−{formatCOP(ev.pasarelaTotal)}</span>
-                    </div>
-                    <div className="balance-money-breakdown__sub">
-                      <span>% variable</span>
-                      <span>{formatCOP(ev.pasarelaPct)}</span>
-                    </div>
-                    <div className="balance-money-breakdown__sub">
-                      <span>Valor fijo (por transacción)</span>
-                      <span>{formatCOP(ev.pasarelaFixed)}</span>
-                    </div>
-                    <div className="balance-money-breakdown__sub">
-                      <span>IVA sobre base pasarela</span>
-                      <span>{formatCOP(ev.pasarelaIva)}</span>
-                    </div>
-                  </>
+                {ev.pasarelaBalances && (
+                  <BalancePasarelaBreakdown balances={ev.pasarelaBalances} formatCOP={formatCOP} compact />
                 )}
                 <p className="balance-money-breakdown__hint">
-                  {ev.showPasarelaCommission
-                    ? 'El neto resta la comisión de pasarela (estimada, solo ventas en línea OnePay). '
-                    : 'Mercado Pago: sin estimación de comisión de pasarela. '}
-                  {ev.serviceFeeDeductedFromNeto
-                    ? 'La tarifa de servicio se descuenta del neto porque no se cobra aparte al comprador.'
-                    : 'El total cobrado al comprador es subtotal + tarifa tiquetera.'}
+                  El saldo por pasarela resta tarifa tiquetera y comisión OnePay (est.) del recaudado en línea; los
+                  retiros se descuentan de OnePay o Mercado Pago según el registro. Taquilla no pasa por pasarela.
                 </p>
               </div>
             </div>

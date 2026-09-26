@@ -43,6 +43,9 @@ export {
   addExpense,
   deleteExpense,
   getExpensesByEventId,
+  getWithdrawalsByEventId,
+  addGatewayWithdrawal,
+  deleteGatewayWithdrawal,
   getTotalRevenue,
   getAdminUsersList,
   getAuditActorUsersList,
@@ -110,7 +113,12 @@ export type {
   VenueMapTemplateDocument,
   VenueMapTemplateZoneLayout,
 } from './types';
-export type { BannerItem, OrganizerBuyerFeeDoc, OrganizerEventsIndex } from './firestore';
+export type {
+  BannerItem,
+  GatewayWithdrawal,
+  OrganizerBuyerFeeDoc,
+  OrganizerEventsIndex,
+} from './firestore';
 export type { TicketData, CreateReservationResult } from './ticketService';
 
 export {

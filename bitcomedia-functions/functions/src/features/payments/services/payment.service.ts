@@ -24,6 +24,7 @@ import {
 import {consumeReservation, restoreReservationActive} from "../../reservations/consume-reservation";
 import {
   assertEnoughCapacityForPurchase,
+  isSectionHiddenFromPublicStore,
   capacityBucketAndCount,
 } from "../../reservations/availability";
 import {
@@ -405,6 +406,9 @@ export class MercadoPagoPaymentService implements PaymentService {
       }
 
       await consumeReservation(db, reservationId, request);
+      if (isSectionHiddenFromPublicStore(eventData, request.metadata?.sectionId)) {
+        throw new Error("Esta localidad no está disponible para compra en línea.");
+      }
       try {
         await assertEnoughCapacityForPurchase(
           db,

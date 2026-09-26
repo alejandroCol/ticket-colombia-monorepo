@@ -523,6 +523,51 @@ export const deleteExpense = async (expenseId: string): Promise<void> => {
   await updateDoc(expenseRef, { deleted: true, deletedAt: new Date() });
 };
 
+/** Retiro de fondos desde la pasarela (OnePay, etc.) — registro manual del organizador. */
+export interface GatewayWithdrawal {
+  id: string;
+  eventId: string;
+  amount: number;
+  /** Fecha en que el dinero salió de la pasarela (YYYY-MM-DD). */
+  date: string;
+  description?: string;
+  provider?: 'onepay' | 'mercadopago' | 'other';
+  createdAt?: unknown;
+  deleted?: boolean;
+}
+
+export const getWithdrawalsByEventId = async (eventId: string): Promise<GatewayWithdrawal[]> => {
+  try {
+    const ref = collection(db, 'event_withdrawals');
+    const q = query(ref, where('eventId', '==', eventId));
+    const snap = await getDocs(q);
+    return snap.docs
+      .filter((d) => !d.data().deleted)
+      .map((d) => ({ id: d.id, ...d.data() } as GatewayWithdrawal))
+      .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  } catch (error) {
+    console.error('Error fetching withdrawals by event:', error);
+    return [];
+  }
+};
+
+export const addGatewayWithdrawal = async (
+  data: Omit<GatewayWithdrawal, 'id'>
+): Promise<string> => {
+  const ref = collection(db, 'event_withdrawals');
+  const docRef = await addDoc(ref, {
+    ...data,
+    provider: data.provider || 'onepay',
+    createdAt: new Date(),
+  });
+  return docRef.id;
+};
+
+export const deleteGatewayWithdrawal = async (withdrawalId: string): Promise<void> => {
+  const wRef = doc(db, 'event_withdrawals', withdrawalId);
+  await updateDoc(wRef, { deleted: true, deletedAt: new Date() });
+};
+
 // Get total revenue from tickets
 export const getTotalRevenue = async (): Promise<number> => {
   try {

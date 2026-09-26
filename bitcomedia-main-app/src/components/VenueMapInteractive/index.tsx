@@ -17,6 +17,8 @@ export interface VenueMapInteractiveProps {
   selectedMapZoneId?: string | null;
   /** Ocupación por id de zona (tickets + reservas). */
   mapZoneSold?: Record<string, number>;
+  /** Localidades ocultas en tienda: celdas visibles en mapa pero no seleccionables. */
+  hiddenSectionIds?: ReadonlySet<string>;
   onSelectZoneOnMap: (section: EventSection, zone: VenueMapZone) => void;
 }
 
@@ -33,6 +35,7 @@ const VenueMapInteractive: React.FC<VenueMapInteractiveProps> = ({
   selectedSectionId,
   selectedMapZoneId = null,
   mapZoneSold = {},
+  hiddenSectionIds,
   onSelectZoneOnMap,
 }) => {
   const resolveSection = (sectionId: string) =>
@@ -85,6 +88,7 @@ const VenueMapInteractive: React.FC<VenueMapInteractiveProps> = ({
             const sec = resolveSection(z.sectionId);
             if (!sec) return null;
             const isPalcoCell = z.palco_index != null;
+            const sectionHidden = hiddenSectionIds?.has(z.sectionId) === true;
             const soldOut = isMapZoneUnavailable(z, mapZoneSold);
             const zoneSelected = selectedMapZoneId === z.id;
             const sectionSelected = selectedSectionId === z.sectionId;
@@ -100,12 +104,14 @@ const VenueMapInteractive: React.FC<VenueMapInteractiveProps> = ({
               <button
                 key={z.id}
                 type="button"
-                disabled={soldOut}
+                disabled={soldOut || sectionHidden}
                 className={`venue-map-interactive__zone${
                   z.shape === "circle" ? " venue-map-interactive__zone--circle" : ""
                 }${soldOut ? " venue-map-interactive__zone--soldout" : ""}${
-                  active ? " venue-map-interactive__zone--active" : ""
-                }${hasTint ? " venue-map-interactive__zone--custom" : ""}`}
+                  sectionHidden && !soldOut ? " venue-map-interactive__zone--section-hidden" : ""
+                }${active ? " venue-map-interactive__zone--active" : ""}${
+                  hasTint ? " venue-map-interactive__zone--custom" : ""
+                }`}
                 style={{
                   left: `${z.x}%`,
                   top: `${z.y}%`,
@@ -124,7 +130,7 @@ const VenueMapInteractive: React.FC<VenueMapInteractiveProps> = ({
                 onFocus={() => setHoveredZoneId(z.id)}
                 onBlur={() => setHoveredZoneId(null)}
                 onClick={() => {
-                  if (!soldOut) onSelectZoneOnMap(sec, z);
+                  if (!soldOut && !sectionHidden) onSelectZoneOnMap(sec, z);
                 }}
               >
                 {!hidePublicZoneLabels ? (

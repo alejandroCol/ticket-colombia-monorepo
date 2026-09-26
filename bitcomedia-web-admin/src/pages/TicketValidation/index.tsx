@@ -392,6 +392,12 @@ const TicketValidationScreen: React.FC = () => {
                   <span className="info-value">{ticket.paymentId}</span>
                 </div>
               )}
+              {(ticket as { transferredFrom?: string }).transferredFrom && (
+                <div className="info-row">
+                  <span className="info-label">Transferido desde:</span>
+                  <span className="info-value">{(ticket as { transferredFrom?: string }).transferredFrom}</span>
+                </div>
+              )}
               <div className="info-row">
                 <span className="info-label">Fecha de Creación:</span>
                 <span className="info-value">{formatDate(ticket.createdAt)}</span>

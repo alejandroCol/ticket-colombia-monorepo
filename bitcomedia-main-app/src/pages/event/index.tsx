@@ -29,6 +29,12 @@ import {
   palcoCellsForSection,
   sectionRequiresMapZonePick,
 } from '../../utils/venueMapSection';
+import {
+  filterPublicStoreSections,
+  isSectionHiddenFromPublicStore,
+  pickDefaultPublicSection,
+  sortSectionsSoldOutLast,
+} from '../../utils/eventSectionPublic';
 
 function displayAvailable(remaining: number, capacity: number): number {
   if (capacity <= 0) return 0;
@@ -112,6 +118,22 @@ const EventDetailScreen: React.FC = () => {
   const buyerServiceFeeShownSeparately = event?.buyer_service_fee_shown_separately !== false;
 
   const sections = event?.sections && event.sections.length > 0 ? event.sections : null;
+
+  const sectionRemainingForSort = (sec: EventSection) =>
+    event
+      ? sectionEffectiveRemaining(sec, availability, mapZoneSold, event)
+      : sectionRemaining(sec, availability);
+
+  const hiddenPublicSectionIds = useMemo(() => {
+    if (!sections) return new Set<string>();
+    return new Set(sections.filter(isSectionHiddenFromPublicStore).map((s) => s.id));
+  }, [sections]);
+
+  const publicStoreSections = useMemo(() => {
+    if (!sections) return null;
+    return sortSectionsSoldOutLast(filterPublicStoreSections(sections), sectionRemainingForSort);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- availability/map drive sort
+  }, [sections, availability, mapZoneSold, event]);
   /** En palco multipersona dividido, `price` en Firestore es el total del palco (incluye las N personas). */
   const price = selectedSection ? selectedSection.price : (event?.ticket_price ?? 0);
   const priceLabelForBooking = (() => {
@@ -182,8 +204,9 @@ const EventDetailScreen: React.FC = () => {
         if (seedMatches && seedEvent) {
           setEvent(seedEvent);
           const seedSecs = seedEvent.sections;
-          if (seedSecs?.length) setSelectedSection(seedSecs[0]);
-          else setSelectedSection(null);
+          if (seedSecs?.length) {
+            setSelectedSection(pickDefaultPublicSection(seedSecs, (s) => sectionRemaining(s, {})) ?? null);
+          } else setSelectedSection(null);
           setAvailability({});
           setTotalSold(0);
           setAvailabilityReady(false);
@@ -235,8 +258,11 @@ const EventDetailScreen: React.FC = () => {
           }
         })();
         const secs = eventData.sections;
-        if (secs?.length) setSelectedSection(secs[0]);
-        else setSelectedSection(null);
+        if (secs?.length) {
+          setSelectedSection(
+            pickDefaultPublicSection(secs, (s) => sectionRemaining(s, {})) ?? null
+          );
+        } else setSelectedSection(null);
 
         if (!seedMatches) {
           setIsLoading(false);
@@ -282,19 +308,34 @@ const EventDetailScreen: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- slug dispara recarga; state se lee del último `location`.
   }, [slug]);
 
-  /** Si la localidad por defecto quedó sin cupo, pasar a la primera con cupo */
+  /** Localidad visible por defecto; si quedó oculta o agotada, pasar a otra con cupo. */
   useEffect(() => {
-    if (!sections?.length || !event) return;
-    if (!selectedSection) return;
-    if (sectionEffectiveRemaining(selectedSection, availability, mapZoneSold, event) > 0) return;
-    const next = sections.find((s) =>
-      sectionEffectiveRemaining(s, availability, mapZoneSold, event) > 0
-    );
-    if (next) {
+    if (!sections?.length || !event || !availabilityReady) return;
+    const rem = (s: EventSection) => sectionEffectiveRemaining(s, availability, mapZoneSold, event);
+    const visible = filterPublicStoreSections(sections);
+    if (visible.length === 0) {
+      setSelectedSection(null);
+      setSelectedMapZoneId(null);
+      return;
+    }
+    const sorted = sortSectionsSoldOutLast(visible, rem);
+    const currentOk =
+      selectedSection &&
+      !isSectionHiddenFromPublicStore(selectedSection) &&
+      rem(selectedSection) > 0;
+    if (currentOk) return;
+    const next = sorted.find((s) => rem(s) > 0) ?? sorted[0];
+    if (next && next.id !== selectedSection?.id) {
+      setSelectedSection(next);
+      setSelectedMapZoneId(null);
+    } else if (
+      selectedSection &&
+      (isSectionHiddenFromPublicStore(selectedSection) || rem(selectedSection) <= 0)
+    ) {
       setSelectedSection(next);
       setSelectedMapZoneId(null);
     }
-  }, [sections, availability, mapZoneSold, event, selectedSection]);
+  }, [sections, availability, mapZoneSold, event, selectedSection, availabilityReady]);
 
   /** Palcos divididos: una sola compra; la cantidad visible es siempre 1. */
   useEffect(() => {
@@ -329,6 +370,11 @@ const EventDetailScreen: React.FC = () => {
     }
 
     if (!palcoPickRequired && ticketQuantity > remaining) return;
+
+    if (selectedSection && isSectionHiddenFromPublicStore(selectedSection)) {
+      alert('Esta localidad no está disponible para compra en línea.');
+      return;
+    }
 
     if (selectedSection && isPalcoSectionEvent(event, selectedSection.id) && !selectedMapZoneId) {
       alert('Elige un palco en el mapa antes de continuar.');
@@ -445,6 +491,7 @@ const EventDetailScreen: React.FC = () => {
       return true;
     }
     if (sections && selectedSection && event) {
+      if (isSectionHiddenFromPublicStore(selectedSection)) return true;
       if (sectionEffectiveRemaining(selectedSection, availability, mapZoneSold, event) <= 0) {
         return true;
       }
@@ -545,7 +592,9 @@ const EventDetailScreen: React.FC = () => {
                     selectedSectionId={selectedSection?.id}
                     selectedMapZoneId={selectedMapZoneId}
                     mapZoneSold={mapZoneSold}
+                    hiddenSectionIds={hiddenPublicSectionIds}
                     onSelectZoneOnMap={(sec, z) => {
+                      if (isSectionHiddenFromPublicStore(sec)) return;
                       setSelectedSection(sec);
                       setSelectedMapZoneId(z.id);
                     }}
@@ -557,13 +606,13 @@ const EventDetailScreen: React.FC = () => {
                   Elige el <strong>número de palco</strong> tocando el mapa.
                 </p>
               )}
-              {sections && (
+              {publicStoreSections && publicStoreSections.length > 0 && (
                 <div className="event-section-picker" role="radiogroup" aria-label="Localidad">
                   <span className="event-section-picker__label" id="section-picker-label">
                     Localidad
                   </span>
                   <div className="event-section-picker__grid" aria-labelledby="section-picker-label">
-                    {sections.map((sec) => {
+                    {publicStoreSections.map((sec) => {
                       const rem = sectionEffectiveRemaining(sec, availability, mapZoneSold, event);
                       const palcoGrid = isPalcoSectionEvent(event, sec.id);
                       const shown =
@@ -614,14 +663,22 @@ const EventDetailScreen: React.FC = () => {
                   </div>
                 </div>
               )}
+              {(!publicStoreSections || publicStoreSections.length === 0) &&
+                sections &&
+                sections.length > 0 && (
+                <p className="availability-pill availability-pill--warn">
+                  No hay localidades disponibles para compra en línea en este momento.
+                </p>
+              )}
               {!sections && !hidePublicRemaining && (
                 <p className="availability-pill availability-pill--solo">
                   <span className="availability-pill__dot" aria-hidden />
                   Quedan {showAvailable} entradas
                 </p>
               )}
-              {sections &&
+              {publicStoreSections &&
                 selectedSection &&
+                !isSectionHiddenFromPublicStore(selectedSection) &&
                 sectionEffectiveRemaining(selectedSection, availability, mapZoneSold, event) > 0 &&
                 !hidePublicRemaining && (
                 <p className="availability-pill">
@@ -650,8 +707,9 @@ const EventDetailScreen: React.FC = () => {
                   ) : null}
                 </p>
               )}
-              {sections &&
+              {publicStoreSections &&
                 selectedSection &&
+                !isSectionHiddenFromPublicStore(selectedSection) &&
                 sectionEffectiveRemaining(selectedSection, availability, mapZoneSold, event) <= 0 && (
                 <p className="availability-pill availability-pill--warn">
                   Esta localidad no tiene cupo. Elige otra.

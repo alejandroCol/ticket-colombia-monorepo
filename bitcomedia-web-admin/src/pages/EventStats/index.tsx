@@ -14,6 +14,9 @@ import {
   getExpensesByEventId,
   addExpense,
   deleteExpense,
+  getWithdrawalsByEventId,
+  addGatewayWithdrawal,
+  deleteGatewayWithdrawal,
   getAnyPartnerGrantForTicketEvent,
   resolveEventCollection,
   getPaymentConfig,
@@ -21,7 +24,10 @@ import {
 } from '@services';
 import { aggregateEventRevenueBreakdown, normalizeGatewayCommissionConfig } from '@utils/revenueBreakdown';
 import type { OrganizerBuyerFeeInput } from '@utils/revenueBreakdown';
-import { aggregateSalesChannelBreakdown } from '@utils/salesChannelBreakdown';
+import {
+  aggregateSalesChannelBreakdown,
+  ONEPAY_PASARELA_COMMISSION_DISCLAIMER,
+} from '@utils/salesChannelBreakdown';
 import { getTicketsByEventId, isTicketReservedHold, filterSoldEntradasTicketsForAdminStats } from '@services/ticketService';
 import {
   IconTickets,
@@ -34,13 +40,15 @@ import {
 } from '@components/EventStatsIcons';
 import type { Event, EventSection } from '@services/types';
 import type { Ticket } from '@services/types';
-import type { Expense } from '@services/firestore';
+import type { Expense, GatewayWithdrawal } from '@services/firestore';
 import { exportTicketsToExcel } from '@utils/exportTicketsExcel';
 import { ticketDocUnits } from '@utils/ticketListDisplay';
 import { buildDailySalesSeries, defaultLastNDaysRange } from '@utils/salesTimeSeries';
 import { duplicateSectionNames, ticketBelongsToSection } from '@utils/eventReportFilters';
 import SalesCurveChart from '@components/SalesCurveChart';
 import SectionRadarChart from '@components/SectionRadarChart';
+import BalancePasarelaBreakdown from '@components/BalancePasarelaBreakdown';
+import { computeEventPasarelaBalances } from '@utils/pasarelaBalance';
 import './index.scss';
 
 interface SectionStats {
@@ -65,12 +73,17 @@ const EventStatsScreen: React.FC = () => {
   const [event, setEvent] = useState<Event | null>(null);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [withdrawals, setWithdrawals] = useState<GatewayWithdrawal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddExpense, setShowAddExpense] = useState(false);
+  const [showAddWithdrawal, setShowAddWithdrawal] = useState(false);
   const [newDesc, setNewDesc] = useState('');
   const [newAmount, setNewAmount] = useState('');
   const [newCategory, setNewCategory] = useState('');
+  const [withdrawalDesc, setWithdrawalDesc] = useState('');
+  const [withdrawalAmount, setWithdrawalAmount] = useState('');
+  const [withdrawalDate, setWithdrawalDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [saving, setSaving] = useState(false);
   const [canEditExpenses, setCanEditExpenses] = useState(false);
   const [eventCollection, setEventCollection] = useState<'events' | 'recurring_events' | null>(null);
@@ -94,15 +107,17 @@ const EventStatsScreen: React.FC = () => {
     try {
       setLoading(true);
       setMoneyCtx(null);
-      const [eventData, ticketsData, expensesData, coll] = await Promise.all([
+      const [eventData, ticketsData, expensesData, withdrawalsData, coll] = await Promise.all([
         getEventOrRecurringById(eventId),
         getTicketsByEventId(eventId),
         getExpensesByEventId(eventId),
+        getWithdrawalsByEventId(eventId),
         resolveEventCollection(eventId),
       ]);
       setEvent(eventData || null);
       setTickets(ticketsData || []);
       setExpenses(expensesData || []);
+      setWithdrawals(withdrawalsData || []);
       setEventCollection(coll);
       if (eventData?.organizer_id) {
         const [pay, orgDoc] = await Promise.all([
@@ -175,6 +190,7 @@ const EventStatsScreen: React.FC = () => {
   const totalQuantity = soldTicketsForStats.reduce((sum, t) => sum + ticketDocUnits(t), 0);
   const uniqueBuyers = new Set(soldTicketsForStats.map((t) => t.buyerEmail || t.metadata?.userName)).size;
   const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+  const totalWithdrawals = withdrawals.reduce((sum, w) => sum + (w.amount || 0), 0);
 
   const moneyAggr = useMemo(() => {
     if (!event || !moneyCtx) return null;
@@ -198,7 +214,13 @@ const EventStatsScreen: React.FC = () => {
     );
   }, [event, soldTicketsForStats, moneyCtx]);
 
-  const profitNetoVsEgresos = moneyAggr ? moneyAggr.netoOrganizador - totalExpenses : null;
+  const pasarelaBalances = useMemo(() => {
+    if (!channelBreakdown) return null;
+    return computeEventPasarelaBalances(channelBreakdown, withdrawals);
+  }, [channelBreakdown, withdrawals]);
+  const profitNetoVsEgresos = moneyAggr
+    ? moneyAggr.netoOrganizador - totalExpenses - totalWithdrawals
+    : null;
 
   const chartRangeInvalid = chartFrom > chartTo;
   const salesSeries = useMemo(() => {
@@ -302,6 +324,35 @@ const EventStatsScreen: React.FC = () => {
   const handleDeleteExpense = async (id: string) => {
     if (!confirm('¿Eliminar este egreso?')) return;
     await deleteExpense(id);
+    await loadData();
+  };
+
+  const handleAddWithdrawal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amount = parseFloat(withdrawalAmount);
+    if (!eventId || isNaN(amount) || amount <= 0 || !withdrawalDate) return;
+    setSaving(true);
+    try {
+      await addGatewayWithdrawal({
+        eventId,
+        amount,
+        date: withdrawalDate,
+        description: withdrawalDesc.trim() || 'Retiro pasarela',
+        provider: 'onepay',
+      });
+      setWithdrawalDesc('');
+      setWithdrawalAmount('');
+      setWithdrawalDate(new Date().toISOString().split('T')[0]);
+      setShowAddWithdrawal(false);
+      await loadData();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteWithdrawal = async (id: string) => {
+    if (!confirm('¿Eliminar este registro de retiro?')) return;
+    await deleteGatewayWithdrawal(id);
     await loadData();
   };
 
@@ -409,9 +460,10 @@ const EventStatsScreen: React.FC = () => {
           <div className="event-stats-channel-breakdown">
             <h3 className="event-stats-channel-breakdown__title">Ventas por canal de cobro</h3>
             <p className="event-stats-channel-breakdown__intro">
-              Desglose entre cobros en pasarela y ventas manuales (taquilla, transferencia). La tarifa tiquetera se
-              calcula sobre <strong>todas las boletas con cobro</strong> (pasarela + manual) y se descuenta en el bloque
-              pasarela; el neto manual es el recaudado sin deducciones adicionales.
+              Desglose entre cobros en pasarela (OnePay y Mercado Pago por separado) y ventas manuales (taquilla,
+              transferencia). La tarifa tiquetera se calcula sobre <strong>todas las boletas con cobro</strong> (pasarela
+              + manual) y se descuenta en el bloque pasarela; la comisión pasarela estimada aplica solo a OnePay. El neto
+              manual es el recaudado sin deducciones adicionales.
             </p>
             <div className="event-stats-channel-grid">
               <div className="event-stats-channel-card event-stats-channel-card--gateway">
@@ -445,6 +497,56 @@ const EventStatsScreen: React.FC = () => {
                     <strong>{formatCOP(channelBreakdown.pasarelaNetoOrganizador)}</strong>
                   </li>
                 </ul>
+                {(channelBreakdown.gatewayOnepay.ticketUnits > 0 ||
+                  channelBreakdown.gatewayMercadopago.ticketUnits > 0) && (
+                  <div className="event-stats-channel-card__providers">
+                    {channelBreakdown.gatewayOnepay.ticketUnits > 0 && (
+                      <div className="event-stats-channel-provider event-stats-channel-provider--onepay">
+                        <h5 className="event-stats-channel-provider__title">OnePay</h5>
+                        <ul className="event-stats-channel-card__list">
+                          <li>
+                            <span>Boletas</span>
+                            <strong>{channelBreakdown.gatewayOnepay.ticketUnits}</strong>
+                          </li>
+                          <li>
+                            <span>Recaudado</span>
+                            <strong>{formatCOP(channelBreakdown.gatewayOnepay.totalCobrado)}</strong>
+                          </li>
+                          {channelBreakdown.gatewayOnepay.showPasarelaCommission && (
+                            <>
+                              <li className="event-stats-channel-card__accent">
+                                <span>Comisión pasarela (est.)</span>
+                                <strong>−{formatCOP(channelBreakdown.gatewayOnepay.pasarelaTotal)}</strong>
+                              </li>
+                              <li className="event-stats-channel-card__disclaimer-line">
+                                <span>{ONEPAY_PASARELA_COMMISSION_DISCLAIMER}</span>
+                              </li>
+                            </>
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                    {channelBreakdown.gatewayMercadopago.ticketUnits > 0 && (
+                      <div className="event-stats-channel-provider event-stats-channel-provider--mp">
+                        <h5 className="event-stats-channel-provider__title">Mercado Pago</h5>
+                        <ul className="event-stats-channel-card__list">
+                          <li>
+                            <span>Boletas</span>
+                            <strong>{channelBreakdown.gatewayMercadopago.ticketUnits}</strong>
+                          </li>
+                          <li>
+                            <span>Recaudado</span>
+                            <strong>{formatCOP(channelBreakdown.gatewayMercadopago.totalCobrado)}</strong>
+                          </li>
+                          <li className="event-stats-channel-card__hint-line">
+                            <span>Comisión pasarela</span>
+                            <strong>Según MP</strong>
+                          </li>
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="event-stats-channel-card event-stats-channel-card--manual">
                 <h4 className="event-stats-channel-card__heading">Manual / taquilla</h4>
@@ -599,7 +701,7 @@ const EventStatsScreen: React.FC = () => {
             </ul>
             <p className="event-stats-money-deck__hint">
               {moneyAggr.showPasarelaCommission
-                ? 'Ventas manuales / transferencia no incluyen comisión de pasarela ni tarifa tiquetera. '
+                ? `Ventas manuales / transferencia no incluyen comisión de pasarela ni tarifa tiquetera. ${ONEPAY_PASARELA_COMMISSION_DISCLAIMER} `
                 : 'Este evento usa Mercado Pago: no se estima comisión de pasarela aquí. '}
               {moneyAggr.serviceFeeDeductedFromNeto
                 ? 'La tarifa tiquetera (pasarela + manual) se descuenta del bloque pasarela.'
@@ -614,16 +716,65 @@ const EventStatsScreen: React.FC = () => {
               <IconProfit className="balance-title-icon" />
               <h3>Balance</h3>
             </div>
-            {canEditExpenses && (!showAddExpense ? (
-              <PrimaryButton onClick={() => setShowAddExpense(true)} size="small">
-                + Agregar egreso
-              </PrimaryButton>
-            ) : (
-              <SecondaryButton onClick={() => setShowAddExpense(false)} size="small">
-                Cancelar
-              </SecondaryButton>
-            ))}
+            {canEditExpenses && (
+              <div className="balance-header__actions">
+                {!showAddExpense && !showAddWithdrawal && (
+                  <>
+                    <PrimaryButton onClick={() => setShowAddExpense(true)} size="small">
+                      + Egreso
+                    </PrimaryButton>
+                    <PrimaryButton onClick={() => setShowAddWithdrawal(true)} size="small">
+                      + Retiro pasarela
+                    </PrimaryButton>
+                  </>
+                )}
+                {(showAddExpense || showAddWithdrawal) && (
+                  <SecondaryButton
+                    onClick={() => {
+                      setShowAddExpense(false);
+                      setShowAddWithdrawal(false);
+                    }}
+                    size="small"
+                  >
+                    Cancelar
+                  </SecondaryButton>
+                )}
+              </div>
+            )}
           </div>
+
+          {canEditExpenses && showAddWithdrawal && (
+            <form onSubmit={handleAddWithdrawal} className="balance-expense-form balance-withdrawal-form">
+              <p className="balance-withdrawal-form__intro">
+                Registra cuando el organizador retira dinero de la pasarela (OnePay). No se sincroniza
+                automáticamente con el banco; es para conciliar el saldo en el panel.
+              </p>
+              <CustomInput
+                type="date"
+                label="Fecha del retiro"
+                value={withdrawalDate}
+                onChange={(e) => setWithdrawalDate(e.target.value)}
+                required
+              />
+              <CustomInput
+                type="number"
+                label="Monto retirado (COP)"
+                value={withdrawalAmount}
+                onChange={(e) => setWithdrawalAmount(e.target.value)}
+                placeholder="5000000"
+                required
+              />
+              <CustomInput
+                label="Nota (opcional)"
+                value={withdrawalDesc}
+                onChange={(e) => setWithdrawalDesc(e.target.value)}
+                placeholder="Ej: Retiro OnePay → cuenta Bancolombia"
+              />
+              <PrimaryButton type="submit" disabled={saving} loading={saving}>
+                Guardar retiro
+              </PrimaryButton>
+            </form>
+          )}
 
           {canEditExpenses && showAddExpense && (
             <form onSubmit={handleAddExpense} className="balance-expense-form">
@@ -662,9 +813,35 @@ const EventStatsScreen: React.FC = () => {
             </div>
             <div className="balance-row balance-row--expense">
               <IconExpense className="balance-row-icon" />
-              <span className="balance-row-label">Egresos</span>
+              <span className="balance-row-label">Egresos operativos</span>
               <span className="balance-row-value">−{formatCOP(totalExpenses)}</span>
             </div>
+            {pasarelaBalances && (
+              <div className="balance-pasarela-wrap">
+                <BalancePasarelaBreakdown balances={pasarelaBalances} formatCOP={formatCOP} />
+              </div>
+            )}
+            {withdrawals.length > 0 && (
+              <div className="balance-expenses-list balance-withdrawals-list">
+                {withdrawals.map((w) => (
+                  <div key={w.id} className="balance-expense-item balance-withdrawal-item">
+                    <span>
+                      {w.date} · {w.description || 'Retiro pasarela'}
+                    </span>
+                    <span className="balance-expense-amount">{formatCOP(w.amount)}</span>
+                    {canEditExpenses && (
+                      <button
+                        type="button"
+                        className="balance-expense-delete"
+                        onClick={() => handleDeleteWithdrawal(w.id)}
+                      >
+                        Eliminar
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
             {expenses.length > 0 && (
               <div className="balance-expenses-list">
                 {expenses.map((exp) => (
@@ -691,7 +868,9 @@ const EventStatsScreen: React.FC = () => {
                 }`}
               >
                 <IconProfit className="balance-row-icon" />
-                <span className="balance-row-label">Utilidad sobre NETO entradas − egresos</span>
+                <span className="balance-row-label">
+                  Utilidad (neto entradas − egresos − retiros pasarela)
+                </span>
                 <span className="balance-row-value">{formatCOP(profitNetoVsEgresos)}</span>
               </div>
             )}

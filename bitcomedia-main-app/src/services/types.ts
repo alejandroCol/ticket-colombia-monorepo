@@ -33,6 +33,8 @@ export interface EventSection {
    * la compra genera N códigos.
    */
   palco_multipersona?: boolean;
+  /** Si true, no aparece en la tienda pública; el mapa sigue mostrando sus celdas. */
+  hidden_from_public_store?: boolean;
 }
 
 export type VenueMapZoneShape = 'rect' | 'circle';
