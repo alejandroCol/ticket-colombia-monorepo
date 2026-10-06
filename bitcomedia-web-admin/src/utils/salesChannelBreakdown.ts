@@ -15,6 +15,7 @@ import {
   ticketReconcilesWithOnepay,
   ticketWasReissuedAfterTransfer,
 } from '@utils/ticketPaymentReference';
+import { applyGatewayCommissionFinalOverrides } from '@utils/gatewayCommissionOverride';
 
 /** Aviso junto a comisiones OnePay estimadas en admin. */
 export const ONEPAY_PASARELA_COMMISSION_DISCLAIMER =
@@ -28,6 +29,9 @@ export type SalesChannelSlice = EventRevenueBreakdownTotals & {
 };
 
 export type OnlineGatewayProvider = 'onepay' | 'mercadopago';
+
+/** Hojas del Excel de cierre de caja (estadísticas del evento). */
+export type TicketCierreCajaSheet = 'onepay' | 'mercadopago' | 'manual';
 
 export type SalesChannelBreakdown = {
   gateway: SalesChannelSlice;
@@ -87,6 +91,18 @@ export function ticketOnlineGatewayProvider(t: Ticket): OnlineGatewayProvider | 
   if (!ticketIsGatewayOnlineSale(t)) return null;
   if (ticketUsesMercadoPagoCheckout(t)) return 'mercadopago';
   return 'onepay';
+}
+
+/**
+ * Hoja del Excel de cierre: misma partición que `gatewayOnepay`, `gatewayMercadopago` y `manual`
+ * en {@link aggregateSalesChannelBreakdown}. Usar solo sobre ventas válidas (pagadas/usadas, con cobro).
+ */
+export function ticketCierreCajaSheetChannel(t: Ticket): TicketCierreCajaSheet {
+  if (ticketReconcilesWithOnepay(t)) return 'onepay';
+  if (ticketInPasarelaSalesBlock(t) && ticketUsesMercadoPagoCheckout(t)) return 'mercadopago';
+  if (ticketIsManualLike(t) && !ticketHasLinkedOnepayPayment(t)) return 'manual';
+  if (ticketInPasarelaSalesBlock(t)) return 'onepay';
+  return 'manual';
 }
 
 export function salesChannelLabel(channel: SalesChannel): string {
@@ -162,7 +178,7 @@ export function aggregateSalesChannelBreakdown(
     gateway.totalCobrado - combinedTiqueteraFee - gateway.pasarelaTotal
   );
 
-  return {
+  const base: SalesChannelBreakdown = {
     gateway,
     gatewayOnepay,
     gatewayMercadopago,
@@ -178,4 +194,6 @@ export function aggregateSalesChannelBreakdown(
     combinedTiqueteraBoletas,
     pasarelaNetoOrganizador,
   };
+
+  return applyGatewayCommissionFinalOverrides(event, base);
 }

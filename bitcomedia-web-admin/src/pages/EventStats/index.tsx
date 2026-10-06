@@ -17,6 +17,7 @@ import {
   getWithdrawalsByEventId,
   addGatewayWithdrawal,
   deleteGatewayWithdrawal,
+  setEventGatewayCommissionFinal,
   getAnyPartnerGrantForTicketEvent,
   resolveEventCollection,
   getPaymentConfig,
@@ -49,6 +50,10 @@ import SalesCurveChart from '@components/SalesCurveChart';
 import SectionRadarChart from '@components/SectionRadarChart';
 import BalancePasarelaBreakdown from '@components/BalancePasarelaBreakdown';
 import { computeEventPasarelaBalances } from '@utils/pasarelaBalance';
+import {
+  pasarelaCommissionRowLabel,
+  readGatewayCommissionFinalOverrides,
+} from '@utils/gatewayCommissionOverride';
 import './index.scss';
 
 interface SectionStats {
@@ -88,6 +93,11 @@ const EventStatsScreen: React.FC = () => {
   const [canEditExpenses, setCanEditExpenses] = useState(false);
   const [eventCollection, setEventCollection] = useState<'events' | 'recurring_events' | null>(null);
   const [showOrganizerExtras, setShowOrganizerExtras] = useState(false);
+  const [isSuperAdminUser, setIsSuperAdminUser] = useState(false);
+  const [showCommissionFinalForm, setShowCommissionFinalForm] = useState(false);
+  const [commissionFinalOnepay, setCommissionFinalOnepay] = useState('');
+  const [commissionFinalMp, setCommissionFinalMp] = useState('');
+  const [savingCommissionFinal, setSavingCommissionFinal] = useState(false);
   const [moneyCtx, setMoneyCtx] = useState<{
     globalFeesPercent: number;
     gateway: ReturnType<typeof normalizeGatewayCommissionConfig>;
@@ -153,8 +163,10 @@ const EventStatsScreen: React.FC = () => {
       const user = getCurrentUser();
       if (!user) return;
       setShowOrganizerExtras(false);
+      setIsSuperAdminUser(false);
       const superA = await isSuperAdmin(user.uid);
       if (superA) {
+        setIsSuperAdminUser(true);
         setShowOrganizerExtras(true);
         return;
       }
@@ -192,17 +204,6 @@ const EventStatsScreen: React.FC = () => {
   const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
   const totalWithdrawals = withdrawals.reduce((sum, w) => sum + (w.amount || 0), 0);
 
-  const moneyAggr = useMemo(() => {
-    if (!event || !moneyCtx) return null;
-    return aggregateEventRevenueBreakdown(
-      event,
-      soldTicketsForStats,
-      moneyCtx.globalFeesPercent,
-      moneyCtx.organizerFee,
-      moneyCtx.gateway
-    );
-  }, [event, soldTicketsForStats, moneyCtx]);
-
   const channelBreakdown = useMemo(() => {
     if (!event || !moneyCtx) return null;
     return aggregateSalesChannelBreakdown(
@@ -213,6 +214,18 @@ const EventStatsScreen: React.FC = () => {
       moneyCtx.gateway
     );
   }, [event, soldTicketsForStats, moneyCtx]);
+
+  const moneyAggr = useMemo(() => {
+    if (channelBreakdown) return channelBreakdown.combined;
+    if (!event || !moneyCtx) return null;
+    return aggregateEventRevenueBreakdown(
+      event,
+      soldTicketsForStats,
+      moneyCtx.globalFeesPercent,
+      moneyCtx.organizerFee,
+      moneyCtx.gateway
+    );
+  }, [channelBreakdown, event, soldTicketsForStats, moneyCtx]);
 
   const pasarelaBalances = useMemo(() => {
     if (!channelBreakdown) return null;
@@ -350,6 +363,56 @@ const EventStatsScreen: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    if (!event || !showCommissionFinalForm) return;
+    const ov = readGatewayCommissionFinalOverrides(event);
+    setCommissionFinalOnepay(ov.onepayCOP != null ? String(ov.onepayCOP) : '');
+    setCommissionFinalMp(ov.mercadopagoCOP != null ? String(ov.mercadopagoCOP) : '');
+  }, [event, showCommissionFinalForm]);
+
+  const handleSaveCommissionFinal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!eventId || !eventCollection) return;
+    const parseOrNull = (raw: string): number | null => {
+      const t = raw.trim().replace(/\D/g, '');
+      if (!t) return null;
+      return Math.max(0, parseInt(t, 10) || 0);
+    };
+    setSavingCommissionFinal(true);
+    try {
+      await setEventGatewayCommissionFinal(eventId, eventCollection, {
+        onepayCOP: parseOrNull(commissionFinalOnepay),
+        mercadopagoCOP: parseOrNull(commissionFinalMp),
+      });
+      setShowCommissionFinalForm(false);
+      await loadData();
+    } catch {
+      alert('No se pudo guardar la comisión final.');
+    } finally {
+      setSavingCommissionFinal(false);
+    }
+  };
+
+  const handleClearCommissionFinal = async () => {
+    if (!eventId || !eventCollection) return;
+    if (!confirm('¿Volver a usar solo la comisión pasarela estimada?')) return;
+    setSavingCommissionFinal(true);
+    try {
+      await setEventGatewayCommissionFinal(eventId, eventCollection, {
+        onepayCOP: null,
+        mercadopagoCOP: null,
+      });
+      setCommissionFinalOnepay('');
+      setCommissionFinalMp('');
+      setShowCommissionFinalForm(false);
+      await loadData();
+    } catch {
+      alert('No se pudo limpiar la comisión final.');
+    } finally {
+      setSavingCommissionFinal(false);
+    }
+  };
+
   const handleDeleteWithdrawal = async (id: string) => {
     if (!confirm('¿Eliminar este registro de retiro?')) return;
     await deleteGatewayWithdrawal(id);
@@ -366,7 +429,12 @@ const EventStatsScreen: React.FC = () => {
       .trim()
       .replace(/\s+/g, '-')
       .slice(0, 48) || 'evento';
-    exportTicketsToExcel(tickets, { [eventId]: event.name }, `boletos-${slug}-${stamp}`);
+    exportTicketsToExcel(
+      tickets,
+      { [eventId]: event.name },
+      `boletos-${slug}-${stamp}`,
+      moneyCtx ? { event, ...moneyCtx } : null
+    );
   };
 
   if (loading) {
@@ -465,6 +533,69 @@ const EventStatsScreen: React.FC = () => {
               + manual) y se descuenta en el bloque pasarela; la comisión pasarela estimada aplica solo a OnePay. El neto
               manual es el recaudado sin deducciones adicionales.
             </p>
+            {isSuperAdminUser && (
+              <div className="event-stats-commission-final">
+                {!showCommissionFinalForm ? (
+                  <PrimaryButton
+                    type="button"
+                    size="small"
+                    onClick={() => setShowCommissionFinalForm(true)}
+                  >
+                    Asignar comisión final pasarela
+                  </PrimaryButton>
+                ) : (
+                  <form className="event-stats-commission-final__form" onSubmit={handleSaveCommissionFinal}>
+                    <p className="event-stats-commission-final__lede">
+                      Valores reales de comisión pasarela (COP, total con IVA). Reemplazan el estimado en balance y
+                      neto. Deja vacío un campo para quitar el valor final de ese proveedor.
+                    </p>
+                    <div className="event-stats-commission-final__fields">
+                      <CustomInput
+                        label="OnePay — comisión final (COP)"
+                        value={commissionFinalOnepay}
+                        onChange={(e) => setCommissionFinalOnepay(e.target.value.replace(/\D/g, ''))}
+                        placeholder={
+                          channelBreakdown
+                            ? String(channelBreakdown.gatewayOnepay.pasarelaTotal)
+                            : '0'
+                        }
+                      />
+                      <CustomInput
+                        label="Mercado Pago — comisión final (COP)"
+                        value={commissionFinalMp}
+                        onChange={(e) => setCommissionFinalMp(e.target.value.replace(/\D/g, ''))}
+                        placeholder="0"
+                      />
+                    </div>
+                    <div className="event-stats-commission-final__actions">
+                      <PrimaryButton type="submit" size="small" loading={savingCommissionFinal} disabled={savingCommissionFinal}>
+                        Guardar comisión final
+                      </PrimaryButton>
+                      <SecondaryButton
+                        type="button"
+                        size="small"
+                        onClick={() => setShowCommissionFinalForm(false)}
+                        disabled={savingCommissionFinal}
+                      >
+                        Cancelar
+                      </SecondaryButton>
+                      {event &&
+                      (readGatewayCommissionFinalOverrides(event).onepayCOP != null ||
+                        readGatewayCommissionFinalOverrides(event).mercadopagoCOP != null) ? (
+                        <SecondaryButton
+                          type="button"
+                          size="small"
+                          onClick={() => void handleClearCommissionFinal()}
+                          disabled={savingCommissionFinal}
+                        >
+                          Usar solo estimado
+                        </SecondaryButton>
+                      ) : null}
+                    </div>
+                  </form>
+                )}
+              </div>
+            )}
             <div className="event-stats-channel-grid">
               <div className="event-stats-channel-card event-stats-channel-card--gateway">
                 <h4 className="event-stats-channel-card__heading">Pasarela (en línea)</h4>
@@ -488,7 +619,7 @@ const EventStatsScreen: React.FC = () => {
                   )}
                   {channelBreakdown.gateway.showPasarelaCommission && (
                     <li className="event-stats-channel-card__accent">
-                      <span>Comisión pasarela (est.)</span>
+                      <span>{pasarelaCommissionRowLabel(channelBreakdown.gateway)}</span>
                       <strong>−{formatCOP(channelBreakdown.gateway.pasarelaTotal)}</strong>
                     </li>
                   )}
@@ -512,15 +643,18 @@ const EventStatsScreen: React.FC = () => {
                             <span>Recaudado</span>
                             <strong>{formatCOP(channelBreakdown.gatewayOnepay.totalCobrado)}</strong>
                           </li>
-                          {channelBreakdown.gatewayOnepay.showPasarelaCommission && (
+                          {(channelBreakdown.gatewayOnepay.showPasarelaCommission ||
+                            channelBreakdown.gatewayOnepay.pasarelaCommissionIsFinalOverride) && (
                             <>
                               <li className="event-stats-channel-card__accent">
-                                <span>Comisión pasarela (est.)</span>
+                                <span>{pasarelaCommissionRowLabel(channelBreakdown.gatewayOnepay)}</span>
                                 <strong>−{formatCOP(channelBreakdown.gatewayOnepay.pasarelaTotal)}</strong>
                               </li>
-                              <li className="event-stats-channel-card__disclaimer-line">
-                                <span>{ONEPAY_PASARELA_COMMISSION_DISCLAIMER}</span>
-                              </li>
+                              {!channelBreakdown.gatewayOnepay.pasarelaCommissionIsFinalOverride && (
+                                <li className="event-stats-channel-card__disclaimer-line">
+                                  <span>{ONEPAY_PASARELA_COMMISSION_DISCLAIMER}</span>
+                                </li>
+                              )}
                             </>
                           )}
                         </ul>
@@ -538,10 +672,17 @@ const EventStatsScreen: React.FC = () => {
                             <span>Recaudado</span>
                             <strong>{formatCOP(channelBreakdown.gatewayMercadopago.totalCobrado)}</strong>
                           </li>
-                          <li className="event-stats-channel-card__hint-line">
-                            <span>Comisión pasarela</span>
-                            <strong>Según MP</strong>
-                          </li>
+                          {channelBreakdown.gatewayMercadopago.pasarelaCommissionIsFinalOverride ? (
+                            <li className="event-stats-channel-card__accent">
+                              <span>{pasarelaCommissionRowLabel(channelBreakdown.gatewayMercadopago)}</span>
+                              <strong>−{formatCOP(channelBreakdown.gatewayMercadopago.pasarelaTotal)}</strong>
+                            </li>
+                          ) : (
+                            <li className="event-stats-channel-card__hint-line">
+                              <span>Comisión pasarela</span>
+                              <strong>Según MP</strong>
+                            </li>
+                          )}
                         </ul>
                       </div>
                     )}
@@ -671,7 +812,7 @@ const EventStatsScreen: React.FC = () => {
               {moneyAggr.showPasarelaCommission && (
                 <>
                   <li className="event-stats-money-deck__accent">
-                    <span>Comisión pasarela (total con IVA)</span>
+                    <span>{pasarelaCommissionRowLabel(moneyAggr)} (total con IVA)</span>
                     <strong>−{formatCOP(moneyAggr.pasarelaTotal)}</strong>
                   </li>
                   <li className="event-stats-money-deck__sub">
