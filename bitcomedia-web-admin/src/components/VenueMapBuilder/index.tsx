@@ -583,7 +583,9 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
         flatRenderUrl: '',
         frame_aspect: t.visual.frame_aspect === 'portrait' ? 'portrait' : 'landscape',
         hide_public_zone_labels: t.visual.hide_public_zone_labels === true,
-        public_zone_label_color: t.visual.public_zone_label_color,
+        ...(normalizeVenueMapLabelHex(t.visual.public_zone_label_color)
+          ? { public_zone_label_color: normalizeVenueMapLabelHex(t.visual.public_zone_label_color)! }
+          : {}),
         decorations: Array.isArray(t.visual.decorations)
           ? t.visual.decorations.map((d) => ({ ...d }))
           : [],

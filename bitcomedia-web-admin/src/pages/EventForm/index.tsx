@@ -31,6 +31,11 @@ import { isLegacyDateSuffixSlug, slugifyEventName } from '@utils/eventSlug';
 import { buildEventPublicPageUrl } from '@utils/eventPublicUrl';
 import { formatCopThousandsDisplay } from '@utils/formatCopInput';
 import { palcoCellsForSection, sectionRequiresMapZonePick } from '@utils/venueMapSection';
+import {
+  normalizeVenueMapLabelHex,
+  sanitizeVenueMapVisualForFirestore,
+  venueMapVisualHasPersistedOptions,
+} from '@utils/venueMapPublicZoneLabel';
 import type {
   Venue,
   EventSection,
@@ -57,15 +62,12 @@ function buildVenueMapForSave(
   visual: VenueMapVisualConfig
 ): VenueMapConfig | null {
   const hasZones = zones.length > 0;
-  const hasVisual =
-    visual.decorations.length > 0 ||
-    visual.background !== DEFAULT_VENUE_MAP_BACKGROUND ||
-    Boolean(visual.backgroundImageUrl?.trim()) ||
-    Boolean(visual.flatRenderUrl?.trim());
+  const sanitizedVisual = sanitizeVenueMapVisualForFirestore(visual);
+  const hasVisual = venueMapVisualHasPersistedOptions(visual);
   if (!hasZones && !hasVisual) return null;
   return {
     ...(hasZones ? { zones } : {}),
-    ...(hasVisual ? { visual } : {}),
+    ...(hasVisual ? { visual: sanitizedVisual } : {}),
   };
 }
 
@@ -441,10 +443,14 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
                   frame_aspect:
                     rawVis.frame_aspect === 'portrait' ? 'portrait' : 'landscape',
                   hide_public_zone_labels: rawVis.hide_public_zone_labels === true,
-                  public_zone_label_color:
-                    typeof rawVis.public_zone_label_color === 'string'
-                      ? rawVis.public_zone_label_color.trim()
-                      : undefined,
+                  ...(typeof rawVis.public_zone_label_color === 'string' &&
+                  normalizeVenueMapLabelHex(rawVis.public_zone_label_color)
+                    ? {
+                        public_zone_label_color: normalizeVenueMapLabelHex(
+                          rawVis.public_zone_label_color
+                        )!,
+                      }
+                    : {}),
                 }
               : {
                   background: DEFAULT_VENUE_MAP_BACKGROUND,
@@ -919,9 +925,15 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
       if (isEditMode && eventId && eventId !== 'new') {
         // Update existing document
         const eventRef = doc(db, collectionName, eventId);
+        const clearMapLabelColor = !normalizeVenueMapLabelHex(
+          formData.venue_map_visual.public_zone_label_color
+        );
         await updateDoc(eventRef, {
           ...eventData,
           venue_map_url: deleteField(),
+          ...(clearMapLabelColor
+            ? { 'venue_map.visual.public_zone_label_color': deleteField() }
+            : {}),
         });
         console.log(`${isRecurring ? 'Evento recurrente' : 'Evento'} actualizado correctamente`);
         void appendAuditLog({

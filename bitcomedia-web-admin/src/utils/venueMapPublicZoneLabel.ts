@@ -1,4 +1,6 @@
 import type { CSSProperties } from 'react';
+import type { VenueMapVisualConfig } from '@services/types';
+import { DEFAULT_VENUE_MAP_BACKGROUND } from '../components/VenueMapBuilder/constants';
 
 const HEX6 = /^#[0-9A-Fa-f]{6}$/;
 
@@ -27,4 +29,36 @@ export function publicZoneLabelStyle(color?: string | null): CSSProperties {
       ? '0 0 1px rgba(255,255,255,0.35)'
       : '0 1px 3px rgba(0,0,0,0.85)',
   };
+}
+
+/** Quita `undefined` y campos vacíos antes de escribir en Firestore. */
+export function sanitizeVenueMapVisualForFirestore(
+  visual: VenueMapVisualConfig
+): VenueMapVisualConfig {
+  const labelColor = normalizeVenueMapLabelHex(visual.public_zone_label_color);
+  const out: VenueMapVisualConfig = {
+    background: visual.background || DEFAULT_VENUE_MAP_BACKGROUND,
+    decorations: Array.isArray(visual.decorations) ? visual.decorations : [],
+  };
+  const bgImg = visual.backgroundImageUrl?.trim();
+  if (bgImg) out.backgroundImageUrl = bgImg;
+  const flat = visual.flatRenderUrl?.trim();
+  if (flat) out.flatRenderUrl = flat;
+  if (visual.frame_aspect === 'portrait') out.frame_aspect = 'portrait';
+  if (visual.hide_public_zone_labels === true) out.hide_public_zone_labels = true;
+  if (labelColor) out.public_zone_label_color = labelColor;
+  return out;
+}
+
+export function venueMapVisualHasPersistedOptions(visual: VenueMapVisualConfig): boolean {
+  const v = sanitizeVenueMapVisualForFirestore(visual);
+  return (
+    v.decorations.length > 0 ||
+    v.background !== DEFAULT_VENUE_MAP_BACKGROUND ||
+    Boolean(v.backgroundImageUrl?.trim()) ||
+    Boolean(v.flatRenderUrl?.trim()) ||
+    v.frame_aspect === 'portrait' ||
+    v.hide_public_zone_labels === true ||
+    Boolean(v.public_zone_label_color)
+  );
 }
