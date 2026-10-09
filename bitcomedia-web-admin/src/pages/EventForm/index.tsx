@@ -441,6 +441,10 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
                   frame_aspect:
                     rawVis.frame_aspect === 'portrait' ? 'portrait' : 'landscape',
                   hide_public_zone_labels: rawVis.hide_public_zone_labels === true,
+                  public_zone_label_color:
+                    typeof rawVis.public_zone_label_color === 'string'
+                      ? rawVis.public_zone_label_color.trim()
+                      : undefined,
                 }
               : {
                   background: DEFAULT_VENUE_MAP_BACKGROUND,

@@ -18,7 +18,17 @@ import type {
 } from '@services/types';
 import DecorationPreview from './DecorationPreview';
 import { compressImageForMapBackground } from '../../utils/imageCompression';
-import { createDecoration, DECORATION_PALETTE, DEFAULT_VENUE_MAP_BACKGROUND } from './constants';
+import {
+  createDecoration,
+  DECORATION_PALETTE,
+  DEFAULT_VENUE_MAP_BACKGROUND,
+  MIN_VENUE_DECORATION_SIZE_PCT,
+  MIN_VENUE_ZONE_SIZE_PCT,
+} from './constants';
+import {
+  normalizeVenueMapLabelHex,
+  publicZoneLabelStyle,
+} from '../../utils/venueMapPublicZoneLabel';
 import { formatCopThousandsDisplay } from '../../utils/formatCopInput';
 import { palcoCellsForSection } from '../../utils/venueMapSection';
 import { exportVenueMapToBlob } from './exportVenueMapPng';
@@ -241,8 +251,8 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
       } else if (drag.mode === 'resize-dec') {
         const dx = px - drag.startPx;
         const dy = py - drag.startPy;
-        const nw = clamp(drag.origW + dx, 4, 100 - drag.origX);
-        const nh = clamp(drag.origH + dy, 4, 100 - drag.origY);
+        const nw = clamp(drag.origW + dx, MIN_VENUE_DECORATION_SIZE_PCT, 100 - drag.origX);
+        const nh = clamp(drag.origH + dy, MIN_VENUE_DECORATION_SIZE_PCT, 100 - drag.origY);
         onVisualChange({
           ...vNow,
           decorations: vNow.decorations.map((d) =>
@@ -266,8 +276,8 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
         const dy = py - drag.startPy;
         const z = zNow[drag.index];
         if (!z) return;
-        const nw = clamp(drag.origW + dx, 4, 100 - drag.origX);
-        const nh = clamp(drag.origH + dy, 4, 100 - drag.origY);
+        const nw = clamp(drag.origW + dx, MIN_VENUE_ZONE_SIZE_PCT, 100 - drag.origX);
+        const nh = clamp(drag.origH + dy, MIN_VENUE_ZONE_SIZE_PCT, 100 - drag.origY);
         const next = [...zNow];
         next[drag.index] = { ...z, w: nw, h: nh };
         onZonesChange(next);
@@ -358,8 +368,8 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
       sectionId,
       x: 40,
       y: 40,
-      w: 18,
-      h: 14,
+      w: 10,
+      h: 8,
     };
     onZonesChange([...zones, z]);
     setSelection({ kind: 'zone', index: zones.length });
@@ -559,8 +569,8 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
         sectionId: newSections[i].id,
         x: clamp(zl.x, 0, 100),
         y: clamp(zl.y, 0, 100),
-        w: clamp(zl.w, 4, 100),
-        h: clamp(zl.h, 4, 100),
+        w: clamp(zl.w, MIN_VENUE_ZONE_SIZE_PCT, 100),
+        h: clamp(zl.h, MIN_VENUE_ZONE_SIZE_PCT, 100),
         ...(zl.shape === 'circle' ? { shape: 'circle' as const } : {}),
         ...(zl.color?.trim() ? { color: zl.color.trim() } : {}),
       }));
@@ -573,6 +583,7 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
         flatRenderUrl: '',
         frame_aspect: t.visual.frame_aspect === 'portrait' ? 'portrait' : 'landscape',
         hide_public_zone_labels: t.visual.hide_public_zone_labels === true,
+        public_zone_label_color: t.visual.public_zone_label_color,
         decorations: Array.isArray(t.visual.decorations)
           ? t.visual.decorations.map((d) => ({ ...d }))
           : [],
@@ -814,6 +825,64 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
           />
           <span>Ocultar texto dentro de las zonas en el mapa del comprador (solo el recuadro)</span>
         </label>
+        <label className="vmb__checkbox-row">
+          <input
+            type="checkbox"
+            checked={Boolean(normalizeVenueMapLabelHex(visual.public_zone_label_color))}
+            onChange={(e) => {
+              if (e.target.checked) {
+                onVisualChange({
+                  ...visual,
+                  public_zone_label_color:
+                    normalizeVenueMapLabelHex(visual.public_zone_label_color) ?? '#111111',
+                });
+              } else {
+                const { public_zone_label_color: _drop, ...rest } = visual;
+                onVisualChange(rest as VenueMapVisualConfig);
+              }
+            }}
+          />
+          <span>Personalizar color del texto de localidades (tienda y vista previa)</span>
+        </label>
+        {normalizeVenueMapLabelHex(visual.public_zone_label_color) ? (
+          <div className="vmb__label-color-row">
+            <label>
+              Color del texto
+              <input
+                type="color"
+                value={normalizeVenueMapLabelHex(visual.public_zone_label_color) ?? '#111111'}
+                onChange={(e) =>
+                  onVisualChange({
+                    ...visual,
+                    public_zone_label_color: normalizeVenueMapLabelHex(e.target.value) ?? '#111111',
+                  })
+                }
+              />
+            </label>
+            <SecondaryButton
+              type="button"
+              size="small"
+              onClick={() =>
+                onVisualChange({ ...visual, public_zone_label_color: '#111111' })
+              }
+            >
+              Negro
+            </SecondaryButton>
+            <SecondaryButton
+              type="button"
+              size="small"
+              onClick={() =>
+                onVisualChange({ ...visual, public_zone_label_color: '#ffffff' })
+              }
+            >
+              Blanco
+            </SecondaryButton>
+          </div>
+        ) : null}
+        <p className="vmb__hint vmb__hint--block">
+          Las zonas se pueden achicar hasta ~{MIN_VENUE_ZONE_SIZE_PCT}% del mapa (arrastra la esquina o ajusta
+          ancho/alto en la zona seleccionada).
+        </p>
       </div>
 
       <div>
@@ -951,7 +1020,10 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
                     onZonePointerDown(e as unknown as React.PointerEvent, index);
                   }}
                 >
-                  <span className="vmb-zone__tag">
+                  <span
+                    className="vmb-zone__tag"
+                    style={publicZoneLabelStyle(visual.public_zone_label_color)}
+                  >
                     {z.palco_index != null
                       ? z.label
                       : sections.find((s) => s.id === z.sectionId)?.name || z.label || 'Zona'}
@@ -1051,6 +1123,42 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
                 Lo que edites aquí actualiza la lista de localidades del evento. Al tocar esta zona en la app se
                 selecciona la misma entrada que en las tarjetas de abajo.
               </p>
+              <label>
+                Tamaño en el mapa (% ancho × alto)
+                <div className="vmb__zone-size-row">
+                  <input
+                    type="number"
+                    min={MIN_VENUE_ZONE_SIZE_PCT}
+                    max={100}
+                    step={0.1}
+                    value={Math.round(selectedZone.w * 10) / 10}
+                    onChange={(e) => {
+                      const nw = clamp(
+                        parseFloat(e.target.value) || MIN_VENUE_ZONE_SIZE_PCT,
+                        MIN_VENUE_ZONE_SIZE_PCT,
+                        100 - selectedZone.x
+                      );
+                      updateSelectedZone({ w: nw });
+                    }}
+                  />
+                  <span aria-hidden>×</span>
+                  <input
+                    type="number"
+                    min={MIN_VENUE_ZONE_SIZE_PCT}
+                    max={100}
+                    step={0.1}
+                    value={Math.round(selectedZone.h * 10) / 10}
+                    onChange={(e) => {
+                      const nh = clamp(
+                        parseFloat(e.target.value) || MIN_VENUE_ZONE_SIZE_PCT,
+                        MIN_VENUE_ZONE_SIZE_PCT,
+                        100 - selectedZone.y
+                      );
+                      updateSelectedZone({ h: nh });
+                    }}
+                  />
+                </div>
+              </label>
               <label>
                 Nombre en mapa y venta
                 <input

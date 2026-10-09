@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import type { EventSection, VenueMapVisualConfig, VenueMapZone } from "../../services/types";
 import { isMapZoneUnavailable } from "../../utils/venueMapSection";
 import { publicZoneButtonStyle } from "../../utils/venueMapZoneStyle";
+import { publicZoneLabelStyle } from "../../utils/venueMapPublicZoneLabel";
 import VenueMapVisualLayer from "../VenueMapVisualLayer";
 import "./index.scss";
 
@@ -58,6 +59,7 @@ const VenueMapInteractive: React.FC<VenueMapInteractiveProps> = ({
 
   const isPortrait = visual?.frame_aspect === "portrait";
   const hidePublicZoneLabels = visual?.hide_public_zone_labels === true;
+  const zoneLabelStyle = publicZoneLabelStyle(visual?.public_zone_label_color);
 
   const frameClass = [
     "venue-map-interactive__frame",
@@ -134,7 +136,10 @@ const VenueMapInteractive: React.FC<VenueMapInteractiveProps> = ({
                 }}
               >
                 {!hidePublicZoneLabels ? (
-                  <span className="venue-map-interactive__zone-label">
+                  <span
+                    className="venue-map-interactive__zone-label"
+                    style={zoneLabelStyle}
+                  >
                     {soldOut ? "—" : labelText}
                   </span>
                 ) : null}

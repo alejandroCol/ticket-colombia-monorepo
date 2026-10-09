@@ -118,6 +118,10 @@ export interface VenueMapVisualConfig {
    * (solo el área coloreada; titulos y accesibilidad siguen en aria-label).
    */
   hide_public_zone_labels?: boolean;
+  /**
+   * Color del texto de localidad/palco en la tienda (#rrggbb). Vacío = blanco con sombra (default).
+   */
+  public_zone_label_color?: string;
 }
 
 export interface VenueMapConfig {
@@ -191,6 +195,11 @@ export interface Event {
   support_whatsapp?: string;
   /** Pasarela de checkout (sin valor → backend usa OnePay). */
   payment_provider?: 'onepay' | 'mercadopago';
+  /** Super admin: comisión pasarela OnePay real (COP total), reemplaza estimado en balance. */
+  gateway_commission_final_onepay_cop?: number;
+  /** Super admin: comisión pasarela Mercado Pago real (COP total). */
+  gateway_commission_final_mercadopago_cop?: number;
+  gateway_commission_final_updated_at?: Timestamp | Date | string;
   /** Ocultar en la tienda el conteo de entradas o palcos disponibles. */
   hide_public_remaining_count?: boolean;
   /** Si true, la tienda muestra el número exacto de cupos disponibles. */

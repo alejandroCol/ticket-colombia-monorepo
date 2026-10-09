@@ -2,6 +2,12 @@ import type { VenueMapDecoration, VenueMapDecorationType } from '@services/types
 
 export const DEFAULT_VENUE_MAP_BACKGROUND = '#1a1a28';
 
+/** Tamaño mínimo de una zona de localidad en el lienzo (% del mapa). */
+export const MIN_VENUE_ZONE_SIZE_PCT = 1.25;
+
+/** Tamaño mínimo al redimensionar elementos decorativos (%). */
+export const MIN_VENUE_DECORATION_SIZE_PCT = 2;
+
 export const DECORATION_PALETTE: { type: VenueMapDecorationType; label: string; hint: string }[] = [
   { type: 'stage', label: 'Tarima', hint: 'Escenario / frente al público' },
   { type: 'palco_tier', label: 'Palcos', hint: 'Filas elevadas tipo palco' },

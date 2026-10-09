@@ -95,6 +95,8 @@ export interface VenueMapVisualConfig {
   decorations: VenueMapDecoration[];
   frame_aspect?: VenueMapFrameAspect;
   hide_public_zone_labels?: boolean;
+  /** Color del texto en localidades del mapa (#rrggbb). Vacío = blanco. */
+  public_zone_label_color?: string;
 }
 
 export interface VenueMapConfig {
