@@ -2,7 +2,11 @@ import React, { useState } from "react";
 import type { EventSection, VenueMapVisualConfig, VenueMapZone } from "../../services/types";
 import { isMapZoneUnavailable } from "../../utils/venueMapSection";
 import { publicZoneButtonStyle } from "../../utils/venueMapZoneStyle";
-import { publicZoneLabelStyle } from "../../utils/venueMapPublicZoneLabel";
+import {
+  normalizePublicZoneCornerStyle,
+  publicZoneFrameStyle,
+  publicZoneLabelStyle,
+} from "../../utils/venueMapPublicZoneLabel";
 import VenueMapVisualLayer from "../VenueMapVisualLayer";
 import "./index.scss";
 
@@ -59,10 +63,10 @@ const VenueMapInteractive: React.FC<VenueMapInteractiveProps> = ({
 
   const isPortrait = visual?.frame_aspect === "portrait";
   const hidePublicZoneLabels = visual?.hide_public_zone_labels === true;
-  const zoneLabelStyle = publicZoneLabelStyle(
-    visual?.public_zone_label_color,
-    visual?.public_zone_label_scale
-  );
+  const zoneVisual: VenueMapVisualConfig = visual ?? {
+    background: "#1a1a28",
+    decorations: [],
+  };
 
   const frameClass = [
     "venue-map-interactive__frame",
@@ -112,6 +116,11 @@ const VenueMapInteractive: React.FC<VenueMapInteractiveProps> = ({
                 disabled={soldOut || sectionHidden}
                 className={`venue-map-interactive__zone${
                   z.shape === "circle" ? " venue-map-interactive__zone--circle" : ""
+                }${
+                  normalizePublicZoneCornerStyle(zoneVisual.public_zone_corner_style) === "square" &&
+                  z.shape !== "circle"
+                    ? " venue-map-interactive__zone--square"
+                    : ""
                 }${soldOut ? " venue-map-interactive__zone--soldout" : ""}${
                   sectionHidden && !soldOut ? " venue-map-interactive__zone--section-hidden" : ""
                 }${active ? " venue-map-interactive__zone--active" : ""}${
@@ -122,6 +131,7 @@ const VenueMapInteractive: React.FC<VenueMapInteractiveProps> = ({
                   top: `${z.y}%`,
                   width: `${z.w}%`,
                   height: `${z.h}%`,
+                  ...publicZoneFrameStyle(zoneVisual, z.shape === "circle"),
                   ...tint,
                 }}
                 title={isPalcoCell ? `${sec.name} · ${z.label}` : z.label || sec.name}
@@ -141,7 +151,12 @@ const VenueMapInteractive: React.FC<VenueMapInteractiveProps> = ({
                 {!hidePublicZoneLabels ? (
                   <span
                     className="venue-map-interactive__zone-label"
-                    style={zoneLabelStyle}
+                    style={publicZoneLabelStyle(
+                      zoneVisual.public_zone_label_color,
+                      zoneVisual.public_zone_label_scale,
+                      zoneVisual.public_zone_label_inset_px,
+                      { circle: z.shape === "circle" }
+                    )}
                   >
                     {soldOut ? "—" : labelText}
                   </span>

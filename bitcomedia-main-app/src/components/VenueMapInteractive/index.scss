@@ -123,6 +123,10 @@
     &--circle {
       border-radius: 50%;
     }
+
+    &--square {
+      border-radius: 0;
+    }
   }
 
   &__zone--circle .venue-map-interactive__zone-label {

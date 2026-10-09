@@ -28,8 +28,13 @@ import {
 import {
   normalizeVenueMapLabelHex,
   normalizeVenueMapLabelScale,
+  normalizeVenueMapLabelInsetPx,
+  normalizePublicZoneCornerStyle,
+  PUBLIC_ZONE_LABEL_INSET_DEFAULT_PX,
+  PUBLIC_ZONE_LABEL_INSET_MAX_PX,
   PUBLIC_ZONE_LABEL_SCALE_MAX,
   PUBLIC_ZONE_LABEL_SCALE_MIN,
+  publicZoneFrameStyle,
   publicZoneLabelStyle,
 } from '../../utils/venueMapPublicZoneLabel';
 import { formatCopThousandsDisplay } from '../../utils/formatCopInput';
@@ -594,6 +599,17 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
               public_zone_label_scale: normalizeVenueMapLabelScale(t.visual.public_zone_label_scale),
             }
           : {}),
+        ...(normalizeVenueMapLabelInsetPx(t.visual.public_zone_label_inset_px) !==
+        PUBLIC_ZONE_LABEL_INSET_DEFAULT_PX
+          ? {
+              public_zone_label_inset_px: normalizeVenueMapLabelInsetPx(
+                t.visual.public_zone_label_inset_px
+              ),
+            }
+          : {}),
+        ...(normalizePublicZoneCornerStyle(t.visual.public_zone_corner_style) === 'square'
+          ? { public_zone_corner_style: 'square' as const }
+          : {}),
         decorations: Array.isArray(t.visual.decorations)
           ? t.visual.decorations.map((d) => ({ ...d }))
           : [],
@@ -859,6 +875,41 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
           Útil en cuadros pequeños: baja hasta {Math.round(PUBLIC_ZONE_LABEL_SCALE_MIN * 100)}% del tamaño
           normal.
         </p>
+        <label className="vmb__label-scale">
+          Margen del texto al borde del cuadro ({normalizeVenueMapLabelInsetPx(visual.public_zone_label_inset_px)}{' '}
+          px)
+          <input
+            type="range"
+            min={0}
+            max={PUBLIC_ZONE_LABEL_INSET_MAX_PX}
+            step={1}
+            value={normalizeVenueMapLabelInsetPx(visual.public_zone_label_inset_px)}
+            onChange={(e) => {
+              const inset = normalizeVenueMapLabelInsetPx(Number(e.target.value));
+              if (inset === PUBLIC_ZONE_LABEL_INSET_DEFAULT_PX) {
+                const { public_zone_label_inset_px: _drop, ...rest } = visual;
+                onVisualChange(rest as VenueMapVisualConfig);
+              } else {
+                onVisualChange({ ...visual, public_zone_label_inset_px: inset });
+              }
+            }}
+          />
+        </label>
+        <label className="vmb__checkbox-row">
+          <input
+            type="checkbox"
+            checked={normalizePublicZoneCornerStyle(visual.public_zone_corner_style) === 'square'}
+            onChange={(e) => {
+              if (e.target.checked) {
+                onVisualChange({ ...visual, public_zone_corner_style: 'square' });
+              } else {
+                const { public_zone_corner_style: _drop, ...rest } = visual;
+                onVisualChange(rest as VenueMapVisualConfig);
+              }
+            }}
+          />
+          <span>Esquinas cuadradas en localidades (sin redondeo del marco)</span>
+        </label>
         <label className="vmb__checkbox-row">
           <input
             type="checkbox"
@@ -1041,12 +1092,13 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
                   key={z.id}
                   role="button"
                   tabIndex={0}
-                  className={`vmb-zone${z.shape === 'circle' ? ' vmb-zone--circle' : ''}${zSelected ? ' vmb-zone--selected' : ''}${hasCustomColor ? ' vmb-zone--custom' : ''}${zoneDisabled ? ' vmb-zone--disabled' : ''}`}
+                  className={`vmb-zone${z.shape === 'circle' ? ' vmb-zone--circle' : ''}${normalizePublicZoneCornerStyle(visual.public_zone_corner_style) === 'square' && z.shape !== 'circle' ? ' vmb-zone--square' : ''}${zSelected ? ' vmb-zone--selected' : ''}${hasCustomColor ? ' vmb-zone--custom' : ''}${zoneDisabled ? ' vmb-zone--disabled' : ''}`}
                   style={{
                     left: `${z.x}%`,
                     top: `${z.y}%`,
                     width: `${z.w}%`,
                     height: `${z.h}%`,
+                    ...publicZoneFrameStyle(visual, z.shape === 'circle'),
                     ...customStyle,
                   }}
                   onMouseDown={(e) => {
@@ -1058,7 +1110,9 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
                     className="vmb-zone__tag"
                     style={publicZoneLabelStyle(
                       visual.public_zone_label_color,
-                      visual.public_zone_label_scale
+                      visual.public_zone_label_scale,
+                      visual.public_zone_label_inset_px,
+                      { circle: z.shape === 'circle' }
                     )}
                   >
                     {z.palco_index != null

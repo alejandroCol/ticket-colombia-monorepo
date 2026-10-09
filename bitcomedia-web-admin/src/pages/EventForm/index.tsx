@@ -34,6 +34,9 @@ import { palcoCellsForSection, sectionRequiresMapZonePick } from '@utils/venueMa
 import {
   normalizeVenueMapLabelHex,
   normalizeVenueMapLabelScale,
+  normalizeVenueMapLabelInsetPx,
+  normalizePublicZoneCornerStyle,
+  PUBLIC_ZONE_LABEL_INSET_DEFAULT_PX,
   sanitizeVenueMapVisualForFirestore,
   venueMapVisualHasPersistedOptions,
 } from '@utils/venueMapPublicZoneLabel';
@@ -459,6 +462,18 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
                           rawVis.public_zone_label_scale
                         ),
                       }
+                    : {}),
+                  ...(rawVis.public_zone_label_inset_px != null &&
+                  normalizeVenueMapLabelInsetPx(rawVis.public_zone_label_inset_px) !==
+                    PUBLIC_ZONE_LABEL_INSET_DEFAULT_PX
+                    ? {
+                        public_zone_label_inset_px: normalizeVenueMapLabelInsetPx(
+                          rawVis.public_zone_label_inset_px
+                        ),
+                      }
+                    : {}),
+                  ...(normalizePublicZoneCornerStyle(rawVis.public_zone_corner_style) === 'square'
+                    ? { public_zone_corner_style: 'square' as const }
                     : {}),
                 }
               : {
@@ -939,6 +954,12 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
         );
         const clearMapLabelScale =
           normalizeVenueMapLabelScale(formData.venue_map_visual.public_zone_label_scale) === 1;
+        const clearMapLabelInset =
+          normalizeVenueMapLabelInsetPx(formData.venue_map_visual.public_zone_label_inset_px) ===
+          PUBLIC_ZONE_LABEL_INSET_DEFAULT_PX;
+        const clearMapSquareCorners =
+          normalizePublicZoneCornerStyle(formData.venue_map_visual.public_zone_corner_style) !==
+          'square';
         await updateDoc(eventRef, {
           ...eventData,
           venue_map_url: deleteField(),
@@ -947,6 +968,12 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
             : {}),
           ...(clearMapLabelScale
             ? { 'venue_map.visual.public_zone_label_scale': deleteField() }
+            : {}),
+          ...(clearMapLabelInset
+            ? { 'venue_map.visual.public_zone_label_inset_px': deleteField() }
+            : {}),
+          ...(clearMapSquareCorners
+            ? { 'venue_map.visual.public_zone_corner_style': deleteField() }
             : {}),
         });
         console.log(`${isRecurring ? 'Evento recurrente' : 'Evento'} actualizado correctamente`);

@@ -123,9 +123,13 @@ export interface VenueMapVisualConfig {
    */
   public_zone_label_color?: string;
   /**
-   * Escala del tamaño del texto en localidades (0.45–1). 1 = normal; valores menores = más pequeño.
+   * Escala del tamaño del texto en localidades (0.1–1). 1 = normal; valores menores = más pequeño.
    */
   public_zone_label_scale?: number;
+  /** Margen del texto al borde del recuadro (px, 0–12). Default 4. */
+  public_zone_label_inset_px?: number;
+  /** Esquinas del recuadro de localidad (rectangular). Default redondeado en tienda. */
+  public_zone_corner_style?: 'rounded' | 'square';
 }
 
 export interface VenueMapConfig {

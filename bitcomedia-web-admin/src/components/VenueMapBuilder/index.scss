@@ -539,15 +539,20 @@
   background: rgba(0, 200, 255, 0.12);
   cursor: grab;
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: center;
-  padding-top: 2px;
+  padding: 2px;
+  box-sizing: border-box;
 
   &--circle {
     border-radius: 50%;
     align-items: center;
     justify-content: center;
     padding-top: 0;
+  }
+
+  &--square {
+    border-radius: 0;
   }
 
   &:active {
