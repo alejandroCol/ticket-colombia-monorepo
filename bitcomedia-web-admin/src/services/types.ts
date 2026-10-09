@@ -122,6 +122,10 @@ export interface VenueMapVisualConfig {
    * Color del texto de localidad/palco en la tienda (#rrggbb). Vacío = blanco con sombra (default).
    */
   public_zone_label_color?: string;
+  /**
+   * Escala del tamaño del texto en localidades (0.45–1). 1 = normal; valores menores = más pequeño.
+   */
+  public_zone_label_scale?: number;
 }
 
 export interface VenueMapConfig {

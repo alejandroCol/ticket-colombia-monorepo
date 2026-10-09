@@ -59,7 +59,10 @@ const VenueMapInteractive: React.FC<VenueMapInteractiveProps> = ({
 
   const isPortrait = visual?.frame_aspect === "portrait";
   const hidePublicZoneLabels = visual?.hide_public_zone_labels === true;
-  const zoneLabelStyle = publicZoneLabelStyle(visual?.public_zone_label_color);
+  const zoneLabelStyle = publicZoneLabelStyle(
+    visual?.public_zone_label_color,
+    visual?.public_zone_label_scale
+  );
 
   const frameClass = [
     "venue-map-interactive__frame",

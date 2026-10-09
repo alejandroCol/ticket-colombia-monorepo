@@ -33,6 +33,7 @@ import { formatCopThousandsDisplay } from '@utils/formatCopInput';
 import { palcoCellsForSection, sectionRequiresMapZonePick } from '@utils/venueMapSection';
 import {
   normalizeVenueMapLabelHex,
+  normalizeVenueMapLabelScale,
   sanitizeVenueMapVisualForFirestore,
   venueMapVisualHasPersistedOptions,
 } from '@utils/venueMapPublicZoneLabel';
@@ -449,6 +450,14 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
                         public_zone_label_color: normalizeVenueMapLabelHex(
                           rawVis.public_zone_label_color
                         )!,
+                      }
+                    : {}),
+                  ...(rawVis.public_zone_label_scale != null &&
+                  normalizeVenueMapLabelScale(rawVis.public_zone_label_scale) !== 1
+                    ? {
+                        public_zone_label_scale: normalizeVenueMapLabelScale(
+                          rawVis.public_zone_label_scale
+                        ),
                       }
                     : {}),
                 }
@@ -928,11 +937,16 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
         const clearMapLabelColor = !normalizeVenueMapLabelHex(
           formData.venue_map_visual.public_zone_label_color
         );
+        const clearMapLabelScale =
+          normalizeVenueMapLabelScale(formData.venue_map_visual.public_zone_label_scale) === 1;
         await updateDoc(eventRef, {
           ...eventData,
           venue_map_url: deleteField(),
           ...(clearMapLabelColor
             ? { 'venue_map.visual.public_zone_label_color': deleteField() }
+            : {}),
+          ...(clearMapLabelScale
+            ? { 'venue_map.visual.public_zone_label_scale': deleteField() }
             : {}),
         });
         console.log(`${isRecurring ? 'Evento recurrente' : 'Evento'} actualizado correctamente`);

@@ -97,6 +97,8 @@ export interface VenueMapVisualConfig {
   hide_public_zone_labels?: boolean;
   /** Color del texto en localidades del mapa (#rrggbb). Vacío = blanco. */
   public_zone_label_color?: string;
+  /** Escala del texto en localidades (0.45–1). */
+  public_zone_label_scale?: number;
 }
 
 export interface VenueMapConfig {

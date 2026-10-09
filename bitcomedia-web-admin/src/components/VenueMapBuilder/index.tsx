@@ -27,6 +27,9 @@ import {
 } from './constants';
 import {
   normalizeVenueMapLabelHex,
+  normalizeVenueMapLabelScale,
+  PUBLIC_ZONE_LABEL_SCALE_MAX,
+  PUBLIC_ZONE_LABEL_SCALE_MIN,
   publicZoneLabelStyle,
 } from '../../utils/venueMapPublicZoneLabel';
 import { formatCopThousandsDisplay } from '../../utils/formatCopInput';
@@ -586,6 +589,11 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
         ...(normalizeVenueMapLabelHex(t.visual.public_zone_label_color)
           ? { public_zone_label_color: normalizeVenueMapLabelHex(t.visual.public_zone_label_color)! }
           : {}),
+        ...(normalizeVenueMapLabelScale(t.visual.public_zone_label_scale) !== 1
+          ? {
+              public_zone_label_scale: normalizeVenueMapLabelScale(t.visual.public_zone_label_scale),
+            }
+          : {}),
         decorations: Array.isArray(t.visual.decorations)
           ? t.visual.decorations.map((d) => ({ ...d }))
           : [],
@@ -827,6 +835,30 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
           />
           <span>Ocultar texto dentro de las zonas en el mapa del comprador (solo el recuadro)</span>
         </label>
+        <label className="vmb__label-scale">
+          Tamaño del texto en localidades (
+          {Math.round(normalizeVenueMapLabelScale(visual.public_zone_label_scale) * 100)}%)
+          <input
+            type="range"
+            min={PUBLIC_ZONE_LABEL_SCALE_MIN * 100}
+            max={PUBLIC_ZONE_LABEL_SCALE_MAX * 100}
+            step={5}
+            value={Math.round(normalizeVenueMapLabelScale(visual.public_zone_label_scale) * 100)}
+            onChange={(e) => {
+              const scale = normalizeVenueMapLabelScale(Number(e.target.value) / 100);
+              if (scale === 1) {
+                const { public_zone_label_scale: _drop, ...rest } = visual;
+                onVisualChange(rest as VenueMapVisualConfig);
+              } else {
+                onVisualChange({ ...visual, public_zone_label_scale: scale });
+              }
+            }}
+          />
+        </label>
+        <p className="vmb__hint vmb__hint--block">
+          Útil en cuadros pequeños: baja hasta {Math.round(PUBLIC_ZONE_LABEL_SCALE_MIN * 100)}% del tamaño
+          normal.
+        </p>
         <label className="vmb__checkbox-row">
           <input
             type="checkbox"
@@ -1024,7 +1056,10 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
                 >
                   <span
                     className="vmb-zone__tag"
-                    style={publicZoneLabelStyle(visual.public_zone_label_color)}
+                    style={publicZoneLabelStyle(
+                      visual.public_zone_label_color,
+                      visual.public_zone_label_scale
+                    )}
                   >
                     {z.palco_index != null
                       ? z.label
