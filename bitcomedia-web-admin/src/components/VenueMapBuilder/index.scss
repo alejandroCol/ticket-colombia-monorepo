@@ -535,7 +535,8 @@
 .vmb-zone {
   position: absolute;
   box-sizing: border-box;
-  border: 2px dashed rgba(0, 200, 255, 0.85);
+  border-style: dashed;
+  border-color: rgba(0, 200, 255, 0.85);
   background: rgba(0, 200, 255, 0.12);
   cursor: grab;
   display: flex;

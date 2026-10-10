@@ -24,3 +24,10 @@ export function isMapZoneUnavailable(
   if (zone.disabled === true) return true;
   return (occupancy[zone.id] ?? 0) >= 1;
 }
+
+export function mapZoneDisplayLabel(zone: VenueMapZone): string {
+  const label = String(zone.label || "").trim();
+  if (label) return label;
+  if (zone.palco_index != null) return String(zone.palco_index);
+  return zone.id.slice(0, 12);
+}

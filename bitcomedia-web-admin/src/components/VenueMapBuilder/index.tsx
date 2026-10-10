@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import PrimaryButton from '@components/PrimaryButton';
 import SecondaryButton from '@components/SecondaryButton';
 import {
@@ -30,6 +30,11 @@ import {
   normalizeVenueMapLabelScale,
   normalizeVenueMapLabelInsetPx,
   normalizePublicZoneCornerStyle,
+  normalizePublicZoneBorderColor,
+  normalizePublicZoneBorderWidthPx,
+  PUBLIC_ZONE_BORDER_WIDTH_DEFAULT_PX,
+  PUBLIC_ZONE_BORDER_WIDTH_MAX_PX,
+  PUBLIC_ZONE_BORDER_WIDTH_MIN_PX,
   PUBLIC_ZONE_LABEL_INSET_DEFAULT_PX,
   PUBLIC_ZONE_LABEL_INSET_MAX_PX,
   PUBLIC_ZONE_LABEL_SCALE_MAX,
@@ -610,6 +615,27 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
         ...(normalizePublicZoneCornerStyle(t.visual.public_zone_corner_style) === 'square'
           ? { public_zone_corner_style: 'square' as const }
           : {}),
+        ...(normalizePublicZoneBorderWidthPx(t.visual.public_zone_border_width_px) !==
+        PUBLIC_ZONE_BORDER_WIDTH_DEFAULT_PX
+          ? {
+              public_zone_border_width_px: normalizePublicZoneBorderWidthPx(
+                t.visual.public_zone_border_width_px
+              ),
+            }
+          : {}),
+        ...(normalizePublicZoneBorderColor(t.visual.public_zone_border_color)
+          ? {
+              public_zone_border_color:
+                normalizePublicZoneBorderColor(t.visual.public_zone_border_color)!,
+            }
+          : {}),
+        ...(normalizeVenueMapLabelHex(t.visual.public_zone_selection_color)
+          ? {
+              public_zone_selection_color: normalizeVenueMapLabelHex(
+                t.visual.public_zone_selection_color
+              )!,
+            }
+          : {}),
         decorations: Array.isArray(t.visual.decorations)
           ? t.visual.decorations.map((d) => ({ ...d }))
           : [],
@@ -745,6 +771,35 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
     100,
     Math.max(1, parseInt(String(palcoSplitPeoplePerCell).replace(/\D/g, ''), 10) || 1)
   );
+
+  const allZonesColorMeta = useMemo(() => {
+    const hexes = zones
+      .map((z) => normalizeVenueMapLabelHex(z.color))
+      .filter((c): c is string => Boolean(c));
+    if (hexes.length === 0) {
+      return { pickerValue: '#00c8ff', uniform: true, hasCustom: false, mixed: false };
+    }
+    const first = hexes[0]!;
+    const uniform = hexes.length === zones.length && hexes.every((c) => c === first);
+    const mixed = !uniform;
+    return {
+      pickerValue: uniform ? first : '#00c8ff',
+      uniform,
+      hasCustom: true,
+      mixed,
+    };
+  }, [zones]);
+
+  const applyColorToAllZones = (rawHex: string) => {
+    const hex = normalizeVenueMapLabelHex(rawHex);
+    if (!hex || zones.length === 0) return;
+    onZonesChange(zones.map((z) => ({ ...z, color: hex })));
+  };
+
+  const resetAllZoneColors = () => {
+    if (zones.length === 0) return;
+    onZonesChange(zones.map((z) => ({ ...z, color: '' })));
+  };
 
   return (
     <div className="vmb">
@@ -895,6 +950,136 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
             }}
           />
         </label>
+        <label className="vmb__label-scale">
+          Grosor del borde del cuadro (
+          {normalizePublicZoneBorderWidthPx(visual.public_zone_border_width_px)} px)
+          <input
+            type="range"
+            min={PUBLIC_ZONE_BORDER_WIDTH_MIN_PX}
+            max={PUBLIC_ZONE_BORDER_WIDTH_MAX_PX}
+            step={1}
+            value={normalizePublicZoneBorderWidthPx(visual.public_zone_border_width_px)}
+            onChange={(e) => {
+              const borderW = normalizePublicZoneBorderWidthPx(Number(e.target.value));
+              if (borderW === PUBLIC_ZONE_BORDER_WIDTH_DEFAULT_PX) {
+                const { public_zone_border_width_px: _drop, ...rest } = visual;
+                onVisualChange(rest as VenueMapVisualConfig);
+              } else {
+                onVisualChange({ ...visual, public_zone_border_width_px: borderW });
+              }
+            }}
+          />
+        </label>
+        <p className="vmb__hint vmb__hint--block">
+          Línea más delgada (1 px) para cuadros pequeños o mapas muy cargados.
+        </p>
+        <label className="vmb__checkbox-row">
+          <input
+            type="checkbox"
+            checked={normalizePublicZoneBorderColor(visual.public_zone_border_color) === 'transparent'}
+            onChange={(e) => {
+              if (e.target.checked) {
+                onVisualChange({ ...visual, public_zone_border_color: 'transparent' });
+              } else {
+                const { public_zone_border_color: _drop, ...rest } = visual;
+                onVisualChange(rest as VenueMapVisualConfig);
+              }
+            }}
+          />
+          <span>Bordes transparentes en la tienda (solo se ve el relleno suave hasta que el comprador selecciona)</span>
+        </label>
+        {normalizePublicZoneBorderColor(visual.public_zone_border_color) !== 'transparent' ? (
+          <label className="vmb__checkbox-row">
+            <input
+              type="checkbox"
+              checked={Boolean(
+                normalizePublicZoneBorderColor(visual.public_zone_border_color) &&
+                  normalizePublicZoneBorderColor(visual.public_zone_border_color) !== 'transparent'
+              )}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  onVisualChange({
+                    ...visual,
+                    public_zone_border_color:
+                      normalizePublicZoneBorderColor(visual.public_zone_border_color) ?? '#00c8ff',
+                  });
+                } else {
+                  const { public_zone_border_color: _drop, ...rest } = visual;
+                  onVisualChange(rest as VenueMapVisualConfig);
+                }
+              }}
+            />
+            <span>Personalizar color del borde de los cuadros (reposo)</span>
+          </label>
+        ) : null}
+        {normalizePublicZoneBorderColor(visual.public_zone_border_color) &&
+        normalizePublicZoneBorderColor(visual.public_zone_border_color) !== 'transparent' ? (
+          <div className="vmb__label-color-row">
+            <label>
+              Color del borde
+              <input
+                type="color"
+                value={
+                  (normalizePublicZoneBorderColor(visual.public_zone_border_color) as string) ??
+                  '#00c8ff'
+                }
+                onChange={(e) =>
+                  onVisualChange({
+                    ...visual,
+                    public_zone_border_color:
+                      normalizeVenueMapLabelHex(e.target.value) ?? '#00c8ff',
+                  })
+                }
+              />
+            </label>
+          </div>
+        ) : null}
+        <label className="vmb__checkbox-row">
+          <input
+            type="checkbox"
+            checked={Boolean(normalizeVenueMapLabelHex(visual.public_zone_selection_color))}
+            onChange={(e) => {
+              if (e.target.checked) {
+                onVisualChange({
+                  ...visual,
+                  public_zone_selection_color:
+                    normalizeVenueMapLabelHex(visual.public_zone_selection_color) ?? '#00d4ff',
+                });
+              } else {
+                const { public_zone_selection_color: _drop, ...rest } = visual;
+                onVisualChange(rest as VenueMapVisualConfig);
+              }
+            }}
+          />
+          <span>Personalizar color al seleccionar (marco grueso en la tienda y en esta vista previa)</span>
+        </label>
+        {normalizeVenueMapLabelHex(visual.public_zone_selection_color) ? (
+          <div className="vmb__label-color-row">
+            <label>
+              Color seleccionado
+              <input
+                type="color"
+                value={normalizeVenueMapLabelHex(visual.public_zone_selection_color) ?? '#00d4ff'}
+                onChange={(e) =>
+                  onVisualChange({
+                    ...visual,
+                    public_zone_selection_color:
+                      normalizeVenueMapLabelHex(e.target.value) ?? '#00d4ff',
+                  })
+                }
+              />
+            </label>
+            <SecondaryButton
+              type="button"
+              size="small"
+              onClick={() =>
+                onVisualChange({ ...visual, public_zone_selection_color: '#ffab40' })
+              }
+            >
+              Naranja (default editor)
+            </SecondaryButton>
+          </div>
+        ) : null}
         <label className="vmb__checkbox-row">
           <input
             type="checkbox"
@@ -968,6 +1153,44 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
           Las zonas se pueden achicar hasta ~{MIN_VENUE_ZONE_SIZE_PCT}% del mapa (arrastra la esquina o ajusta
           ancho/alto en la zona seleccionada).
         </p>
+      </div>
+
+      <div>
+        <span className="vmb__toolbar-label">Color de todas las zonas</span>
+        <div className="vmb__toolbar">
+          <label>
+            <span className="vmb__hint" style={{ marginRight: 8 }}>
+              Cambiar color a todos los cuadros
+            </span>
+            <input
+              type="color"
+              value={allZonesColorMeta.pickerValue}
+              disabled={zones.length === 0}
+              onChange={(e) => applyColorToAllZones(e.target.value)}
+            />
+          </label>
+          <SecondaryButton
+            type="button"
+            size="small"
+            disabled={zones.length === 0 || !allZonesColorMeta.hasCustom}
+            onClick={resetAllZoneColors}
+          >
+            Color por defecto (todas)
+          </SecondaryButton>
+        </div>
+        {zones.length === 0 ? (
+          <p className="vmb__hint vmb__hint--block">Agrega al menos una zona localidad para usar esta opción.</p>
+        ) : allZonesColorMeta.mixed ? (
+          <p className="vmb__hint vmb__hint--block">
+            Hay cuadros con colores distintos; el selector muestra el tono por defecto hasta que elijas uno nuevo
+            (se aplicará a <strong>todas</strong> las zonas).
+          </p>
+        ) : (
+          <p className="vmb__hint vmb__hint--block">
+            Aplica el mismo color a todas las localidades y palcos del mapa. Sigue pudiendo afinar una zona en el panel
+            lateral al seleccionarla.
+          </p>
+        )}
       </div>
 
       <div>
@@ -1084,7 +1307,7 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
             <div className="vmb__zones-layer">
               {zones.map((z, index) => {
                 const zSelected = selection?.kind === 'zone' && selection.index === index;
-                const customStyle = adminZoneCanvasStyle(z.color, zSelected);
+                const customStyle = adminZoneCanvasStyle(z.color, zSelected, visual);
                 const hasCustomColor = Object.keys(customStyle).length > 0;
                 const zoneDisabled = z.disabled === true;
                 return (
@@ -1221,8 +1444,8 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
                     type="number"
                     min={MIN_VENUE_ZONE_SIZE_PCT}
                     max={100}
-                    step={0.1}
-                    value={Math.round(selectedZone.w * 10) / 10}
+                    step="any"
+                    value={Math.round(selectedZone.w * 100) / 100}
                     onChange={(e) => {
                       const nw = clamp(
                         parseFloat(e.target.value) || MIN_VENUE_ZONE_SIZE_PCT,
@@ -1237,8 +1460,8 @@ const VenueMapBuilder: React.FC<VenueMapBuilderProps> = ({
                     type="number"
                     min={MIN_VENUE_ZONE_SIZE_PCT}
                     max={100}
-                    step={0.1}
-                    value={Math.round(selectedZone.h * 10) / 10}
+                    step="any"
+                    value={Math.round(selectedZone.h * 100) / 100}
                     onChange={(e) => {
                       const nh = clamp(
                         parseFloat(e.target.value) || MIN_VENUE_ZONE_SIZE_PCT,

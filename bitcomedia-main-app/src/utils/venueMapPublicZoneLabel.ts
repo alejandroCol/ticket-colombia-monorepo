@@ -7,6 +7,9 @@ export const PUBLIC_ZONE_LABEL_BASE_REM = 0.7;
 export const PUBLIC_ZONE_LABEL_SCALE_MIN = 0.1;
 export const PUBLIC_ZONE_LABEL_SCALE_MAX = 1;
 export const PUBLIC_ZONE_LABEL_INSET_DEFAULT_PX = 4;
+export const PUBLIC_ZONE_BORDER_WIDTH_DEFAULT_PX = 2;
+export const PUBLIC_ZONE_BORDER_WIDTH_MIN_PX = 1;
+export const PUBLIC_ZONE_BORDER_WIDTH_MAX_PX = 4;
 
 export function normalizeVenueMapLabelHex(raw: string | undefined | null): string | null {
   const t = String(raw ?? "").trim();
@@ -31,6 +34,21 @@ export function normalizeVenueMapLabelInsetPx(raw: unknown): number {
 
 export function normalizePublicZoneCornerStyle(raw: unknown): "rounded" | "square" {
   return raw === "square" ? "square" : "rounded";
+}
+
+export function normalizePublicZoneBorderColor(raw: unknown): "transparent" | string | null {
+  const t = String(raw ?? "").trim().toLowerCase();
+  if (t === "transparent") return "transparent";
+  return normalizeVenueMapLabelHex(String(raw ?? ""));
+}
+
+export function normalizePublicZoneBorderWidthPx(raw: unknown): number {
+  const n = typeof raw === "number" ? raw : parseFloat(String(raw ?? ""));
+  if (!Number.isFinite(n)) return PUBLIC_ZONE_BORDER_WIDTH_DEFAULT_PX;
+  return Math.min(
+    PUBLIC_ZONE_BORDER_WIDTH_MAX_PX,
+    Math.max(PUBLIC_ZONE_BORDER_WIDTH_MIN_PX, Math.round(n))
+  );
 }
 
 function labelLuminance(hex: string): number {
@@ -72,11 +90,16 @@ export function publicZoneLabelStyle(
 }
 
 export function publicZoneFrameStyle(
-  visual: Pick<VenueMapVisualConfig, "public_zone_corner_style" | "public_zone_label_inset_px">,
+  visual: Pick<
+    VenueMapVisualConfig,
+    "public_zone_corner_style" | "public_zone_label_inset_px" | "public_zone_border_width_px"
+  >,
   isCircle: boolean
 ): CSSProperties {
-  if (isCircle) return {};
   const style: CSSProperties = {};
+  const borderW = normalizePublicZoneBorderWidthPx(visual.public_zone_border_width_px);
+  style.borderWidth = `${borderW}px`;
+  if (isCircle) return style;
   if (normalizePublicZoneCornerStyle(visual.public_zone_corner_style) === "square") {
     style.borderRadius = 0;
   }

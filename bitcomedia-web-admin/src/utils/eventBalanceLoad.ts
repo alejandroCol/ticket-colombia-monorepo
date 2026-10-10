@@ -5,7 +5,7 @@ import {
   getWithdrawalsByEventId,
   getOrganizerBuyerFee,
 } from '@services';
-import { aggregateEventRevenueBreakdown, normalizeGatewayCommissionConfig } from '@utils/revenueBreakdown';
+import { normalizeGatewayCommissionConfig } from '@utils/revenueBreakdown';
 import type { OrganizerBuyerFeeInput } from '@utils/revenueBreakdown';
 import { aggregateSalesChannelBreakdown } from '@utils/salesChannelBreakdown';
 import { computeEventPasarelaBalances, type EventPasarelaBalances } from '@utils/pasarelaBalance';
@@ -90,13 +90,6 @@ export async function loadEventBalanceRow(
       orgFee = feeDoc ? { type: feeDoc.fee_type, value: feeDoc.fee_value } : null;
       ctx.orgFeeCache.set(orgId, orgFee);
     }
-    const agg = aggregateEventRevenueBreakdown(
-      eventDoc,
-      valid,
-      ctx.globalFeesPercent,
-      orgFee,
-      ctx.gateway
-    );
     const channel = aggregateSalesChannelBreakdown(
       eventDoc,
       valid,
@@ -104,6 +97,7 @@ export async function loadEventBalanceRow(
       orgFee,
       ctx.gateway
     );
+    const combined = channel.combined;
     const pasarelaBalances = computeEventPasarelaBalances(channel, withdrawals);
     return {
       ...listed,
@@ -111,15 +105,15 @@ export async function loadEventBalanceRow(
       ingresos,
       egresos,
       retirosPasarela,
-      subtotalEntradas: agg.subtotalEntradas,
-      tiqueteraFee: agg.tiqueteraFee,
-      pasarelaTotal: agg.pasarelaTotal,
-      pasarelaPct: agg.pasarelaPercentPart,
-      pasarelaFixed: agg.pasarelaFixedPart,
-      pasarelaIva: agg.pasarelaIva,
-      netoOrganizador: agg.netoOrganizador,
-      showPasarelaCommission: agg.showPasarelaCommission,
-      serviceFeeDeductedFromNeto: agg.serviceFeeDeductedFromNeto,
+      subtotalEntradas: combined.subtotalEntradas,
+      tiqueteraFee: combined.tiqueteraFee,
+      pasarelaTotal: combined.pasarelaTotal,
+      pasarelaPct: combined.pasarelaPercentPart,
+      pasarelaFixed: combined.pasarelaFixedPart,
+      pasarelaIva: combined.pasarelaIva,
+      netoOrganizador: combined.netoOrganizador,
+      showPasarelaCommission: combined.showPasarelaCommission,
+      serviceFeeDeductedFromNeto: combined.serviceFeeDeductedFromNeto,
       pasarelaBalances,
     };
   } catch {

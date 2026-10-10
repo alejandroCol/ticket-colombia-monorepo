@@ -36,6 +36,9 @@ import {
   normalizeVenueMapLabelScale,
   normalizeVenueMapLabelInsetPx,
   normalizePublicZoneCornerStyle,
+  normalizePublicZoneBorderColor,
+  normalizePublicZoneBorderWidthPx,
+  PUBLIC_ZONE_BORDER_WIDTH_DEFAULT_PX,
   PUBLIC_ZONE_LABEL_INSET_DEFAULT_PX,
   sanitizeVenueMapVisualForFirestore,
   venueMapVisualHasPersistedOptions,
@@ -474,6 +477,29 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
                     : {}),
                   ...(normalizePublicZoneCornerStyle(rawVis.public_zone_corner_style) === 'square'
                     ? { public_zone_corner_style: 'square' as const }
+                    : {}),
+                  ...(rawVis.public_zone_border_width_px != null &&
+                  normalizePublicZoneBorderWidthPx(rawVis.public_zone_border_width_px) !==
+                    PUBLIC_ZONE_BORDER_WIDTH_DEFAULT_PX
+                    ? {
+                        public_zone_border_width_px: normalizePublicZoneBorderWidthPx(
+                          rawVis.public_zone_border_width_px
+                        ),
+                      }
+                    : {}),
+                  ...(normalizePublicZoneBorderColor(rawVis.public_zone_border_color)
+                    ? {
+                        public_zone_border_color: normalizePublicZoneBorderColor(
+                          rawVis.public_zone_border_color
+                        )!,
+                      }
+                    : {}),
+                  ...(normalizeVenueMapLabelHex(rawVis.public_zone_selection_color)
+                    ? {
+                        public_zone_selection_color: normalizeVenueMapLabelHex(
+                          rawVis.public_zone_selection_color
+                        )!,
+                      }
                     : {}),
                 }
               : {
@@ -960,6 +986,16 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
         const clearMapSquareCorners =
           normalizePublicZoneCornerStyle(formData.venue_map_visual.public_zone_corner_style) !==
           'square';
+        const clearMapBorderWidth =
+          normalizePublicZoneBorderWidthPx(
+            formData.venue_map_visual.public_zone_border_width_px
+          ) === PUBLIC_ZONE_BORDER_WIDTH_DEFAULT_PX;
+        const clearMapBorderColor = !normalizePublicZoneBorderColor(
+          formData.venue_map_visual.public_zone_border_color
+        );
+        const clearMapSelectionColor = !normalizeVenueMapLabelHex(
+          formData.venue_map_visual.public_zone_selection_color
+        );
         await updateDoc(eventRef, {
           ...eventData,
           venue_map_url: deleteField(),
@@ -974,6 +1010,15 @@ const EventFormScreen: React.FC<EventFormScreenProps> = ({ isRecurring: initialI
             : {}),
           ...(clearMapSquareCorners
             ? { 'venue_map.visual.public_zone_corner_style': deleteField() }
+            : {}),
+          ...(clearMapBorderWidth
+            ? { 'venue_map.visual.public_zone_border_width_px': deleteField() }
+            : {}),
+          ...(clearMapBorderColor
+            ? { 'venue_map.visual.public_zone_border_color': deleteField() }
+            : {}),
+          ...(clearMapSelectionColor
+            ? { 'venue_map.visual.public_zone_selection_color': deleteField() }
             : {}),
         });
         console.log(`${isRecurring ? 'Evento recurrente' : 'Evento'} actualizado correctamente`);

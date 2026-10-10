@@ -130,6 +130,12 @@ export interface VenueMapVisualConfig {
   public_zone_label_inset_px?: number;
   /** Esquinas del recuadro de localidad (rectangular). Default redondeado en tienda. */
   public_zone_corner_style?: 'rounded' | 'square';
+  /** Grosor del borde del recuadro de localidad (px, 1–4). Default 2. */
+  public_zone_border_width_px?: number;
+  /** Borde en reposo en la tienda: `#rrggbb` o `transparent`. Vacío = borde por defecto. */
+  public_zone_border_color?: string;
+  /** Color del marco grueso al seleccionar una zona en la tienda (#rrggbb). Vacío = acento / color de la zona. */
+  public_zone_selection_color?: string;
 }
 
 export interface VenueMapConfig {

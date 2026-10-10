@@ -101,6 +101,10 @@ export interface VenueMapVisualConfig {
   public_zone_label_scale?: number;
   public_zone_label_inset_px?: number;
   public_zone_corner_style?: "rounded" | "square";
+  /** Grosor del borde del recuadro de localidad (px, 1–4). Default 2. */
+  public_zone_border_width_px?: number;
+  public_zone_border_color?: string;
+  public_zone_selection_color?: string;
 }
 
 export interface VenueMapConfig {

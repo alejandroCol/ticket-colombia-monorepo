@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import type { EventSection, VenueMapVisualConfig, VenueMapZone } from "../../services/types";
 import { isMapZoneUnavailable } from "../../utils/venueMapSection";
-import { publicZoneButtonStyle } from "../../utils/venueMapZoneStyle";
+import { publicZoneOverlayStyle } from "../../utils/venueMapZoneStyle";
 import {
   normalizePublicZoneCornerStyle,
   publicZoneFrameStyle,
@@ -103,7 +103,7 @@ const VenueMapInteractive: React.FC<VenueMapInteractiveProps> = ({
             const sectionSelected = selectedSectionId === z.sectionId;
             const active = isPalcoCell ? zoneSelected : sectionSelected;
             const hovered = hoveredZoneId === z.id;
-            const tint = publicZoneButtonStyle(z.color, active, hovered);
+            const tint = publicZoneOverlayStyle(zoneVisual, z.color, active, hovered);
             const hasTint = Object.keys(tint).length > 0;
             const labelText = isPalcoCell ? z.label : z.label || sec.name;
             const aria = isPalcoCell

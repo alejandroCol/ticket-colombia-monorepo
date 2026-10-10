@@ -46,6 +46,7 @@ export {
   getWithdrawalsByEventId,
   addGatewayWithdrawal,
   deleteGatewayWithdrawal,
+  setEventGatewayCommissionFinal,
   getTotalRevenue,
   getAdminUsersList,
   getAuditActorUsersList,

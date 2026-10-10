@@ -35,16 +35,18 @@ const BalancePasarelaBreakdown: React.FC<Props> = ({ balances, formatCOP, compac
               <span>−{formatCOP(p.tarifaTiqueteraCOP)}</span>
             </div>
           )}
-          {p.showPasarelaCommissionEstimate && p.comisionPasarelaCOP > 0 && (
+          {(p.comisionPasarelaCOP > 0 || p.commissionIsFinal) && (
             <div className="balance-pasarela-breakdown__row balance-pasarela-breakdown__row--deduct">
-              <span>Comisión pasarela (est.)</span>
+              <span>
+                {p.commissionIsFinal ? 'Comisión pasarela (final)' : 'Comisión pasarela (est.)'}
+              </span>
               <span>−{formatCOP(p.comisionPasarelaCOP)}</span>
             </div>
           )}
-          {p.provider === 'onepay' && p.showPasarelaCommissionEstimate && (
+          {p.provider === 'onepay' && p.showPasarelaCommissionEstimate && !p.commissionIsFinal && (
             <p className="balance-pasarela-breakdown__disclaimer">{ONEPAY_PASARELA_COMMISSION_DISCLAIMER}</p>
           )}
-          {p.provider === 'mercadopago' && (
+          {p.provider === 'mercadopago' && !p.commissionIsFinal && p.comisionPasarelaCOP <= 0 && (
             <div className="balance-pasarela-breakdown__row balance-pasarela-breakdown__row--hint">
               <span>Comisión pasarela</span>
               <span>Según MP</span>

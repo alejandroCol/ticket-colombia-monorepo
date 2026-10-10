@@ -12,6 +12,9 @@ export const PUBLIC_ZONE_LABEL_SCALE_MAX = 1;
 
 export const PUBLIC_ZONE_LABEL_INSET_DEFAULT_PX = 4;
 export const PUBLIC_ZONE_LABEL_INSET_MAX_PX = 12;
+export const PUBLIC_ZONE_BORDER_WIDTH_DEFAULT_PX = 2;
+export const PUBLIC_ZONE_BORDER_WIDTH_MIN_PX = 1;
+export const PUBLIC_ZONE_BORDER_WIDTH_MAX_PX = 4;
 
 export type PublicZoneCornerStyle = 'rounded' | 'square';
 
@@ -41,6 +44,21 @@ export function normalizeVenueMapLabelInsetPx(raw: unknown): number {
 
 export function normalizePublicZoneCornerStyle(raw: unknown): PublicZoneCornerStyle {
   return raw === 'square' ? 'square' : 'rounded';
+}
+
+export function normalizePublicZoneBorderColor(raw: unknown): 'transparent' | string | null {
+  const t = String(raw ?? '').trim().toLowerCase();
+  if (t === 'transparent') return 'transparent';
+  return normalizeVenueMapLabelHex(String(raw ?? ''));
+}
+
+export function normalizePublicZoneBorderWidthPx(raw: unknown): number {
+  const n = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
+  if (!Number.isFinite(n)) return PUBLIC_ZONE_BORDER_WIDTH_DEFAULT_PX;
+  return Math.min(
+    PUBLIC_ZONE_BORDER_WIDTH_MAX_PX,
+    Math.max(PUBLIC_ZONE_BORDER_WIDTH_MIN_PX, Math.round(n))
+  );
 }
 
 function labelLuminance(hex: string): number {
@@ -84,11 +102,16 @@ export function publicZoneLabelStyle(
 
 /** Borde del recuadro de localidad (esquinas cuadradas + padding interno). */
 export function publicZoneFrameStyle(
-  visual: Pick<VenueMapVisualConfig, 'public_zone_corner_style' | 'public_zone_label_inset_px'>,
+  visual: Pick<
+    VenueMapVisualConfig,
+    'public_zone_corner_style' | 'public_zone_label_inset_px' | 'public_zone_border_width_px'
+  >,
   isCircle: boolean
 ): CSSProperties {
-  if (isCircle) return {};
   const style: CSSProperties = {};
+  const borderW = normalizePublicZoneBorderWidthPx(visual.public_zone_border_width_px);
+  style.borderWidth = `${borderW}px`;
+  if (isCircle) return style;
   if (normalizePublicZoneCornerStyle(visual.public_zone_corner_style) === 'square') {
     style.borderRadius = 0;
   }
@@ -122,6 +145,14 @@ export function sanitizeVenueMapVisualForFirestore(
     out.public_zone_label_inset_px = labelInset;
   }
   if (corners === 'square') out.public_zone_corner_style = 'square';
+  const borderW = normalizePublicZoneBorderWidthPx(visual.public_zone_border_width_px);
+  if (borderW !== PUBLIC_ZONE_BORDER_WIDTH_DEFAULT_PX) {
+    out.public_zone_border_width_px = borderW;
+  }
+  const borderColor = normalizePublicZoneBorderColor(visual.public_zone_border_color);
+  if (borderColor) out.public_zone_border_color = borderColor;
+  const selectionColor = normalizeVenueMapLabelHex(visual.public_zone_selection_color);
+  if (selectionColor) out.public_zone_selection_color = selectionColor;
   return out;
 }
 
@@ -138,6 +169,10 @@ export function venueMapVisualHasPersistedOptions(visual: VenueMapVisualConfig):
     normalizeVenueMapLabelScale(visual.public_zone_label_scale) !== 1 ||
     normalizeVenueMapLabelInsetPx(visual.public_zone_label_inset_px) !==
       PUBLIC_ZONE_LABEL_INSET_DEFAULT_PX ||
-    normalizePublicZoneCornerStyle(visual.public_zone_corner_style) === 'square'
+    normalizePublicZoneCornerStyle(visual.public_zone_corner_style) === 'square' ||
+    normalizePublicZoneBorderWidthPx(visual.public_zone_border_width_px) !==
+      PUBLIC_ZONE_BORDER_WIDTH_DEFAULT_PX ||
+    Boolean(normalizePublicZoneBorderColor(visual.public_zone_border_color)) ||
+    Boolean(normalizeVenueMapLabelHex(visual.public_zone_selection_color))
   );
 }

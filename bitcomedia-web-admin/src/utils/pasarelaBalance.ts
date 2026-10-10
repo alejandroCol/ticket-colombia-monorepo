@@ -11,6 +11,7 @@ export type PasarelaProviderSaldo = {
   retirosCOP: number;
   saldoEstimadoCOP: number;
   showPasarelaCommissionEstimate: boolean;
+  commissionIsFinal: boolean;
 };
 
 export type EventPasarelaBalances = {
@@ -77,19 +78,22 @@ export function computeEventPasarelaBalances(
       retirosCOP: retirosOnepay,
       saldoEstimadoCOP: Math.max(0, onepayRec - tiqueteraOnOnepay - comm - retirosOnepay),
       showPasarelaCommissionEstimate: showOnepayComm,
+      commissionIsFinal: breakdown.gatewayOnepay.pasarelaCommissionIsFinalOverride === true,
     });
   }
 
   if (mpUnits > 0 || tiqueteraOnMp > 0 || retirosMp > 0) {
+    const mpComm = breakdown.gatewayMercadopago.pasarelaTotal;
     providers.push({
       provider: 'mercadopago',
       label: 'Mercado Pago',
       recaudadoCOP: mpRec,
       tarifaTiqueteraCOP: tiqueteraOnMp,
-      comisionPasarelaCOP: 0,
+      comisionPasarelaCOP: mpComm,
       retirosCOP: retirosMp,
-      saldoEstimadoCOP: Math.max(0, mpRec - tiqueteraOnMp - retirosMp),
-      showPasarelaCommissionEstimate: false,
+      saldoEstimadoCOP: Math.max(0, mpRec - tiqueteraOnMp - mpComm - retirosMp),
+      showPasarelaCommissionEstimate: true,
+      commissionIsFinal: breakdown.gatewayMercadopago.pasarelaCommissionIsFinalOverride === true,
     });
   }
 

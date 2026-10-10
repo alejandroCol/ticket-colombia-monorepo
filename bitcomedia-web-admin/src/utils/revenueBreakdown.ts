@@ -285,6 +285,8 @@ export type EventRevenueBreakdownTotals = {
   showPasarelaCommission: boolean;
   /** true cuando la tarifa tiquetera se descuenta del neto (no cobrada aparte al comprador). */
   serviceFeeDeductedFromNeto: boolean;
+  /** Super admin fijó comisión pasarela real (reemplaza estimado). */
+  pasarelaCommissionIsFinalOverride?: boolean;
 };
 
 /**

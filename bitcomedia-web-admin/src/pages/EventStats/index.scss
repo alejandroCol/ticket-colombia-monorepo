@@ -221,6 +221,44 @@
   }
 }
 
+.event-stats-commission-final {
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: 10px;
+  background: rgba(#9b59b6, 0.12);
+  border: 1px dashed rgba(#bb8fce, 0.45);
+
+  &__form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+
+  &__lede {
+    margin: 0;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    color: rgba($color-text-primary, 0.88);
+  }
+
+  &__fields {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+
+    @include respond-md {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+  }
+}
+
 .event-stats-channel-grid {
   display: grid;
   grid-template-columns: 1fr;

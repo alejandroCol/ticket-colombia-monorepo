@@ -11,6 +11,7 @@ import {
   where,
   limit,
   deleteDoc,
+  deleteField,
   serverTimestamp,
 } from 'firebase/firestore';
 
@@ -566,6 +567,38 @@ export const addGatewayWithdrawal = async (
 export const deleteGatewayWithdrawal = async (withdrawalId: string): Promise<void> => {
   const wRef = doc(db, 'event_withdrawals', withdrawalId);
   await updateDoc(wRef, { deleted: true, deletedAt: new Date() });
+};
+
+export type GatewayCommissionFinalPatch = {
+  onepayCOP?: number | null;
+  mercadopagoCOP?: number | null;
+};
+
+/** Super admin: comisión pasarela final por proveedor (reemplaza estimado en reportes). */
+export const setEventGatewayCommissionFinal = async (
+  eventId: string,
+  collectionName: 'events' | 'recurring_events',
+  patch: GatewayCommissionFinalPatch
+): Promise<void> => {
+  const ref = doc(db, collectionName, eventId);
+  const payload: {
+    gateway_commission_final_updated_at: ReturnType<typeof serverTimestamp>;
+    gateway_commission_final_onepay_cop?: number | ReturnType<typeof deleteField>;
+    gateway_commission_final_mercadopago_cop?: number | ReturnType<typeof deleteField>;
+  } = {
+    gateway_commission_final_updated_at: serverTimestamp(),
+  };
+  if (patch.onepayCOP === null) {
+    payload.gateway_commission_final_onepay_cop = deleteField();
+  } else if (patch.onepayCOP != null) {
+    payload.gateway_commission_final_onepay_cop = Math.max(0, Math.round(patch.onepayCOP));
+  }
+  if (patch.mercadopagoCOP === null) {
+    payload.gateway_commission_final_mercadopago_cop = deleteField();
+  } else if (patch.mercadopagoCOP != null) {
+    payload.gateway_commission_final_mercadopago_cop = Math.max(0, Math.round(patch.mercadopagoCOP));
+  }
+  await updateDoc(ref, payload);
 };
 
 // Get total revenue from tickets

@@ -26,6 +26,7 @@ import WhatsAppButton from '../../components/WhatsAppButton';
 import './index.scss';
 import { isTcGlassUi } from '../../utils/tcEmbedUi';
 import {
+  mapZoneDisplayLabel,
   palcoCellsForSection,
   sectionRequiresMapZonePick,
 } from '../../utils/venueMapSection';
@@ -166,7 +167,14 @@ const EventDetailScreen: React.FC = () => {
   const palcoPickRequired = Boolean(
     event && selectedSection && isPalcoSectionEvent(event, selectedSection.id)
   );
-  
+  const selectedMapZone = useMemo((): VenueMapZone | null => {
+    if (!event || !selectedSection || !selectedMapZoneId) return null;
+    return (
+      zonesForSectionEvent(event, selectedSection.id).find((z) => z.id === selectedMapZoneId) ??
+      null
+    );
+  }, [event, selectedSection, selectedMapZoneId]);
+
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [slug]);
@@ -395,7 +403,7 @@ const EventDetailScreen: React.FC = () => {
         const z = zonesForSectionEvent(event, selectedSection.id).find((x) => x.id === selectedMapZoneId);
         if (z) {
           params.set('mapZoneId', z.id);
-          params.set('mapZoneLabel', z.label || String(z.palco_index ?? ''));
+          params.set('mapZoneLabel', mapZoneDisplayLabel(z));
         }
       }
     }
@@ -601,6 +609,27 @@ const EventDetailScreen: React.FC = () => {
                   />
                 );
               })()}
+              {selectedSection &&
+                selectedMapZone &&
+                !isSectionHiddenFromPublicStore(selectedSection) && (
+                <div className="event-map-selection" role="status" aria-live="polite">
+                  <span className="event-map-selection__kicker">Tu selección en el mapa</span>
+                  <p className="event-map-selection__detail">
+                    <strong>{selectedSection.name}</strong>
+                    {palcoPickRequired || selectedMapZone.palco_index != null ? (
+                      <>
+                        {' '}
+                        · Palco <strong>{mapZoneDisplayLabel(selectedMapZone)}</strong>
+                      </>
+                    ) : mapZoneDisplayLabel(selectedMapZone) !== selectedSection.name ? (
+                      <>
+                        {' '}
+                        · <strong>{mapZoneDisplayLabel(selectedMapZone)}</strong>
+                      </>
+                    ) : null}
+                  </p>
+                </div>
+              )}
               {palcoPickRequired && !selectedMapZoneId && (
                 <p className="availability-pill availability-pill--warn" style={{ marginTop: '0.5rem' }}>
                   Elige el <strong>número de palco</strong> tocando el mapa.
@@ -695,14 +724,10 @@ const EventDetailScreen: React.FC = () => {
                       en <strong>{selectedSection.name}</strong>
                     </>
                   )}
-                  {palcoPickRequired && selectedMapZoneId ? (
+                  {palcoPickRequired && selectedMapZone ? (
                     <>
                       {' '}
-                      · Palco{' '}
-                      <strong>
-                        {zonesForSectionEvent(event, selectedSection.id).find((z) => z.id === selectedMapZoneId)
-                          ?.label || '?'}
-                      </strong>
+                      · Palco <strong>{mapZoneDisplayLabel(selectedMapZone)}</strong>
                     </>
                   ) : null}
                 </p>
